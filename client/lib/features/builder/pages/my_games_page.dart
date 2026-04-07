@@ -1,9 +1,9 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
-
-import '../../../models/auth_session.dart';
-import '../../../services/api_service.dart';
 import '../models/saved_builder_project.dart';
-import 'builder_page.dart';
 
 class MyGamesPage extends StatefulWidget {
   final AuthSession session;
@@ -82,12 +82,11 @@ class _MyGamesPageState extends State<MyGamesPage> {
   }
 
   Future<void> _openProject(SavedBuilderProject project) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => BuilderPage(
-          session: widget.session,
-          initialProjectId: project.id,
-        ),
+    await Navigator.of(context).pushNamed(
+      AppRoutes.builder,
+      arguments: BuilderRouteData(
+        session: widget.session,
+        initialProjectId: project.id,
       ),
     );
 

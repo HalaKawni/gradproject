@@ -25,7 +25,7 @@ class BuilderStatusBar extends StatelessWidget {
     final gridPreset = LevelSettings.closestPresetForTileSize(
       controller.project.settings.tileSize,
     );
-    final logicStepCount = controller.project.solutionCommands.length;
+    final logicStepCount = controller.logicCommandBlockCount;
     final runStatus = controller.isPlaybackRunning
         ? 'Playing'
         : controller.logicStatusMessage ?? 'Ready';
@@ -52,7 +52,7 @@ class BuilderStatusBar extends StatelessWidget {
             '${controller.project.settings.tileSize.round()} px',
           ),
           _infoRow('Collectables', '$collectableCount'),
-          _infoRow('Logic Steps', '$logicStepCount'),
+          _infoRow('Logic Blocks', '$logicStepCount'),
           _infoRow('Run Status', runStatus),
           if (showValidation)
             Padding(

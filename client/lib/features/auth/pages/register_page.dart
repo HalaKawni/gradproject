@@ -1,59 +1,56 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 
-import 'models/auth_session.dart';
-import 'register_page.dart';
-import 'services/api_service.dart';
-import 'user_home_page.dart';
-
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
-
-  static const String routeName = 'HomePage';
-  static const String routePath = '/homePage';
+class RegisterPage extends StatefulWidget {
+  const RegisterPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
+class _RegisterPageState extends State<RegisterPage> {
+  final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final FocusNode emailFocusNode = FocusNode();
-  final FocusNode passwordFocusNode = FocusNode();
 
-  bool isLoading = false;
+  bool isSubmitting = false;
+  String selectedRole = 'parent';
 
   @override
   void dispose() {
+    nameController.dispose();
     emailController.dispose();
     passwordController.dispose();
-    emailFocusNode.dispose();
-    passwordFocusNode.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
+  Future<void> _register() async {
+    final name = nameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    if (email.isEmpty || password.isEmpty) {
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Email and password are required'),
+          content: Text('Name, email, and password are required'),
         ),
       );
       return;
     }
 
     setState(() {
-      isLoading = true;
+      isSubmitting = true;
     });
 
     try {
-      final result = await ApiService.login(
+      final result = await ApiService.register(
+        name: name,
         email: email,
         password: password,
+        role: selectedRole,
       );
 
       if (!mounted) {
@@ -67,19 +64,18 @@ class _LoginPageState extends State<LoginPage> {
         );
 
         if (!session.isValid) {
-          throw Exception('Login succeeded but no valid session was returned.');
+          throw Exception('Registration succeeded but no session was returned.');
         }
 
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute<void>(
-            builder: (_) => UserHomePage(session: session),
-          ),
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.home,
           (route) => false,
+          arguments: HomeRouteData(session: session),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message']?.toString() ?? 'Login failed'),
+            content: Text(result['message']?.toString() ?? 'Registration failed'),
           ),
         );
       }
@@ -94,18 +90,10 @@ class _LoginPageState extends State<LoginPage> {
     } finally {
       if (mounted) {
         setState(() {
-          isLoading = false;
+          isSubmitting = false;
         });
       }
     }
-  }
-
-  void _openRegisterPage() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const RegisterPage(),
-      ),
-    );
   }
 
   @override
@@ -113,18 +101,8 @@ class _LoginPageState extends State<LoginPage> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        key: scaffoldKey,
-        backgroundColor: Colors.white,
         appBar: AppBar(
-          backgroundColor: Colors.blue,
-          title: const Text(
-            'Learny',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          title: const Text('Register'),
         ),
         body: SafeArea(
           child: Center(
@@ -133,21 +111,27 @@ class _LoginPageState extends State<LoginPage> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 420),
                 child: Card(
-                  color: Colors.grey.shade100,
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Login',
+                          'Create an account',
                           style: Theme.of(context).textTheme.headlineSmall,
-                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
                         TextFormField(
+                          controller: nameController,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Name',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
                           controller: emailController,
-                          focusNode: emailFocusNode,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
                           decoration: const InputDecoration(
@@ -158,24 +142,47 @@ class _LoginPageState extends State<LoginPage> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: passwordController,
-                          focusNode: passwordFocusNode,
                           obscureText: true,
                           textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _login(),
+                          onFieldSubmitted: (_) => _register(),
                           decoration: const InputDecoration(
                             labelText: 'Password',
                             border: OutlineInputBorder(),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedRole,
+                          decoration: const InputDecoration(
+                            labelText: 'Role',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'parent',
+                              child: Text('Parent'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'child',
+                              child: Text('Child'),
+                            ),
+                          ],
+                          onChanged: isSubmitting
+                              ? null
+                              : (value) {
+                                  if (value == null) {
+                                    return;
+                                  }
+
+                                  setState(() {
+                                    selectedRole = value;
+                                  });
+                                },
+                        ),
                         const SizedBox(height: 24),
                         ElevatedButton(
-                          onPressed: isLoading ? null : _login,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            minimumSize: const Size.fromHeight(48),
-                          ),
-                          child: isLoading
+                          onPressed: isSubmitting ? null : _register,
+                          child: isSubmitting
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
@@ -183,12 +190,13 @@ class _LoginPageState extends State<LoginPage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('Login'),
+                              : const Text('Register'),
                         ),
-                        const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: isLoading ? null : _openRegisterPage,
-                          child: const Text('Register'),
+                        TextButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          child: const Text('Already have an account? Login'),
                         ),
                       ],
                     ),

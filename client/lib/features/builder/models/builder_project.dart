@@ -11,7 +11,7 @@ class BuilderProject {
   final LevelSettings settings;
   final List<TileData> tiles;
   final List<EntityData> entities;
-  final List<String> solutionCommands;
+  final List<LogicCommandNode> solutionCommands;
 
   const BuilderProject({
     required this.id,
@@ -82,7 +82,9 @@ class BuilderProject {
       'settings': settings.toJson(),
       'tiles': tiles.map((tile) => tile.toJson()).toList(),
       'entities': entities.map((entity) => entity.toJson()).toList(),
-      'solutionCommands': solutionCommands,
+      'solutionCommands': solutionCommands
+          .map((command) => command.toJson())
+          .toList(),
     };
   }
 
@@ -104,8 +106,8 @@ class BuilderProject {
           )
           .toList(),
       solutionCommands: (json['solutionCommands'] as List<dynamic>? ?? [])
-          .whereType<String>()
-          .map((command) => LogicCommandTypeExtension.fromString(command).value)
+          .map(LogicCommandNode.tryParse)
+          .whereType<LogicCommandNode>()
           .toList(),
     );
   }
@@ -118,7 +120,7 @@ class BuilderProject {
     LevelSettings? settings,
     List<TileData>? tiles,
     List<EntityData>? entities,
-    List<String>? solutionCommands,
+    List<LogicCommandNode>? solutionCommands,
   }) {
     return BuilderProject(
       id: id ?? this.id,

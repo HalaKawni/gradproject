@@ -1,9 +1,7 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
 import 'package:flutter/material.dart';
-
-import 'features/builder/pages/builder_page.dart';
-import 'features/builder/pages/my_games_page.dart';
-import 'login_page.dart';
-import 'models/auth_session.dart';
 
 class UserHomePage extends StatelessWidget {
   final AuthSession session;
@@ -14,27 +12,23 @@ class UserHomePage extends StatelessWidget {
   });
 
   void _logout(BuildContext context) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const LoginPage(),
-      ),
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.login,
       (route) => false,
     );
   }
 
   void _openBuilder(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => BuilderPage(session: session),
-      ),
+    Navigator.of(context).pushNamed(
+      AppRoutes.builder,
+      arguments: BuilderRouteData(session: session),
     );
   }
 
   void _openMyGames(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => MyGamesPage(session: session),
-      ),
+    Navigator.of(context).pushNamed(
+      AppRoutes.myGames,
+      arguments: MyGamesRouteData(session: session),
     );
   }
 

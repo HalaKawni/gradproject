@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flame/components.dart';
-import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
@@ -10,13 +9,19 @@ import '../models/builder_playback_state.dart';
 import '../models/entity_data.dart';
 import '../models/logic_command.dart';
 import '../models/tile_data.dart';
-import '../shared/builder_tool.dart';
 
 class BuilderGame extends FlameGame {
+  static const Color boardBackgroundColor = Color(0xFFDDEAF7);
+
   final BuilderController controller;
   late final BuilderBoard board;
 
   BuilderGame({required this.controller});
+
+  @override
+  Color backgroundColor() {
+    return boardBackgroundColor;
+  }
 
   @override
   Future<void> onLoad() async {
@@ -27,8 +32,8 @@ class BuilderGame extends FlameGame {
   }
 }
 
-class BuilderBoard extends PositionComponent with TapCallbacks, DragCallbacks {
-  static const Color _backgroundColor = Color(0xFFDDEAF7);
+class BuilderBoard extends PositionComponent {
+  static const Color _backgroundColor = BuilderGame.boardBackgroundColor;
   static const Color _groundTileColor = Color(0xFF5FBF72);
   static const Color _obstacleTileColor = Color(0xFF7C8796);
   static const Color _unknownTileColor = Color(0xFF9AA5B5);
@@ -38,13 +43,6 @@ class BuilderBoard extends PositionComponent with TapCallbacks, DragCallbacks {
   static const Color _unknownEntityColor = Color(0xFF8B5CF6);
 
   final BuilderController controller;
-
-  _DragItemKind? _dragItemKind;
-  String? _dragEntityId;
-  int? _dragStartX;
-  int? _dragStartY;
-  int? _dragCurrentX;
-  int? _dragCurrentY;
 
   BuilderBoard({required this.controller});
 
@@ -58,143 +56,6 @@ class BuilderBoard extends PositionComponent with TapCallbacks, DragCallbacks {
   Future<void> onLoad() async {
     await super.onLoad();
     _syncBoardSize();
-  }
-
-  @override
-  void onTapDown(TapDownEvent event) {
-    super.onTapDown(event);
-
-    if (controller.isPlaybackRunning) {
-      return;
-    }
-
-    final cell = _cellFromVector(event.localPosition);
-
-    if (cell == null) {
-      return;
-    }
-
-    controller.placeAt(cell.x, cell.y);
-  }
-
-  @override
-  void onDragStart(DragStartEvent event) {
-    super.onDragStart(event);
-
-    if (controller.isPlaybackRunning ||
-        controller.currentTool != BuilderTool.select) {
-      return;
-    }
-
-    final cell = _cellFromVector(event.localPosition);
-
-    if (cell == null) {
-      return;
-    }
-
-    controller.selectAt(cell.x, cell.y);
-
-    final entity = controller.entityAt(cell.x, cell.y);
-    if (entity != null) {
-      _dragItemKind = _DragItemKind.entity;
-      _dragEntityId = entity.id;
-      _dragStartX = cell.x;
-      _dragStartY = cell.y;
-      _dragCurrentX = cell.x;
-      _dragCurrentY = cell.y;
-      return;
-    }
-
-    final tile = controller.tileAt(cell.x, cell.y);
-    if (tile != null) {
-      _dragItemKind = _DragItemKind.tile;
-      _dragStartX = cell.x;
-      _dragStartY = cell.y;
-      _dragCurrentX = cell.x;
-      _dragCurrentY = cell.y;
-    }
-  }
-
-  @override
-  void onDragUpdate(DragUpdateEvent event) {
-    super.onDragUpdate(event);
-
-    if (controller.isPlaybackRunning ||
-        controller.currentTool != BuilderTool.select ||
-        _dragItemKind == null) {
-      return;
-    }
-
-    final cell = _cellFromVector(event.localEndPosition);
-
-    if (cell == null) {
-      return;
-    }
-
-    _dragCurrentX = cell.x;
-    _dragCurrentY = cell.y;
-    controller.selectAt(cell.x, cell.y);
-  }
-
-  @override
-  void onDragEnd(DragEndEvent event) {
-    super.onDragEnd(event);
-    _completeDrag();
-  }
-
-  @override
-  void onDragCancel(DragCancelEvent event) {
-    super.onDragCancel(event);
-    _resetDragState();
-  }
-
-  void _completeDrag() {
-    final dragKind = _dragItemKind;
-    final startX = _dragStartX;
-    final startY = _dragStartY;
-    final currentX = _dragCurrentX;
-    final currentY = _dragCurrentY;
-
-    if (dragKind == null ||
-        startX == null ||
-        startY == null ||
-        currentX == null ||
-        currentY == null) {
-      _resetDragState();
-      return;
-    }
-
-    if (dragKind == _DragItemKind.tile) {
-      controller.moveTile(startX, startY, currentX, currentY);
-    } else if (_dragEntityId != null) {
-      controller.moveEntity(_dragEntityId!, currentX, currentY);
-    }
-
-    _resetDragState();
-  }
-
-  void _resetDragState() {
-    _dragItemKind = null;
-    _dragEntityId = null;
-    _dragStartX = null;
-    _dragStartY = null;
-    _dragCurrentX = null;
-    _dragCurrentY = null;
-  }
-
-  _GridCell? _cellFromVector(Vector2 position) {
-    if (position.x.isNaN || position.y.isNaN) {
-      return null;
-    }
-
-    final x = (position.x / tileSize).floor();
-    final y = (position.y / tileSize).floor();
-
-    if (x < 0 || x >= columns || y < 0 || y >= rows) {
-      return null;
-    }
-
-    return _GridCell(x: x, y: y);
   }
 
   void _syncBoardSize() {
@@ -386,13 +247,4 @@ class BuilderBoard extends PositionComponent with TapCallbacks, DragCallbacks {
     return entity.type == 'collectable' &&
         playbackState.collectedCollectableIds.contains(entity.id);
   }
-}
-
-enum _DragItemKind { tile, entity }
-
-class _GridCell {
-  final int x;
-  final int y;
-
-  const _GridCell({required this.x, required this.y});
 }

@@ -1,9 +1,8 @@
 import 'dart:async';
 
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
-
-import '../../../models/auth_session.dart';
-import '../../../services/api_service.dart';
 import '../models/builder_playback_state.dart';
 import '../models/builder_project.dart';
 import '../models/builder_validation.dart';
@@ -21,7 +20,7 @@ class BuilderController extends ChangeNotifier {
   BuilderProject project;
   final AuthSession session;
 
-  BuilderTool currentTool = BuilderTool.select;
+  BuilderTool currentTool = BuilderTool.ground;
 
   int? selectedX;
   int? selectedY;
@@ -36,6 +35,7 @@ class BuilderController extends ChangeNotifier {
   String? lastMessage;
 
   Timer? _playbackTimer;
+  _PlaybackPlan? _playbackPlan;
 
   bool get hasBlockingValidationIssues {
     return validation.errors.isNotEmpty || validation.warnings.isNotEmpty;
@@ -43,11 +43,11 @@ class BuilderController extends ChangeNotifier {
 
   bool get isPlaybackRunning => playbackState?.isPlaying ?? false;
 
-  List<LogicCommandType> get solutionCommands {
-    return project.solutionCommands
-        .map(LogicCommandTypeExtension.fromString)
-        .toList(growable: false);
-  }
+  List<LogicCommandNode> get solutionCommands =>
+      List<LogicCommandNode>.unmodifiable(project.solutionCommands);
+
+  int get logicCommandBlockCount =>
+      _countSolutionCommandBlocks(project.solutionCommands);
 
   BuilderController({required this.project, required this.session}) {
     project = _normalizeProject(project);
@@ -102,7 +102,10 @@ class BuilderController extends ChangeNotifier {
       tiles: _remapTilesForSettings(previousSettings, nextSettings),
       settings: nextSettings,
     );
-    final nextEntities = _remapEntitiesForSettings(previousSettings, nextSettings);
+    final nextEntities = _remapEntitiesForSettings(
+      previousSettings,
+      nextSettings,
+    );
 
     project = project.copyWith(
       settings: nextSettings,
@@ -163,6 +166,10 @@ class BuilderController extends ChangeNotifier {
   }
 
   void selectAt(int x, int y) {
+    if (selectedX == x && selectedY == y) {
+      return;
+    }
+
     selectedX = x;
     selectedY = y;
     notifyListeners();
@@ -274,51 +281,222 @@ class BuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void deleteTileAt(int x, int y) {
+    _clearPlaybackPreview();
+    final sourceTile = tileAt(x, y);
+
+    if (sourceTile == null) {
+      return;
+    }
+
+    final updatedTiles = List<TileData>.from(project.tiles)
+      ..removeWhere((tile) => tile.x == x && tile.y == y);
+
+    project = project.copyWith(
+      tiles: _enforceProtectedGroundTiles(
+        tiles: updatedTiles,
+        settings: project.settings,
+      ),
+    );
+    selectedX = x;
+    selectedY = y;
+    _runValidation();
+    notifyListeners();
+  }
+
+  void deleteEntity(String entityId) {
+    _clearPlaybackPreview();
+    final sourceEntity = entityById(entityId);
+
+    if (sourceEntity == null) {
+      return;
+    }
+
+    final updatedEntities = List<EntityData>.from(project.entities)
+      ..removeWhere((entity) => entity.id == entityId);
+
+    project = project.copyWith(entities: updatedEntities);
+    selectedX = sourceEntity.x;
+    selectedY = sourceEntity.y;
+    _runValidation();
+    notifyListeners();
+  }
+
   void placeAt(int x, int y) {
     applyToolAt(currentTool, x, y);
   }
 
-  void addSolutionCommand(LogicCommandType command) {
+  String addSolutionCommand(
+    LogicCommandType command, {
+    String? parentLoopId,
+    int? targetIndex,
+  }) {
     _clearPlaybackPreview();
-    final nextCommands = List<String>.from(project.solutionCommands)
-      ..add(command.value);
-    project = project.copyWith(solutionCommands: nextCommands);
-    logicStatusMessage = 'Added ${command.label}.';
+    final nextCommand = LogicCommandNode.action(command: command);
+    project = project.copyWith(
+      solutionCommands: _insertSolutionCommandNode(
+        commands: project.solutionCommands,
+        targetParentId: parentLoopId,
+        targetIndex: targetIndex,
+        node: nextCommand,
+      ),
+    );
+    logicStatusMessage = parentLoopId == null
+        ? 'Added ${command.label}.'
+        : 'Added ${command.label} inside the loop.';
     notifyListeners();
+    return nextCommand.id;
   }
 
-  void moveSolutionCommand(int fromIndex, int toIndex) {
-    if (fromIndex < 0 ||
-        fromIndex >= project.solutionCommands.length ||
-        toIndex < 0 ||
-        toIndex >= project.solutionCommands.length ||
-        fromIndex == toIndex) {
-      return;
+  String addLoopCommand({String? parentLoopId, int? targetIndex}) {
+    _clearPlaybackPreview();
+    final nextLoop = LogicCommandNode.loop();
+    project = project.copyWith(
+      solutionCommands: _insertSolutionCommandNode(
+        commands: project.solutionCommands,
+        targetParentId: parentLoopId,
+        targetIndex: targetIndex,
+        node: nextLoop,
+      ),
+    );
+    logicStatusMessage = parentLoopId == null
+        ? 'Added a loop.'
+        : 'Added a loop inside the loop.';
+    notifyListeners();
+    return nextLoop.id;
+  }
+
+  LogicCommandNode? solutionCommandById(String commandId) {
+    return _findSolutionCommandLocation(
+      project.solutionCommands,
+      commandId,
+    )?.node;
+  }
+
+  bool containsSolutionCommand(String commandId) {
+    return solutionCommandById(commandId) != null;
+  }
+
+  bool canMoveSolutionCommand(String commandId, int offset) {
+    final location = _findSolutionCommandLocation(
+      project.solutionCommands,
+      commandId,
+    );
+    if (location == null) {
+      return false;
+    }
+
+    final siblingCount = _childCommandsForParent(
+      project.solutionCommands,
+      location.parentId,
+    )?.length;
+    if (siblingCount == null) {
+      return false;
+    }
+
+    final nextIndex = location.index + offset;
+    return nextIndex >= 0 && nextIndex < siblingCount;
+  }
+
+  bool moveSolutionCommandByOffset(String commandId, int offset) {
+    final location = _findSolutionCommandLocation(
+      project.solutionCommands,
+      commandId,
+    );
+    if (location == null) {
+      return false;
+    }
+
+    return moveSolutionCommand(
+      commandId: commandId,
+      targetLoopId: location.parentId,
+      targetIndex: location.index + offset,
+    );
+  }
+
+  bool moveSolutionCommand({
+    required String commandId,
+    String? targetLoopId,
+    required int targetIndex,
+  }) {
+    final sourceLocation = _findSolutionCommandLocation(
+      project.solutionCommands,
+      commandId,
+    );
+    if (sourceLocation == null) {
+      return false;
+    }
+
+    final resolvedTargetParentId = _resolveTargetLoopId(
+      commands: project.solutionCommands,
+      targetLoopId: targetLoopId,
+    );
+    final targetParentLocation = resolvedTargetParentId == null
+        ? null
+        : _findSolutionCommandLocation(
+            project.solutionCommands,
+            resolvedTargetParentId,
+          );
+
+    if (resolvedTargetParentId == commandId ||
+        (targetParentLocation != null &&
+            _pathStartsWith(targetParentLocation.path, sourceLocation.path))) {
+      return false;
+    }
+
+    var adjustedTargetIndex = targetIndex;
+    if (sourceLocation.parentId == resolvedTargetParentId &&
+        adjustedTargetIndex > sourceLocation.index) {
+      adjustedTargetIndex -= 1;
     }
 
     _clearPlaybackPreview();
-    final nextCommands = List<String>.from(project.solutionCommands);
-    final movedCommand = nextCommands.removeAt(fromIndex);
-    nextCommands.insert(toIndex, movedCommand);
-    project = project.copyWith(solutionCommands: nextCommands);
+
+    LogicCommandNode? movedCommand;
+    final commandsWithoutSource = _removeSolutionCommandAtPath(
+      commands: project.solutionCommands,
+      path: sourceLocation.path,
+      onRemoved: (removed) {
+        movedCommand = removed;
+      },
+    );
+    final commandToMove = movedCommand;
+    if (commandToMove == null) {
+      return false;
+    }
+
+    project = project.copyWith(
+      solutionCommands: _insertSolutionCommandNode(
+        commands: commandsWithoutSource,
+        targetParentId: resolvedTargetParentId,
+        targetIndex: adjustedTargetIndex,
+        node: commandToMove,
+      ),
+    );
     logicStatusMessage = 'Updated the solution order.';
     notifyListeners();
+    return true;
   }
 
-  void removeSolutionCommandAt(int index) {
-    if (index < 0 || index >= project.solutionCommands.length) {
-      return;
+  bool removeSolutionCommand(String commandId) {
+    final location = _findSolutionCommandLocation(
+      project.solutionCommands,
+      commandId,
+    );
+    if (location == null) {
+      return false;
     }
 
     _clearPlaybackPreview();
-    final removedCommand = LogicCommandTypeExtension.fromString(
-      project.solutionCommands[index],
+    project = project.copyWith(
+      solutionCommands: _removeSolutionCommandAtPath(
+        commands: project.solutionCommands,
+        path: location.path,
+      ),
     );
-    final nextCommands = List<String>.from(project.solutionCommands)
-      ..removeAt(index);
-    project = project.copyWith(solutionCommands: nextCommands);
-    logicStatusMessage = 'Removed ${removedCommand.label}.';
+    logicStatusMessage = 'Removed ${location.node.label}.';
     notifyListeners();
+    return true;
   }
 
   void clearSolutionCommands() {
@@ -328,7 +506,7 @@ class BuilderController extends ChangeNotifier {
 
     _clearPlaybackPreview();
     project = project.copyWith(solutionCommands: const []);
-    logicStatusMessage = 'Cleared the solution steps.';
+    logicStatusMessage = 'Cleared the solution blocks.';
     notifyListeners();
   }
 
@@ -339,10 +517,17 @@ class BuilderController extends ChangeNotifier {
       return;
     }
 
-    _finishPlayback(
-      nextState: null,
-      message: 'Playback stopped.',
-    );
+    _finishPlayback(nextState: null, message: 'Playback stopped.');
+  }
+
+  void resetPlaybackPreview() {
+    if (playbackState == null && _playbackPlan == null && _playbackTimer == null) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    logicStatusMessage = 'Preview reset.';
+    notifyListeners();
   }
 
   void playSolution() {
@@ -355,7 +540,7 @@ class BuilderController extends ChangeNotifier {
       return;
     }
 
-    if (project.solutionCommands.isEmpty) {
+    if (!_hasExecutableSolutionCommands(project.solutionCommands)) {
       logicStatusMessage = 'Add at least one arrow block before pressing play.';
       notifyListeners();
       return;
@@ -374,20 +559,36 @@ class BuilderController extends ChangeNotifier {
       return;
     }
 
-    playbackState = BuilderPlaybackState(
+    final initialState = _PlaybackSimulationState(
       playerX: startPosition.playerX,
       playerY: startPosition.playerY,
-      fromPlayerX: startPosition.playerX,
-      fromPlayerY: startPosition.playerY,
-      toPlayerX: startPosition.playerX,
-      toPlayerY: startPosition.playerY,
-      activeCommandIndex: -1,
+      collectedCollectableIds: startPosition.collectedCollectableIds,
+    );
+    final playbackPlan = _buildPlaybackPlan(initialState);
+
+    if (playbackPlan.steps.isEmpty) {
+      logicStatusMessage = playbackPlan.outcome.message;
+      notifyListeners();
+      return;
+    }
+
+    _playbackPlan = playbackPlan;
+    playbackState = BuilderPlaybackState(
+      playerX: initialState.playerX,
+      playerY: initialState.playerY,
+      fromPlayerX: initialState.playerX,
+      fromPlayerY: initialState.playerY,
+      toPlayerX: initialState.playerX,
+      toPlayerY: initialState.playerY,
+      activeStepIndex: -1,
+      totalStepCount: playbackPlan.steps.length,
+      activeCommandId: null,
       movementStartedAtMs: DateTime.now().millisecondsSinceEpoch,
       animatedCommand: null,
       isPlaying: true,
       hasSucceeded: false,
       hasFailed: false,
-      collectedCollectableIds: startPosition.collectedCollectableIds,
+      collectedCollectableIds: initialState.collectedCollectableIds,
     );
     logicStatusMessage = 'Playing solution...';
     notifyListeners();
@@ -662,57 +863,511 @@ class BuilderController extends ChangeNotifier {
     return null;
   }
 
-  void _runNextSolutionStep() {
-    final currentPlayback = playbackState;
-    if (currentPlayback == null || !currentPlayback.isPlaying) {
-      _playbackTimer?.cancel();
-      return;
+  int _countSolutionCommandBlocks(List<LogicCommandNode> commands) {
+    var total = 0;
+
+    for (final command in commands) {
+      total += 1;
+      total += _countSolutionCommandBlocks(command.children);
     }
 
-    final nextCommandIndex = currentPlayback.activeCommandIndex + 1;
-    if (nextCommandIndex >= project.solutionCommands.length) {
-      _finishPlayback(
-        nextState: currentPlayback.copyWith(
-          isPlaying: false,
-          hasFailed: true,
-        ),
-        message: _buildIncompleteRunMessage(currentPlayback),
-      );
-      return;
+    return total;
+  }
+
+  bool _hasExecutableSolutionCommands(List<LogicCommandNode> commands) {
+    for (final command in commands) {
+      if (command.isAction) {
+        return true;
+      }
+
+      if (_hasExecutableSolutionCommands(command.children)) {
+        return true;
+      }
     }
 
-    final command = LogicCommandTypeExtension.fromString(
-      project.solutionCommands[nextCommandIndex],
+    return false;
+  }
+
+  String? _resolveTargetLoopId({
+    required List<LogicCommandNode> commands,
+    required String? targetLoopId,
+  }) {
+    if (targetLoopId == null) {
+      return null;
+    }
+
+    final targetLocation = _findSolutionCommandLocation(commands, targetLoopId);
+    if (targetLocation == null || !targetLocation.node.isLoop) {
+      return null;
+    }
+
+    return targetLoopId;
+  }
+
+  List<LogicCommandNode> _insertSolutionCommandNode({
+    required List<LogicCommandNode> commands,
+    required String? targetParentId,
+    int? targetIndex,
+    required LogicCommandNode node,
+  }) {
+    final resolvedTargetParentId = _resolveTargetLoopId(
+      commands: commands,
+      targetLoopId: targetParentId,
     );
-    final nextX = currentPlayback.playerX + command.deltaX;
-    final nextY = currentPlayback.playerY + command.deltaY;
+
+    if (resolvedTargetParentId == null) {
+      final nextCommands = List<LogicCommandNode>.from(commands);
+      final safeIndex = _clampInsertIndex(targetIndex, nextCommands.length);
+      nextCommands.insert(safeIndex, node);
+      return nextCommands;
+    }
+
+    final parentLocation = _findSolutionCommandLocation(
+      commands,
+      resolvedTargetParentId,
+    );
+    if (parentLocation == null || !parentLocation.node.isLoop) {
+      final nextCommands = List<LogicCommandNode>.from(commands);
+      final safeIndex = _clampInsertIndex(targetIndex, nextCommands.length);
+      nextCommands.insert(safeIndex, node);
+      return nextCommands;
+    }
+
+    return _insertSolutionCommandAtPath(
+      commands: commands,
+      parentPath: parentLocation.path,
+      targetIndex: targetIndex,
+      node: node,
+    );
+  }
+
+  List<LogicCommandNode> _insertSolutionCommandAtPath({
+    required List<LogicCommandNode> commands,
+    required List<int> parentPath,
+    required int? targetIndex,
+    required LogicCommandNode node,
+  }) {
+    if (parentPath.isEmpty) {
+      final nextCommands = List<LogicCommandNode>.from(commands);
+      final safeIndex = _clampInsertIndex(targetIndex, nextCommands.length);
+      nextCommands.insert(safeIndex, node);
+      return nextCommands;
+    }
+
+    final nextCommands = List<LogicCommandNode>.from(commands);
+    final parentIndex = parentPath.first;
+    final parentNode = nextCommands[parentIndex];
+
+    nextCommands[parentIndex] = parentNode.copyWith(
+      children: _insertSolutionCommandAtPath(
+        commands: parentNode.children,
+        parentPath: parentPath.sublist(1),
+        targetIndex: targetIndex,
+        node: node,
+      ),
+    );
+
+    return nextCommands;
+  }
+
+  List<LogicCommandNode> _removeSolutionCommandAtPath({
+    required List<LogicCommandNode> commands,
+    required List<int> path,
+    void Function(LogicCommandNode removed)? onRemoved,
+  }) {
+    final nextCommands = List<LogicCommandNode>.from(commands);
+    final currentIndex = path.first;
+
+    if (path.length == 1) {
+      final removed = nextCommands.removeAt(currentIndex);
+      onRemoved?.call(removed);
+      return nextCommands;
+    }
+
+    final currentNode = nextCommands[currentIndex];
+    nextCommands[currentIndex] = currentNode.copyWith(
+      children: _removeSolutionCommandAtPath(
+        commands: currentNode.children,
+        path: path.sublist(1),
+        onRemoved: onRemoved,
+      ),
+    );
+
+    return nextCommands;
+  }
+
+  List<LogicCommandNode>? _childCommandsForParent(
+    List<LogicCommandNode> commands,
+    String? parentId,
+  ) {
+    if (parentId == null) {
+      return commands;
+    }
+
+    final parentLocation = _findSolutionCommandLocation(commands, parentId);
+    if (parentLocation == null || !parentLocation.node.isLoop) {
+      return null;
+    }
+
+    return parentLocation.node.children;
+  }
+
+  _SolutionCommandLocation? _findSolutionCommandLocation(
+    List<LogicCommandNode> commands,
+    String commandId, {
+    String? parentId,
+    List<int> currentPath = const [],
+  }) {
+    for (int index = 0; index < commands.length; index++) {
+      final command = commands[index];
+      final nextPath = [...currentPath, index];
+
+      if (command.id == commandId) {
+        return _SolutionCommandLocation(
+          node: command,
+          parentId: parentId,
+          path: nextPath,
+        );
+      }
+
+      if (!command.isLoop) {
+        continue;
+      }
+
+      final nestedLocation = _findSolutionCommandLocation(
+        command.children,
+        commandId,
+        parentId: command.id,
+        currentPath: nextPath,
+      );
+      if (nestedLocation != null) {
+        return nestedLocation;
+      }
+    }
+
+    return null;
+  }
+
+  bool _pathStartsWith(List<int> value, List<int> prefix) {
+    if (prefix.length > value.length) {
+      return false;
+    }
+
+    for (int index = 0; index < prefix.length; index++) {
+      if (value[index] != prefix[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  int _clampInsertIndex(int? index, int length) {
+    if (index == null) {
+      return length;
+    }
+
+    if (index < 0) {
+      return 0;
+    }
+
+    if (index > length) {
+      return length;
+    }
+
+    return index;
+  }
+
+  _PlaybackPlan _buildPlaybackPlan(_PlaybackSimulationState initialState) {
+    final steps = <_PlaybackPlanStep>[];
+    var currentState = initialState;
+    final maxStepCount = _computeMaxPlaybackSteps();
+
+    for (final command in project.solutionCommands) {
+      if (command.isLoop) {
+        final loopResult = _appendLoopToPlan(
+          loop: command,
+          startState: currentState,
+          committedSteps: steps,
+          maxStepCount: maxStepCount,
+        );
+        currentState = loopResult.endingState;
+
+        if (loopResult.outcome != null) {
+          return _PlaybackPlan(steps: steps, outcome: loopResult.outcome!);
+        }
+
+        continue;
+      }
+
+      if (steps.length >= maxStepCount) {
+        return _PlaybackPlan(
+          steps: steps,
+          outcome: _buildFailureOutcome(
+            message: 'The run used too many steps.',
+            state: currentState,
+            activeCommandId: steps.isEmpty ? null : steps.last.commandId,
+          ),
+        );
+      }
+
+      final actionResult = _simulateActionCommand(
+        commandNode: command,
+        currentState: currentState,
+      );
+      if (!actionResult.wasSuccessful) {
+        return _PlaybackPlan(
+          steps: steps,
+          outcome: _buildFailureOutcome(
+            message: actionResult.failureMessage ?? 'The run failed.',
+            state: actionResult.nextState,
+            activeCommandId: command.id,
+          ),
+        );
+      }
+
+      steps.add(actionResult.step!);
+      currentState = actionResult.nextState;
+
+      if (actionResult.didSolveLevel) {
+        return _PlaybackPlan(
+          steps: steps,
+          outcome: _buildSuccessOutcome(
+            state: currentState,
+            activeCommandId: command.id,
+          ),
+        );
+      }
+    }
+
+    return _PlaybackPlan(
+      steps: steps,
+      outcome: _buildFailureOutcome(
+        message: _buildIncompleteRunMessageFromState(currentState),
+        state: currentState,
+        activeCommandId: steps.isEmpty ? null : steps.last.commandId,
+      ),
+    );
+  }
+
+  _LoopPlanBuildResult _appendLoopToPlan({
+    required LogicCommandNode loop,
+    required _PlaybackSimulationState startState,
+    required List<_PlaybackPlanStep> committedSteps,
+    required int maxStepCount,
+  }) {
+    if (loop.children.isEmpty) {
+      return _LoopPlanBuildResult(endingState: startState);
+    }
+
+    var currentState = startState;
+
+    while (true) {
+      final remainingBudget = maxStepCount - committedSteps.length;
+      if (remainingBudget <= 0) {
+        return _LoopPlanBuildResult(
+          endingState: currentState,
+          outcome: _buildFailureOutcome(
+            message: 'The run used too many steps.',
+            state: currentState,
+            activeCommandId: loop.id,
+          ),
+        );
+      }
+
+      final iterationResult = _trySimulateSequenceOnce(
+        nodes: loop.children,
+        startState: currentState,
+        stepBudget: remainingBudget,
+      );
+
+      switch (iterationResult.status) {
+        case _TransactionalSequenceStatus.softFailure:
+          return _LoopPlanBuildResult(endingState: currentState);
+        case _TransactionalSequenceStatus.hardFailure:
+          return _LoopPlanBuildResult(
+            endingState: currentState,
+            outcome: _buildFailureOutcome(
+              message: iterationResult.message ?? 'The loop failed.',
+              state: currentState,
+              activeCommandId: iterationResult.activeCommandId ?? loop.id,
+            ),
+          );
+        case _TransactionalSequenceStatus.success:
+          if (iterationResult.steps.isEmpty) {
+            return _LoopPlanBuildResult(endingState: currentState);
+          }
+
+          if (!_didStateChange(currentState, iterationResult.endingState)) {
+            return _LoopPlanBuildResult(
+              endingState: currentState,
+              outcome: _buildFailureOutcome(
+                message: 'The loop repeats without making progress.',
+                state: currentState,
+                activeCommandId: loop.id,
+              ),
+            );
+          }
+
+          committedSteps.addAll(iterationResult.steps);
+          currentState = iterationResult.endingState;
+
+          if (iterationResult.didSolveLevel) {
+            return _LoopPlanBuildResult(
+              endingState: currentState,
+              outcome: _buildSuccessOutcome(
+                state: currentState,
+                activeCommandId: iterationResult.lastCommandId ?? loop.id,
+              ),
+            );
+          }
+
+          break;
+      }
+    }
+  }
+
+  _TransactionalSequenceResult _trySimulateSequenceOnce({
+    required List<LogicCommandNode> nodes,
+    required _PlaybackSimulationState startState,
+    required int stepBudget,
+  }) {
+    final localSteps = <_PlaybackPlanStep>[];
+    var currentState = startState;
+
+    for (final command in nodes) {
+      if (localSteps.length >= stepBudget) {
+        return _TransactionalSequenceResult.hardFailure(
+          endingState: startState,
+          message: 'The run used too many steps.',
+          activeCommandId: command.id,
+        );
+      }
+
+      if (command.isLoop) {
+        var nestedLoopState = currentState;
+
+        while (true) {
+          final remainingBudget = stepBudget - localSteps.length;
+          if (remainingBudget <= 0) {
+            return _TransactionalSequenceResult.hardFailure(
+              endingState: startState,
+              message: 'The run used too many steps.',
+              activeCommandId: command.id,
+            );
+          }
+
+          final nestedIteration = _trySimulateSequenceOnce(
+            nodes: command.children,
+            startState: nestedLoopState,
+            stepBudget: remainingBudget,
+          );
+
+          if (nestedIteration.status ==
+              _TransactionalSequenceStatus.softFailure) {
+            break;
+          }
+
+          if (nestedIteration.status ==
+              _TransactionalSequenceStatus.hardFailure) {
+            return _TransactionalSequenceResult.hardFailure(
+              endingState: startState,
+              message: nestedIteration.message,
+              activeCommandId: nestedIteration.activeCommandId ?? command.id,
+            );
+          }
+
+          if (nestedIteration.steps.isEmpty) {
+            break;
+          }
+
+          if (!_didStateChange(nestedLoopState, nestedIteration.endingState)) {
+            return _TransactionalSequenceResult.hardFailure(
+              endingState: startState,
+              message: 'The loop repeats without making progress.',
+              activeCommandId: command.id,
+            );
+          }
+
+          localSteps.addAll(nestedIteration.steps);
+          nestedLoopState = nestedIteration.endingState;
+
+          if (nestedIteration.didSolveLevel) {
+            return _TransactionalSequenceResult.success(
+              endingState: nestedLoopState,
+              steps: localSteps,
+              didSolveLevel: true,
+            );
+          }
+        }
+
+        currentState = nestedLoopState;
+        continue;
+      }
+
+      final actionResult = _simulateActionCommand(
+        commandNode: command,
+        currentState: currentState,
+      );
+
+      if (!actionResult.wasSuccessful) {
+        return _TransactionalSequenceResult.softFailure(
+          endingState: startState,
+          message: actionResult.failureMessage,
+          activeCommandId: command.id,
+        );
+      }
+
+      localSteps.add(actionResult.step!);
+      currentState = actionResult.nextState;
+
+      if (actionResult.didSolveLevel) {
+        return _TransactionalSequenceResult.success(
+          endingState: currentState,
+          steps: localSteps,
+          didSolveLevel: true,
+        );
+      }
+    }
+
+    return _TransactionalSequenceResult.success(
+      endingState: currentState,
+      steps: localSteps,
+      didSolveLevel: false,
+    );
+  }
+
+  _ActionSimulationResult _simulateActionCommand({
+    required LogicCommandNode commandNode,
+    required _PlaybackSimulationState currentState,
+  }) {
+    final command = commandNode.command;
+    if (command == null) {
+      return _ActionSimulationResult.failure(
+        message: 'A command is missing its action.',
+        nextState: currentState,
+      );
+    }
+
+    final nextX = currentState.playerX + command.deltaX;
+    final nextY = currentState.playerY + command.deltaY;
 
     if (!_isInBounds(nextX, nextY)) {
-      _finishPlayback(
-        nextState: currentPlayback.copyWith(
-          activeCommandIndex: nextCommandIndex,
-          isPlaying: false,
-          hasFailed: true,
-        ),
+      return _ActionSimulationResult.failure(
         message: '${command.label} goes outside the level.',
+        nextState: currentState,
       );
-      return;
     }
 
     if (_isSolidTile(nextX, nextY)) {
-      _finishPlayback(
-        nextState: currentPlayback.copyWith(
-          activeCommandIndex: nextCommandIndex,
-          isPlaying: false,
-          hasFailed: true,
-        ),
+      return _ActionSimulationResult.failure(
         message: '${command.label} is blocked by a tile.',
+        nextState: currentState,
       );
-      return;
     }
 
     final nextCollectedIds = <String>{
-      ...currentPlayback.collectedCollectableIds,
+      ...currentState.collectedCollectableIds,
       ..._collectablesAt(nextX, nextY),
     };
     final fallResult = _resolveFallingPosition(
@@ -720,60 +1375,145 @@ class BuilderController extends ChangeNotifier {
       startY: nextY,
       collectedCollectableIds: nextCollectedIds,
     );
-
-    if (fallResult.fellOutOfLevel) {
-      _finishPlayback(
-        nextState: currentPlayback.copyWith(
-          playerX: fallResult.playerX,
-          playerY: fallResult.playerY,
-          activeCommandIndex: nextCommandIndex,
-          isPlaying: false,
-          hasFailed: true,
-          collectedCollectableIds: fallResult.collectedCollectableIds,
-        ),
-        message: '${command.label} makes the player fall out of the level.',
-      );
-      return;
-    }
-
-    final nextPlayback = currentPlayback.copyWith(
+    final nextState = _PlaybackSimulationState(
       playerX: fallResult.playerX,
       playerY: fallResult.playerY,
-      fromPlayerX: currentPlayback.playerX,
-      fromPlayerY: currentPlayback.playerY,
-      toPlayerX: fallResult.playerX,
-      toPlayerY: fallResult.playerY,
-      activeCommandIndex: nextCommandIndex,
-      movementStartedAtMs: DateTime.now().millisecondsSinceEpoch,
-      animatedCommand: command,
       collectedCollectableIds: fallResult.collectedCollectableIds,
     );
 
-    if (_hasSolvedLevel(nextPlayback)) {
+    if (fallResult.fellOutOfLevel) {
+      return _ActionSimulationResult.failure(
+        message: '${command.label} makes the player fall out of the level.',
+        nextState: nextState,
+      );
+    }
+
+    return _ActionSimulationResult.success(
+      nextState: nextState,
+      step: _PlaybackPlanStep(
+        commandId: commandNode.id,
+        command: command,
+        fromPlayerX: currentState.playerX,
+        fromPlayerY: currentState.playerY,
+        toPlayerX: nextState.playerX,
+        toPlayerY: nextState.playerY,
+        collectedCollectableIds: nextState.collectedCollectableIds,
+      ),
+      didSolveLevel: _hasSolvedLevelFromState(nextState),
+    );
+  }
+
+  _PlaybackPlanOutcome _buildFailureOutcome({
+    required String message,
+    required _PlaybackSimulationState state,
+    required String? activeCommandId,
+  }) {
+    return _PlaybackPlanOutcome(
+      hasSucceeded: false,
+      hasFailed: true,
+      message: message,
+      playerX: state.playerX,
+      playerY: state.playerY,
+      collectedCollectableIds: state.collectedCollectableIds,
+      activeCommandId: activeCommandId,
+    );
+  }
+
+  _PlaybackPlanOutcome _buildSuccessOutcome({
+    required _PlaybackSimulationState state,
+    required String? activeCommandId,
+  }) {
+    return _PlaybackPlanOutcome(
+      hasSucceeded: true,
+      hasFailed: false,
+      message: 'The player collected everything and reached the goal.',
+      playerX: state.playerX,
+      playerY: state.playerY,
+      collectedCollectableIds: state.collectedCollectableIds,
+      activeCommandId: activeCommandId,
+    );
+  }
+
+  int _computeMaxPlaybackSteps() {
+    final candidate = project.settings.columns * project.settings.rows * 4;
+    if (candidate < 48) {
+      return 48;
+    }
+
+    if (candidate > 600) {
+      return 600;
+    }
+
+    return candidate;
+  }
+
+  bool _didStateChange(
+    _PlaybackSimulationState previous,
+    _PlaybackSimulationState next,
+  ) {
+    final collectedChanged =
+        previous.collectedCollectableIds.length !=
+            next.collectedCollectableIds.length ||
+        !previous.collectedCollectableIds.containsAll(
+          next.collectedCollectableIds,
+        );
+
+    return previous.playerX != next.playerX ||
+        previous.playerY != next.playerY ||
+        collectedChanged;
+  }
+
+  void _runNextSolutionStep() {
+    final currentPlayback = playbackState;
+    final currentPlaybackPlan = _playbackPlan;
+    if (currentPlayback == null ||
+        currentPlaybackPlan == null ||
+        !currentPlayback.isPlaying) {
+      _playbackTimer?.cancel();
+      return;
+    }
+
+    final nextStepIndex = currentPlayback.activeStepIndex + 1;
+    if (nextStepIndex >= currentPlaybackPlan.steps.length) {
+      final outcome = currentPlaybackPlan.outcome;
       _finishPlayback(
-        nextState: nextPlayback.copyWith(
+        nextState: currentPlayback.copyWith(
+          playerX: outcome.playerX,
+          playerY: outcome.playerY,
+          fromPlayerX: outcome.playerX,
+          fromPlayerY: outcome.playerY,
+          toPlayerX: outcome.playerX,
+          toPlayerY: outcome.playerY,
+          activeStepIndex: currentPlaybackPlan.steps.length - 1,
+          activeCommandId: outcome.activeCommandId,
+          animatedCommand: null,
           isPlaying: false,
-          hasSucceeded: true,
+          hasSucceeded: outcome.hasSucceeded,
+          hasFailed: outcome.hasFailed,
+          collectedCollectableIds: outcome.collectedCollectableIds,
         ),
-        message: 'The player collected everything and reached the goal.',
+        message: outcome.message,
       );
       return;
     }
 
-    if (nextCommandIndex == project.solutionCommands.length - 1) {
-      _finishPlayback(
-        nextState: nextPlayback.copyWith(
-          isPlaying: false,
-          hasFailed: true,
-        ),
-        message: _buildIncompleteRunMessage(nextPlayback),
-      );
-      return;
-    }
-
-    playbackState = nextPlayback;
+    final nextStep = currentPlaybackPlan.steps[nextStepIndex];
+    playbackState = currentPlayback.copyWith(
+      playerX: nextStep.toPlayerX,
+      playerY: nextStep.toPlayerY,
+      fromPlayerX: nextStep.fromPlayerX,
+      fromPlayerY: nextStep.fromPlayerY,
+      toPlayerX: nextStep.toPlayerX,
+      toPlayerY: nextStep.toPlayerY,
+      activeStepIndex: nextStepIndex,
+      totalStepCount: currentPlaybackPlan.steps.length,
+      activeCommandId: nextStep.commandId,
+      movementStartedAtMs: DateTime.now().millisecondsSinceEpoch,
+      animatedCommand: nextStep.command,
+      collectedCollectableIds: nextStep.collectedCollectableIds,
+    );
     logicStatusMessage =
-        'Step ${nextCommandIndex + 1} of ${project.solutionCommands.length}';
+        'Step ${nextStepIndex + 1} of ${currentPlaybackPlan.steps.length}';
     notifyListeners();
   }
 
@@ -791,6 +1531,7 @@ class BuilderController extends ChangeNotifier {
   void _clearPlaybackPreview() {
     _playbackTimer?.cancel();
     _playbackTimer = null;
+    _playbackPlan = null;
     playbackState = null;
   }
 
@@ -851,7 +1592,7 @@ class BuilderController extends ChangeNotifier {
     return collectableIds;
   }
 
-  bool _hasSolvedLevel(BuilderPlaybackState state) {
+  bool _hasSolvedLevelFromState(_PlaybackSimulationState state) {
     final goal = _goalEntity;
     if (goal == null) {
       return false;
@@ -866,7 +1607,7 @@ class BuilderController extends ChangeNotifier {
         state.collectedCollectableIds.length == totalCollectables;
   }
 
-  String _buildIncompleteRunMessage(BuilderPlaybackState state) {
+  String _buildIncompleteRunMessageFromState(_PlaybackSimulationState state) {
     final goal = _goalEntity;
     final totalCollectables = project.entities
         .where((entity) => entity.type == 'collectable')
@@ -1001,4 +1742,194 @@ class _ResolvedPlaybackPosition {
     required this.collectedCollectableIds,
     required this.fellOutOfLevel,
   });
+}
+
+class _SolutionCommandLocation {
+  final LogicCommandNode node;
+  final String? parentId;
+  final List<int> path;
+
+  const _SolutionCommandLocation({
+    required this.node,
+    required this.parentId,
+    required this.path,
+  });
+
+  int get index => path.last;
+}
+
+class _PlaybackSimulationState {
+  final int playerX;
+  final int playerY;
+  final Set<String> collectedCollectableIds;
+
+  const _PlaybackSimulationState({
+    required this.playerX,
+    required this.playerY,
+    required this.collectedCollectableIds,
+  });
+}
+
+class _PlaybackPlan {
+  final List<_PlaybackPlanStep> steps;
+  final _PlaybackPlanOutcome outcome;
+
+  const _PlaybackPlan({required this.steps, required this.outcome});
+}
+
+class _PlaybackPlanStep {
+  final String commandId;
+  final LogicCommandType command;
+  final int fromPlayerX;
+  final int fromPlayerY;
+  final int toPlayerX;
+  final int toPlayerY;
+  final Set<String> collectedCollectableIds;
+
+  const _PlaybackPlanStep({
+    required this.commandId,
+    required this.command,
+    required this.fromPlayerX,
+    required this.fromPlayerY,
+    required this.toPlayerX,
+    required this.toPlayerY,
+    required this.collectedCollectableIds,
+  });
+}
+
+class _PlaybackPlanOutcome {
+  final bool hasSucceeded;
+  final bool hasFailed;
+  final String message;
+  final int playerX;
+  final int playerY;
+  final Set<String> collectedCollectableIds;
+  final String? activeCommandId;
+
+  const _PlaybackPlanOutcome({
+    required this.hasSucceeded,
+    required this.hasFailed,
+    required this.message,
+    required this.playerX,
+    required this.playerY,
+    required this.collectedCollectableIds,
+    required this.activeCommandId,
+  });
+}
+
+class _LoopPlanBuildResult {
+  final _PlaybackSimulationState endingState;
+  final _PlaybackPlanOutcome? outcome;
+
+  const _LoopPlanBuildResult({required this.endingState, this.outcome});
+}
+
+class _ActionSimulationResult {
+  final bool wasSuccessful;
+  final _PlaybackSimulationState nextState;
+  final _PlaybackPlanStep? step;
+  final String? failureMessage;
+  final bool didSolveLevel;
+
+  const _ActionSimulationResult._({
+    required this.wasSuccessful,
+    required this.nextState,
+    required this.step,
+    required this.failureMessage,
+    required this.didSolveLevel,
+  });
+
+  factory _ActionSimulationResult.success({
+    required _PlaybackSimulationState nextState,
+    required _PlaybackPlanStep step,
+    required bool didSolveLevel,
+  }) {
+    return _ActionSimulationResult._(
+      wasSuccessful: true,
+      nextState: nextState,
+      step: step,
+      failureMessage: null,
+      didSolveLevel: didSolveLevel,
+    );
+  }
+
+  factory _ActionSimulationResult.failure({
+    required String message,
+    required _PlaybackSimulationState nextState,
+  }) {
+    return _ActionSimulationResult._(
+      wasSuccessful: false,
+      nextState: nextState,
+      step: null,
+      failureMessage: message,
+      didSolveLevel: false,
+    );
+  }
+}
+
+enum _TransactionalSequenceStatus { success, softFailure, hardFailure }
+
+class _TransactionalSequenceResult {
+  final _TransactionalSequenceStatus status;
+  final _PlaybackSimulationState endingState;
+  final List<_PlaybackPlanStep> steps;
+  final bool didSolveLevel;
+  final String? message;
+  final String? activeCommandId;
+
+  const _TransactionalSequenceResult._({
+    required this.status,
+    required this.endingState,
+    required this.steps,
+    required this.didSolveLevel,
+    required this.message,
+    required this.activeCommandId,
+  });
+
+  factory _TransactionalSequenceResult.success({
+    required _PlaybackSimulationState endingState,
+    required List<_PlaybackPlanStep> steps,
+    required bool didSolveLevel,
+  }) {
+    return _TransactionalSequenceResult._(
+      status: _TransactionalSequenceStatus.success,
+      endingState: endingState,
+      steps: List<_PlaybackPlanStep>.unmodifiable(steps),
+      didSolveLevel: didSolveLevel,
+      message: null,
+      activeCommandId: steps.isEmpty ? null : steps.last.commandId,
+    );
+  }
+
+  factory _TransactionalSequenceResult.softFailure({
+    required _PlaybackSimulationState endingState,
+    required String? message,
+    required String? activeCommandId,
+  }) {
+    return _TransactionalSequenceResult._(
+      status: _TransactionalSequenceStatus.softFailure,
+      endingState: endingState,
+      steps: const [],
+      didSolveLevel: false,
+      message: message,
+      activeCommandId: activeCommandId,
+    );
+  }
+
+  factory _TransactionalSequenceResult.hardFailure({
+    required _PlaybackSimulationState endingState,
+    required String? message,
+    required String? activeCommandId,
+  }) {
+    return _TransactionalSequenceResult._(
+      status: _TransactionalSequenceStatus.hardFailure,
+      endingState: endingState,
+      steps: const [],
+      didSolveLevel: false,
+      message: message,
+      activeCommandId: activeCommandId,
+    );
+  }
+
+  String? get lastCommandId => steps.isEmpty ? null : steps.last.commandId;
 }
