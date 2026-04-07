@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
+import 'codejr.dart';
 
 void main() => runApp(const MyApp());
 
@@ -12,7 +13,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'CodeMonkey',
       debugShowCheckedModeBanner: false,
-      home: const WelcomePage(),
+      home: const WelcomePage(),  
     );
   }
 }
@@ -491,53 +492,192 @@ Widget _buildHero() {
   }
 }
 
-// ── COURSES DROPDOWN WIDGET ──
-class _CourseDropdown extends StatelessWidget {
+class _CourseDropdown extends StatefulWidget {
   const _CourseDropdown();
 
-  static const courses = [
-    '🎮 Coding for Kids',
-    '🐍 Python Course',
-    '🌐 Web Development',
-    '🕹️ Game Design',
-    '📱 Mobile Apps',
+  @override
+  State<_CourseDropdown> createState() => _CourseDropdownState();
+}
+
+class _CourseDropdownState extends State<_CourseDropdown> {
+  bool _hovered = false;
+  final List<String> _courses = [
+    'ALL COURSES',
+    'CODE JR.',
+    'BEAVER ACHIEVER',
+    'DODO DOES MATH',
+    'CODING ADVENTURE',
+    'GAME BUILDER',
+    'BANANA TALES',
+    'CODING CHATBOTS',
+    'DIGITAL LITERACY COURSES',
+    'DATA SCIENCE COURSE',
+    'ARTIFICIAL INTELLIGENCE COURSE',
+    'HIGH SCHOOL CS COURSES',
+    'MONTHLY ACTIVITY – Limited Time ✨',
   ];
 
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      color: const Color(0xFF2A1505),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-      ),
-      offset: const Offset(0, 40),
-      onSelected: (value) {},
-      itemBuilder: (_) => courses
-          .map(
-            (c) => PopupMenuItem(
-              value: c,
-              child: Text(
-                c,
-                style: GoogleFonts.pacifico(
-                  color: const Color(0xFFE8D8B0),
-                  fontSize: 13,
+  OverlayEntry? _overlayEntry;
+
+  void _showDropdown(BuildContext context) {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          // Transparent barrier to dismiss on tap outside
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _hideDropdown,
+              behavior: HitTestBehavior.translucent,
+              child: const SizedBox.expand(),
+            ),
+          ),
+          Positioned(
+            top: offset.dy + size.height,
+            left: offset.dx,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: 300,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color.fromARGB(255,195, 158, 222), width: 1.5),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: _courses.map((course) {
+                    final isHighSchool = course == 'HIGH SCHOOL CS COURSES';
+                    final isLimited = course.contains('Limited Time');
+                    return InkWell(
+                      onTap: () {
+                        _hideDropdown();
+                        if (course == 'CODE JR.') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CodemonkeyJrPage()),
+      );
+    }
+                      },
+                      hoverColor: const Color(0xFFF0F4FF),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: const Color(0xFFEEEEEE),
+                              width: course == _courses.last ? 0 : 1,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              course,
+                              style: GoogleFonts.montserrat(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isLimited
+                                    ? const Color(0xFF1A3A6B)
+                                    : const Color(0xFF1A3A6B),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            if (isHighSchool)
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 12,
+                                color: Color(0xFF1A3A6B),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
             ),
-          )
-          .toList(),
-      child: Row(
-        children: [
-          Text(
-            'COURSES',
-            style: GoogleFonts.montserrat(fontSize: 14, color: const Color.fromARGB(255, 255, 255, 255),fontWeight: FontWeight.w500),
-          ),
-          const Icon(
-            Icons.keyboard_arrow_down,
-            color: Color(0xFFE8D8B0),
-            size: 16,
           ),
         ],
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() => _hovered = true);
+  }
+
+  void _hideDropdown() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    setState(() => _hovered = false);
+  }
+
+  @override
+  void dispose() {
+    _hideDropdown();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        if (_overlayEntry == null) {
+          _showDropdown(context);
+        } else {
+          _hideDropdown();
+        }
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: _hovered
+                  ? const .fromARGB(255,195, 158, 222)
+                  : Colors.transparent,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'COURSES',
+              style: GoogleFonts.montserrat(
+                fontSize: 14,
+                color: _hovered
+                    ? const .fromARGB(255,195, 158, 222)
+                    : Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down,
+              color: _hovered
+                  ? const Color.fromARGB(255,195, 158, 222)
+                  : Colors.white,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
