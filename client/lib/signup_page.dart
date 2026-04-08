@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'student.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -218,7 +219,12 @@ AnimatedBuilder(
                           title: 'STUDENT',
                           subtitle: 'Join your classmates in fun coding games',
                           imagePath: 'assets/images/student.png',
-                          onTap: () {},
+                          onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const StudentSignupPage()),
+  );
+},
                         ),
                         const SizedBox(width: 24),
                         _RoleCard(
