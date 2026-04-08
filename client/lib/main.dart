@@ -233,8 +233,8 @@ Widget _buildHero() {
             right: 0,
             child: Center(
               child: Image.asset(
-                'assets/images/elephant.png',
-                height: 150,
+                'assets/images/elephant2.png',
+                height: 200,
               ),
             ),
           ),

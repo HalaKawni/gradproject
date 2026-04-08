@@ -218,7 +218,7 @@ AnimatedBuilder(
                         _RoleCard(
                           title: 'STUDENT',
                           subtitle: 'Join your classmates in fun coding games',
-                          imagePath: 'assets/images/student.png',
+                          imagePath: 'assets/images/student.jpg',
                           onTap: () {
   Navigator.push(
     context,
@@ -231,7 +231,7 @@ AnimatedBuilder(
                           title: 'PARENT',
                           subtitle:
                               'Introduce your child to Computer Science and track their progress',
-                          imagePath: 'assets/images/parent.png',
+                          imagePath: 'assets/images/parent.jpg',
                           onTap: () {},
                         ),
                       ],

@@ -61,16 +61,20 @@ flutter:
     - assets/images/monkey1.png
     - assets/images/background_blue.png
     - assets/images/giraff.png
-    - assets/images/elephant.png
+    - assets/images/elephant2.png
     - assets/images/login_bg.jpg
     - assets/images/clouds.png
     - assets/images/signup_bg.jpg
-    - assets/images/student.png
-    - assets/images/parent.png
+    - assets/images/student.jpg
+    - assets/images/parent.jpg
     - assets/images/Jr1.png
     - assets/images/monkey_yes.png
     - assets/images/monkey_no.png
     - assets/images/background3.jpg
+    - assets/images/elephant_no.jpg
+    - assets/images/elephant_yes.jpg
+    - assets/images/classroom2.jpg
+    - assets/images/home.png
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

@@ -1,21 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'No_page.dart';
 
-class StudentSignupPage extends StatefulWidget {
-  const StudentSignupPage({super.key});
+class WherePlayingPage extends StatefulWidget {
+  const WherePlayingPage({super.key});
 
   @override
-  State<StudentSignupPage> createState() => _StudentSignupPageState();
+  State<WherePlayingPage> createState() => _WherePlayingPageState();
 }
 
-class _StudentSignupPageState extends State<StudentSignupPage>
+class _WherePlayingPageState extends State<WherePlayingPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _cloudController;
   late Animation<double> _cloudAnimation;
-  String? _selected; // 'YES' or 'NO'
-  final _codeController = TextEditingController();
-  bool _showCodeError = false;
 
   @override
   void initState() {
@@ -31,7 +27,6 @@ class _StudentSignupPageState extends State<StudentSignupPage>
   @override
   void dispose() {
     _cloudController.dispose();
-    _codeController.dispose();
     super.dispose();
   }
 
@@ -108,7 +103,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
 
                       // ── TITLE ──
                       Text(
-                        'DO YOU HAVE A CLASSROOM CODE?',
+                        'WHERE WILL YOU BE PLAYING?',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -116,182 +111,37 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                           fontWeight: FontWeight.w700,
                           height: 1.1,
                           shadows: const [
-                          Shadow(
-                            offset: Offset(3, 3),
-                            color: Color(0x33000000),
-                            blurRadius: 0,
-                          ),
-                        ],
+                            Shadow(
+                              offset: Offset(3, 3),
+                              color: Color(0x33000000),
+                              blurRadius: 0,
+                            ),
+                          ],
                         ),
                       ),
 
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 36),
 
-                      // ── Subtitle ──
-                      Text(
-                        'A classroom code is a code given to you by your teacher for creating your user.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunito(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // ── CODE INPUT (only when YES selected) ──
-                      if (_selected == 'YES') ...[
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 340,
-                                    child: TextField(
-                                      controller: _codeController,
-                                      style: GoogleFonts.nunito(
-                                        fontSize: 14,
-                                        color: const Color(0xFF333333),
-                                      ),
-                                      decoration: InputDecoration(
-                                        hintText: 'Enter classroom code',
-                                        hintStyle: GoogleFonts.nunito(
-                                          fontSize: 14,
-                                          color: const Color(0xFF999999),
-                                        ),
-                                        filled: true,
-                                        fillColor: Colors.white,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 16, vertical: 14),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderSide: const BorderSide(
-                                              color: Color(0xFFDDDDDD)),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderSide: const BorderSide(
-                                              color: Color(0xFF6DB33F),
-                                              width: 2),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 0),
-                                  // NEXT button
-                                  Container(
-                                    margin: const EdgeInsets.only(left: 8), 
-                                    decoration: BoxDecoration(
-                                      color: const Color.fromARGB(255,195, 158, 222),
-                                      borderRadius: const BorderRadius.only(
-                                        topRight: Radius.circular(4),
-                                        bottomRight: Radius.circular(4),
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(bottom: 4),
-                                      child: ElevatedButton(
-                                        onPressed: () {
-                                          if (_codeController.text.isEmpty) {
-                                            setState(
-                                                () => _showCodeError = true);
-                                          } else {
-                                            setState(
-                                                () => _showCodeError = false);
-                                            // TODO: handle next
-                                          }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              const Color.fromARGB(255,220, 202, 233),
-                                          foregroundColor:
-                                              const Color(0xFF3A2A00),
-                                          elevation: 0,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 28, vertical: 14),
-                                          shape: const RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.only(
-                                              topRight: Radius.circular(4),
-                                              bottomRight: Radius.circular(4),
-                                            ),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'NEXT',
-                                          style: GoogleFonts.montserrat(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 1.2,
-                                            
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (_showCodeError) ...[
-                                const SizedBox(height: 6),
-                                Padding(
-                                  padding: const EdgeInsets.only(left:520),
-                                  child: Text(
-                                    'This field is required',
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFFE53935),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                      ] else
-                        const SizedBox(height: 12),
-
-                      // ── YES / NO CARDS ──
+                      // ── HOME / CLASSROOM CARDS ──
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _ClassroomCard(
-                              answer: 'YES',
-                              subtitle: 'I have a code',
-                              imagePath: 'assets/images/elephant_yes.jpg',
-                              isSelected: _selected == 'YES',
-                              onTap: () {
-                                setState(() {
-                                  _selected = 'YES';
-                                  _showCodeError = false;
-                                  _codeController.clear();
-                                });
-                              },
+                            _PlayingCard(
+                              answer: 'HOME',
+                              subtitle: "I'm playing on my own",
+                              imagePath: 'assets/images/home.png',
+                              onTap: () {},
                             ),
                             const SizedBox(width: 24),
-                            _ClassroomCard(
-                              answer: 'NO',
-                              subtitle: "I didn't receive any code",
-                              imagePath: 'assets/images/elephant_no.jpg',
-                              isSelected: _selected == 'NO',
-                             onTap: () {
-  setState(() => _selected = 'NO');
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const WherePlayingPage()),
-  );
-},
-                              
+                            _PlayingCard(
+                              answer: 'CLASSROOM',
+                              subtitle:
+                                  'I belong to a CodeMonkey classroom with a teacher',
+                              imagePath: 'assets/images/classroom2.jpg',
+                              onTap: () {},
                             ),
                           ],
                         ),
@@ -390,27 +240,25 @@ class _StudentSignupPageState extends State<StudentSignupPage>
   }
 }
 
-// ── YES / NO CARD ──
-class _ClassroomCard extends StatefulWidget {
+// ── PLAYING CARD ──
+class _PlayingCard extends StatefulWidget {
   final String answer;
   final String subtitle;
   final String imagePath;
-  final bool isSelected;
   final VoidCallback onTap;
 
-  const _ClassroomCard({
+  const _PlayingCard({
     required this.answer,
     required this.subtitle,
     required this.imagePath,
-    required this.isSelected,
     required this.onTap,
   });
 
   @override
-  State<_ClassroomCard> createState() => _ClassroomCardState();
+  State<_PlayingCard> createState() => _PlayingCardState();
 }
 
-class _ClassroomCardState extends State<_ClassroomCard> {
+class _PlayingCardState extends State<_PlayingCard> {
   bool _hovered = false;
 
   @override
@@ -427,14 +275,12 @@ class _ClassroomCardState extends State<_ClassroomCard> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: widget.isSelected
-                  ? const Color(0xFF5D9C2A)
-                  : _hovered
-                      ? const Color(0xFF888888)
-                      : const Color(0xFFDDDDDD),
-              width: widget.isSelected ? 3 : (_hovered ? 2 : 1),
+              color: _hovered
+                  ? const Color(0xFF888888)
+                  : const Color(0xFFDDDDDD),
+              width: _hovered ? 2 : 1,
             ),
-            boxShadow: (_hovered || widget.isSelected)
+            boxShadow: _hovered
                 ? [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.18),
@@ -451,22 +297,31 @@ class _ClassroomCardState extends State<_ClassroomCard> {
                   ],
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 24),
               Text(
                 widget.answer,
                 style: GoogleFonts.amaticSc(
-                  fontSize: 42,
+                  fontSize: 38,
                   fontWeight: FontWeight.w700,
                   color: const Color(0xFF2C3E50),
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                widget.subtitle,
-                style: GoogleFonts.nunito(
-                  fontSize: 13,
-                  color: const Color(0xFF777777),
+              SizedBox(
+                height: 40,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    widget.subtitle,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      color: const Color(0xFF777777),
+                      height: 1.4,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -478,7 +333,7 @@ class _ClassroomCardState extends State<_ClassroomCard> {
                 child: Image.asset(
                   widget.imagePath,
                   width: 240,
-                  height: 160,
+                  height: 180,
                   fit: BoxFit.cover,
                 ),
               ),
