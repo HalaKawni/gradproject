@@ -3,5 +3,6 @@ class AppRoutes {
   static const String register = '/register';
   static const String home = '/home';
   static const String builder = '/builder';
+  static const String topViewBuilder = '/top-view-builder';
   static const String myGames = '/my-games';
 }

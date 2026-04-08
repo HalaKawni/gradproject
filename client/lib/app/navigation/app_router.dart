@@ -4,6 +4,7 @@ import 'package:client/features/auth/pages/login_page.dart';
 import 'package:client/features/auth/pages/register_page.dart';
 import 'package:client/features/builder/pages/builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
+import 'package:client/features/builder/pages/top_view_builder_page.dart';
 import 'package:client/features/home/pages/user_home_page.dart';
 import 'package:flutter/material.dart';
 
@@ -47,6 +48,18 @@ class AppRouter {
         return _errorRoute(
           settings,
           'The builder page needs an active user session.',
+        );
+      case AppRoutes.topViewBuilder:
+        final data = settings.arguments;
+        if (data is TopViewBuilderRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => TopViewBuilderPage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The top view builder page needs an active user session.',
         );
       case AppRoutes.myGames:
         final data = settings.arguments;
