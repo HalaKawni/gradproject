@@ -71,18 +71,18 @@ class _LoginPageState extends State<LoginPage>
     ],
   ),
 ),
- Positioned(
-        bottom: 0,
-        left: 16,
-        child: IgnorePointer(
-          child: Image.asset(
-            'assets/images/elephant.png',
-            width: 160,
-            height: 160,
-            fit: BoxFit.contain,
-          ),
-        ),
-      ),
+//  Positioned(
+//         bottom: 0,
+//         left: 16,
+//         child: IgnorePointer(
+//           child: Image.asset(
+//             'assets/images/elephant2.png',
+//             width: 160,
+//             height: 160,
+//             fit: BoxFit.contain,
+//           ),
+//         ),
+//       ),
                     const SizedBox(height: 20),
 
                     // ── WHITE CARD ──

@@ -75,6 +75,7 @@ flutter:
     - assets/images/elephant_yes.jpg
     - assets/images/classroom2.jpg
     - assets/images/home.png
+    - assets/images/age.png
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

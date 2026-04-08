@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'home_page.dart';
 
 class WherePlayingPage extends StatefulWidget {
   const WherePlayingPage({super.key});
@@ -133,7 +134,12 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                               answer: 'HOME',
                               subtitle: "I'm playing on my own",
                               imagePath: 'assets/images/home.png',
-                              onTap: () {},
+                              onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (_) => const HomeAgePage()),
+  );
+},
                             ),
                             const SizedBox(width: 24),
                             _PlayingCard(
