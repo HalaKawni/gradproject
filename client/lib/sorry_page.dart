@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'home_page.dart';
 
-class WherePlayingPage extends StatefulWidget {
-  const WherePlayingPage({super.key});
+class SorryPage extends StatefulWidget {
+  const SorryPage({super.key});
 
   @override
-  State<WherePlayingPage> createState() => _WherePlayingPageState();
+  State<SorryPage> createState() => _SorryPageState();
 }
 
-class _WherePlayingPageState extends State<WherePlayingPage>
+class _SorryPageState extends State<SorryPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _cloudController;
   late Animation<double> _cloudAnimation;
@@ -61,37 +60,11 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                 SingleChildScrollView(
                   child: Column(
                     children: [
-                      // ── BACK ──
-                      Padding(
-                        padding: const EdgeInsets.only(left: 24, top: 16),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: GestureDetector(
-                            onTap: () => Navigator.pop(context),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.chevron_left,
-                                    color: Colors.white, size: 20),
-                                Text(
-                                  'BACK',
-                                  style: GoogleFonts.montserrat(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 40),
 
-                      const SizedBox(height: 24),
-
-                      // ── STUDENT SIGNUP label ──
+                      // ── Student Signup label ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'Student Signup',
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -100,17 +73,16 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                         ),
                       ),
 
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
 
                       // ── TITLE ──
                       Text(
-                        'WHERE WILL YOU BE PLAYING?',
+                        'SORRY, FELLOW GRASSHOPPER',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
                           fontSize: 58,
                           fontWeight: FontWeight.w700,
-                          height: 1.1,
                           shadows: const [
                             Shadow(
                               offset: Offset(3, 3),
@@ -121,67 +93,71 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                         ),
                       ),
 
-                      const SizedBox(height: 36),
+                      const SizedBox(height: 40),
 
-                      // ── HOME / CLASSROOM CARDS ──
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _PlayingCard(
-                              answer: 'HOME',
-                              subtitle: "I'm playing on my own",
-                              imagePath: 'assets/images/home.png',
-                              onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const HomeAgePage()),
-  );
-},
-                            ),
-                            const SizedBox(width: 24),
-                            _PlayingCard(
-                              answer: 'CLASSROOM',
-                              subtitle:
-                                  'I belong to a CodeMonkey classroom with a teacher',
-                              imagePath: 'assets/images/classroom2.jpg',
-                              onTap: () {Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeAgePage()),
-    );},
-                            ),
-                          ],
+                      // ── MAGNIFYING GLASS ILLUSTRATION ──
+                    Image.asset(
+  'assets/images/grasshopper.png',
+  width: 220,
+  height: 220,
+  fit: BoxFit.contain,
+),
+
+                      const SizedBox(height: 40),
+
+                      // ── Message ──
+                      Text(
+                        'Unfortunately you are not eligible to access this option.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
                         ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // ── TWO BUTTONS ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _YellowButton(
+                            label: 'Belong to a classroom?',
+                            onTap: () => Navigator.pop(context),
+                          ),
+                          const SizedBox(width: 16),
+                          _YellowButton(
+                            label: 'Playing at home?',
+                            onTap: () => Navigator.pop(context),
+                          ),
+                        ],
                       ),
 
                       const SizedBox(height: 36),
 
-                      // ── Already a member ──
-                      RichText(
-                        text: TextSpan(
-                          style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
-                          children: [
-                            const TextSpan(text: 'Already a member? '),
-                            WidgetSpan(
-                              child: GestureDetector(
-                                onTap: () => Navigator.pop(context),
-                                child: Text(
-                                  'Log in to your account',
-                                  style: GoogleFonts.nunito(
-                                    fontSize: 14,
-                                    color: const Color(0xFF1A73E8),
-                                    decoration: TextDecoration.underline,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                      // ── Maybe these links can help ──
+                      Text(
+                        'Maybe these links can help?',
+                        style: GoogleFonts.nunito(
+                          color: Colors.white,
+                          fontSize: 14,
                         ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _LinkText(label: 'Mini Courses', onTap: () {}),
+                          Text(' | ',
+                              style: GoogleFonts.nunito(
+                                  color: Colors.white, fontSize: 14)),
+                          _LinkText(label: 'Help Center', onTap: () {}),
+                          Text(' | ',
+                              style: GoogleFonts.nunito(
+                                  color: Colors.white, fontSize: 14)),
+                          _LinkText(label: 'Blog', onTap: () {}),
+                        ],
                       ),
 
                       const SizedBox(height: 40),
@@ -202,8 +178,8 @@ class _WherePlayingPageState extends State<WherePlayingPage>
       animation: _cloudAnimation,
       builder: (context, child) {
         final sw = MediaQuery.of(context).size.width;
-        final x = -200 +
-            (((_cloudAnimation.value + offset) % 1.0) * (sw + 400));
+        final x =
+            -200 + (((_cloudAnimation.value + offset) % 1.0) * (sw + 400));
         return Positioned(left: x, top: top, child: child!);
       },
       child: SizedBox(
@@ -249,25 +225,17 @@ class _WherePlayingPageState extends State<WherePlayingPage>
   }
 }
 
-// ── PLAYING CARD ──
-class _PlayingCard extends StatefulWidget {
-  final String answer;
-  final String subtitle;
-  final String imagePath;
+// ── YELLOW BUTTON ──
+class _YellowButton extends StatefulWidget {
+  final String label;
   final VoidCallback onTap;
-
-  const _PlayingCard({
-    required this.answer,
-    required this.subtitle,
-    required this.imagePath,
-    required this.onTap,
-  });
+  const _YellowButton({required this.label, required this.onTap});
 
   @override
-  State<_PlayingCard> createState() => _PlayingCardState();
+  State<_YellowButton> createState() => _YellowButtonState();
 }
 
-class _PlayingCardState extends State<_PlayingCard> {
+class _YellowButtonState extends State<_YellowButton> {
   bool _hovered = false;
 
   @override
@@ -279,80 +247,51 @@ class _PlayingCardState extends State<_PlayingCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 240,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _hovered
-                  ? const Color(0xFF888888)
-                  : const Color(0xFFDDDDDD),
-              width: _hovered ? 2 : 1,
-            ),
-            boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
-                    )
-                  ]
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    )
-                  ],
+            color: _hovered
+                ? const Color.fromARGB(255,195, 158, 222)
+                : const Color.fromARGB(255,220, 202, 233),
+            borderRadius: BorderRadius.circular(6),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 24),
-              Text(
-                widget.answer,
-                style: GoogleFonts.amaticSc(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2C3E50),
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                height: 40,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    widget.subtitle,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.nunito(
-                      fontSize: 13,
-                      color: const Color(0xFF777777),
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(6),
-                  bottomRight: Radius.circular(6),
-                ),
-                child: Image.asset(
-                  widget.imagePath,
-                  width: 240,
-                  height: 180,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ],
+          child: Text(
+            widget.label,
+            style: GoogleFonts.montserrat(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF3A2A00),
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+// ── LINK TEXT ──
+class _LinkText extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _LinkText({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Text(
+        label,
+        style: GoogleFonts.nunito(
+          fontSize: 14,
+          color: Colors.white,
+          decoration: TextDecoration.underline,
+          decorationColor: Colors.white,
+        ),
+      ),
+    );
+  }
+}
+
 
 // ── CLOUD PAINTER ──
 class _CloudPainter extends CustomPainter {
@@ -361,10 +300,8 @@ class _CloudPainter extends CustomPainter {
     final paint = Paint()
       ..color = Colors.white.withOpacity(0.85)
       ..style = PaintingStyle.fill;
-
     final w = size.width;
     final h = size.height;
-
     canvas.drawCircle(Offset(w * 0.18, h * 0.85), w * 0.14, paint);
     canvas.drawCircle(Offset(w * 0.35, h * 0.90), w * 0.16, paint);
     canvas.drawCircle(Offset(w * 0.52, h * 0.92), w * 0.17, paint);
@@ -394,20 +331,17 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
-
   const _HoverNavButton({
     required this.label,
     required this.onPressed,
     this.filled = false,
   });
-
   @override
   State<_HoverNavButton> createState() => _HoverNavButtonState();
 }
 
 class _HoverNavButtonState extends State<_HoverNavButton> {
   bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
     final isYellow = widget.filled || _hovered;

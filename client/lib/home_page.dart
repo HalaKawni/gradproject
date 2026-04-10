@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'student_account_page.dart';
+import 'sorry_page.dart';
 
 class HomeAgePage extends StatefulWidget {
   const HomeAgePage({super.key});
@@ -314,12 +316,19 @@ double get _monkeyHeight {
                                     padding: const EdgeInsets.only(bottom: 4),
                                     child: ElevatedButton(
                                       onPressed: () {
-                                        if (_ageController.text.isEmpty ||
-                                            _age <= 0) {
-                                          setState(() => _showError = true);
-                                        } else {
-                                          // TODO: navigate next
-                                        }
+                                        if (_ageController.text.isEmpty || _age <= 0) {
+    setState(() => _showError = true);
+  } else if (_age > 12) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const StudentAccountPage()),
+    );
+  } else {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SorryPage()),
+    );
+  }
                                       },
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor:

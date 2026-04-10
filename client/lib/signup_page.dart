@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'student.dart';
+import 'parent.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -232,7 +233,10 @@ AnimatedBuilder(
                           subtitle:
                               'Introduce your child to Computer Science and track their progress',
                           imagePath: 'assets/images/parent.jpg',
-                          onTap: () {},
+                          onTap: () {Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const parentAccountPage()),
+    );},
                         ),
                       ],
                     ),
