@@ -78,6 +78,13 @@ class UserHomePage extends StatelessWidget {
     );
   }
 
+  void _openMyPublishedGames(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.myPublishedGames,
+      arguments: MyPublishedGamesRouteData(session: session),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = session.user;
@@ -134,6 +141,15 @@ class UserHomePage extends StatelessWidget {
                     Text(
                       'Email: ${user.email}',
                       style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openMyPublishedGames(context),
+                        icon: const Icon(Icons.public_outlined),
+                        label: const Text('My Published Games'),
+                      ),
                     ),
                   ],
                 ),

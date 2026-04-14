@@ -16,6 +16,18 @@ class BuilderRouteData {
   final String? initialProjectId;
 }
 
+class BuilderPlayRouteData {
+  const BuilderPlayRouteData({
+    required this.session,
+    required this.projectId,
+    this.initialTitle,
+  });
+
+  final AuthSession session;
+  final String projectId;
+  final String? initialTitle;
+}
+
 class TopViewBuilderRouteData {
   const TopViewBuilderRouteData({required this.session});
 
@@ -24,6 +36,12 @@ class TopViewBuilderRouteData {
 
 class MyGamesRouteData {
   const MyGamesRouteData({required this.session});
+
+  final AuthSession session;
+}
+
+class MyPublishedGamesRouteData {
+  const MyPublishedGamesRouteData({required this.session});
 
   final AuthSession session;
 }

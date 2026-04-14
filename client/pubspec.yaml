@@ -34,12 +34,14 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+  google_fonts: ^8.0.2
   http: ^1.6.0
   flame: ^1.36.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
@@ -53,10 +55,33 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
 
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/background1.jpg
+    - assets/images/monkey.png
+    - assets/images/monkey1.png
+    - assets/images/background_blue.png
+    - assets/images/giraff.png
+    - assets/images/elephant2.png
+    - assets/images/login_bg.jpg
+    - assets/images/clouds.png
+    - assets/images/signup_bg.jpg
+    - assets/images/student.jpg
+    - assets/images/parent.jpg
+    - assets/images/Jr1.png
+    - assets/images/monkey_yes.png
+    - assets/images/monkey_no.png
+    - assets/images/background3.jpg
+    - assets/images/elephant_no.jpg
+    - assets/images/elephant_yes.jpg
+    - assets/images/classroom2.jpg
+    - assets/images/home.png
+    - assets/images/age.png
+    - assets/images/sign.png
+    - assets/images/grasshopper.png
+    - assets/images/course1.jpg
+    - assets/images/course2.jpg
 
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -88,3 +113,4 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+

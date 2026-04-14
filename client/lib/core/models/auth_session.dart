@@ -19,7 +19,7 @@ class AuthSession {
     );
   }
 
-  bool get isValid => token.isNotEmpty && user.id.isNotEmpty;
+    bool get isValid => token.isNotEmpty && user.id.isNotEmpty;
 }
 
 class AuthUser {

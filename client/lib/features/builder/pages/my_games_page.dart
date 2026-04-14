@@ -7,10 +7,22 @@ import '../models/saved_builder_project.dart';
 
 class MyGamesPage extends StatefulWidget {
   final AuthSession session;
+  final String title;
+  final String emptyMessage;
+  final String? statusFilter;
+  final bool openProjectOnTap;
+  final bool playProjectOnTap;
+  final String pendingTapMessage;
 
   const MyGamesPage({
     super.key,
     required this.session,
+    this.title = 'My Games',
+    this.emptyMessage = 'No saved games yet.',
+    this.statusFilter,
+    this.openProjectOnTap = true,
+    this.playProjectOnTap = false,
+    this.pendingTapMessage = 'Opening published games will be connected next.',
   });
 
   @override
@@ -46,17 +58,28 @@ class _MyGamesPageState extends State<MyGamesPage> {
       if (result['success'] == true) {
         final rawData = result['data'];
         final items = rawData is List ? rawData : const [];
+        final normalizedStatusFilter = widget.statusFilter?.trim().toLowerCase();
+        final loadedProjects = items
+            .whereType<Map>()
+            .map(
+              (item) => SavedBuilderProject.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .where((project) => project.id.isNotEmpty)
+            .where((project) {
+              if (normalizedStatusFilter == null ||
+                  normalizedStatusFilter.isEmpty) {
+                return true;
+              }
+
+              return project.status.trim().toLowerCase() ==
+                  normalizedStatusFilter;
+            })
+            .toList();
 
         setState(() {
-          projects = items
-              .whereType<Map>()
-              .map(
-                (item) => SavedBuilderProject.fromJson(
-                  Map<String, dynamic>.from(item),
-                ),
-              )
-              .where((project) => project.id.isNotEmpty)
-              .toList();
+          projects = loadedProjects;
         });
       } else {
         setState(() {
@@ -97,6 +120,44 @@ class _MyGamesPageState extends State<MyGamesPage> {
     await _loadProjects();
   }
 
+  Future<void> _playProject(SavedBuilderProject project) async {
+    await Navigator.of(context).pushNamed(
+      AppRoutes.builderPlay,
+      arguments: BuilderPlayRouteData(
+        session: widget.session,
+        projectId: project.id,
+        initialTitle: project.title,
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    await _loadProjects();
+  }
+
+  void _handleProjectPressed(SavedBuilderProject project) {
+    if (widget.openProjectOnTap) {
+      _openProject(project);
+      return;
+    }
+
+    if (widget.playProjectOnTap) {
+      _playProject(project);
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(widget.pendingTapMessage),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   String _buildSubtitle(SavedBuilderProject project) {
     final parts = <String>[
       'Status: ${project.status}',
@@ -125,7 +186,7 @@ class _MyGamesPageState extends State<MyGamesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Games'),
+        title: Text(widget.title),
       ),
       body: RefreshIndicator(
         onRefresh: _loadProjects,
@@ -165,9 +226,9 @@ class _MyGamesPageState extends State<MyGamesPage> {
               return ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(24),
-                children: const [
+                children: [
                   Text(
-                    'No saved games yet.',
+                    widget.emptyMessage,
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -186,8 +247,14 @@ class _MyGamesPageState extends State<MyGamesPage> {
                   child: ListTile(
                     title: Text(project.title),
                     subtitle: Text(_buildSubtitle(project)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openProject(project),
+                    trailing: Icon(
+                      widget.openProjectOnTap
+                          ? Icons.chevron_right
+                          : widget.playProjectOnTap
+                          ? Icons.play_circle_outline
+                          : Icons.public_outlined,
+                    ),
+                    onTap: () => _handleProjectPressed(project),
                   ),
                 );
               },

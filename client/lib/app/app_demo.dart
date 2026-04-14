@@ -2,6 +2,11 @@ import 'package:client/app/navigation/app_router.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 
+
+void main() {
+  runApp(const LearnyApp());
+}
+
 class LearnyApp extends StatelessWidget {
   const LearnyApp({super.key});
 

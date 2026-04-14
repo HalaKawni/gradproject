@@ -19,6 +19,7 @@ class BuilderController extends ChangeNotifier {
 
   BuilderProject project;
   final AuthSession session;
+  final bool requireAllCollectablesForSuccess;
 
   BuilderTool currentTool = BuilderTool.ground;
 
@@ -49,7 +50,17 @@ class BuilderController extends ChangeNotifier {
   int get logicCommandBlockCount =>
       _countSolutionCommandBlocks(project.solutionCommands);
 
-  BuilderController({required this.project, required this.session}) {
+  int get totalCollectableCount =>
+      project.entities.where((entity) => entity.type == 'collectable').length;
+
+  int get collectedCollectableCount =>
+      playbackState?.collectedCollectableIds.length ?? 0;
+
+  BuilderController({
+    required this.project,
+    required this.session,
+    this.requireAllCollectablesForSuccess = true,
+  }) {
     project = _normalizeProject(project);
     _runValidation();
   }
@@ -499,14 +510,16 @@ class BuilderController extends ChangeNotifier {
     return true;
   }
 
-  void clearSolutionCommands() {
+  void clearSolutionCommands({
+    String? statusMessage = 'Cleared the solution blocks.',
+  }) {
     if (project.solutionCommands.isEmpty) {
       return;
     }
 
     _clearPlaybackPreview();
     project = project.copyWith(solutionCommands: const []);
-    logicStatusMessage = 'Cleared the solution blocks.';
+    logicStatusMessage = statusMessage;
     notifyListeners();
   }
 
@@ -680,60 +693,25 @@ class BuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> saveProject() async {
-    try {
-      _runValidation();
+  Future<bool> saveProject() {
+    return _persistProject(
+      createSuccessMessage: 'Project created successfully.',
+      updateSuccessMessage: 'Project updated successfully.',
+      createFailureMessage: 'Failed to create project.',
+      updateFailureMessage: 'Failed to update project.',
+      failurePrefix: 'Save failed',
+    );
+  }
 
-      final normalizedTitle = project.title.trim().isEmpty
-          ? 'Untitled'
-          : project.title.trim();
-
-      if (normalizedTitle != project.title) {
-        project = project.copyWith(title: normalizedTitle);
-      }
-
-      isSaving = true;
-      lastMessage = null;
-      notifyListeners();
-
-      final projectJson = project.toJson();
-
-      if (savedProjectId == null) {
-        final response = await ApiService.createBuilderProject(
-          authToken: session.token,
-          projectJson: projectJson,
-        );
-
-        if (response['success'] == true) {
-          savedProjectId = response['data']['_id'];
-          lastMessage = response['message'] ?? 'Project created successfully.';
-          return true;
-        } else {
-          lastMessage = response['message'] ?? 'Failed to create project.';
-          return false;
-        }
-      } else {
-        final response = await ApiService.updateBuilderProject(
-          authToken: session.token,
-          projectId: savedProjectId!,
-          projectJson: projectJson,
-        );
-
-        if (response['success'] == true) {
-          lastMessage = response['message'] ?? 'Project updated successfully.';
-          return true;
-        } else {
-          lastMessage = response['message'] ?? 'Failed to update project.';
-          return false;
-        }
-      }
-    } catch (e) {
-      lastMessage = 'Save failed: $e';
-      return false;
-    } finally {
-      isSaving = false;
-      notifyListeners();
-    }
+  Future<bool> publishProject() {
+    return _persistProject(
+      createSuccessMessage: 'Project published successfully.',
+      updateSuccessMessage: 'Project published successfully.',
+      createFailureMessage: 'Failed to publish project.',
+      updateFailureMessage: 'Failed to publish project.',
+      failurePrefix: 'Publish failed',
+      statusOverride: 'published',
+    );
   }
 
   Future<void> loadProject(String projectId) async {
@@ -763,6 +741,87 @@ class BuilderController extends ChangeNotifier {
       lastMessage = 'Load failed: $e';
     } finally {
       isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _persistProject({
+    required String createSuccessMessage,
+    required String updateSuccessMessage,
+    required String createFailureMessage,
+    required String updateFailureMessage,
+    required String failurePrefix,
+    String? statusOverride,
+  }) async {
+    final previousStatus = project.status;
+
+    try {
+      _runValidation();
+
+      final normalizedTitle = project.title.trim().isEmpty
+          ? 'Untitled'
+          : project.title.trim();
+
+      if (normalizedTitle != project.title) {
+        project = project.copyWith(title: normalizedTitle);
+      }
+
+      if (statusOverride != null && project.status != statusOverride) {
+        project = project.copyWith(status: statusOverride);
+      }
+
+      isSaving = true;
+      lastMessage = null;
+      notifyListeners();
+
+      final projectJson = project.toJson();
+
+      if (savedProjectId == null) {
+        final response = await ApiService.createBuilderProject(
+          authToken: session.token,
+          projectJson: projectJson,
+        );
+
+        if (response['success'] == true) {
+          final data = response['data'];
+          if (data is Map && data['_id'] != null) {
+            savedProjectId = data['_id'].toString();
+          }
+          lastMessage = response['message'] ?? createSuccessMessage;
+          return true;
+        }
+
+        if (statusOverride != null && previousStatus != project.status) {
+          project = project.copyWith(status: previousStatus);
+        }
+        lastMessage = response['message'] ?? createFailureMessage;
+        return false;
+      }
+
+      final response = await ApiService.updateBuilderProject(
+        authToken: session.token,
+        projectId: savedProjectId!,
+        projectJson: projectJson,
+      );
+
+      if (response['success'] == true) {
+        lastMessage = response['message'] ?? updateSuccessMessage;
+        return true;
+      }
+
+      if (statusOverride != null && previousStatus != project.status) {
+        project = project.copyWith(status: previousStatus);
+      }
+      lastMessage = response['message'] ?? updateFailureMessage;
+      return false;
+    } catch (e) {
+      if (statusOverride != null && previousStatus != project.status) {
+        project = project.copyWith(status: previousStatus);
+      }
+      lastMessage = '$failurePrefix: $e';
+      return false;
+    } finally {
+      isSaving = false;
       notifyListeners();
     }
   }
@@ -1426,7 +1485,9 @@ class BuilderController extends ChangeNotifier {
     return _PlaybackPlanOutcome(
       hasSucceeded: true,
       hasFailed: false,
-      message: 'The player collected everything and reached the goal.',
+      message: requireAllCollectablesForSuccess
+          ? 'The player collected everything and reached the goal.'
+          : 'The player reached the goal.',
       playerX: state.playerX,
       playerY: state.playerY,
       collectedCollectableIds: state.collectedCollectableIds,
@@ -1598,28 +1659,31 @@ class BuilderController extends ChangeNotifier {
       return false;
     }
 
-    final totalCollectables = project.entities
-        .where((entity) => entity.type == 'collectable')
-        .length;
+    final isAtGoal = state.playerX == goal.x && state.playerY == goal.y;
+    if (!isAtGoal) {
+      return false;
+    }
 
-    return state.playerX == goal.x &&
-        state.playerY == goal.y &&
-        state.collectedCollectableIds.length == totalCollectables;
+    if (!requireAllCollectablesForSuccess) {
+      return true;
+    }
+
+    return state.collectedCollectableIds.length == totalCollectableCount;
   }
 
   String _buildIncompleteRunMessageFromState(_PlaybackSimulationState state) {
     final goal = _goalEntity;
-    final totalCollectables = project.entities
-        .where((entity) => entity.type == 'collectable')
-        .length;
 
     if (goal == null) {
       return 'The run ended, but the level has no goal yet.';
     }
 
-    if (state.collectedCollectableIds.length < totalCollectables) {
+    if (requireAllCollectablesForSuccess &&
+        state.playerX == goal.x &&
+        state.playerY == goal.y &&
+        state.collectedCollectableIds.length < totalCollectableCount) {
       final missingCollectables =
-          totalCollectables - state.collectedCollectableIds.length;
+          totalCollectableCount - state.collectedCollectableIds.length;
       return 'The run ended before collecting all items. $missingCollectables collectable(s) are still missing.';
     }
 

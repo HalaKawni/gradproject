@@ -3,47 +3,47 @@ import 'dart:math' as math;
 import 'package:client/core/models/auth_session.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+
 import '../controllers/builder_controller.dart';
 import '../flame/builder_game.dart';
 import '../models/builder_playback_state.dart';
 import '../models/builder_project.dart';
-import '../models/entity_data.dart';
 import '../models/level_settings.dart';
 import '../models/logic_command.dart';
-import '../models/tile_data.dart';
-import '../shared/builder_tool.dart';
-import '../widgets/builder_status_bar.dart';
-import '../widgets/builder_toolbar.dart';
 
-class BuilderPage extends StatefulWidget {
+class BuilderPlayPage extends StatefulWidget {
   final AuthSession session;
-  final String? initialProjectId;
+  final String projectId;
+  final String? initialTitle;
 
-  const BuilderPage({super.key, required this.session, this.initialProjectId});
+  const BuilderPlayPage({
+    super.key,
+    required this.session,
+    required this.projectId,
+    this.initialTitle,
+  });
 
   @override
-  State<BuilderPage> createState() => _BuilderPageState();
+  State<BuilderPlayPage> createState() => _BuilderPlayPageState();
 }
 
-class _BuilderPageState extends State<BuilderPage> {
-  static const double _leftPanelWidth = 260;
+class _BuilderPlayPageState extends State<BuilderPlayPage> {
   static const double _rootLogicLaneHeight = 54;
   static const double _logicDropSnapPadding = 30;
   static const double _logicGhostProbeYOffset = -18;
 
-  late BuilderController controller;
-  late BuilderGame game;
-  late TextEditingController titleController;
+  late final BuilderController controller;
+  late final BuilderGame game;
   late final ScrollController horizontalScrollController;
   late final ScrollController verticalScrollController;
   late final VoidCallback controllerListener;
   final Map<_LogicDropTarget, GlobalKey> _logicDropTargetKeys =
       <_LogicDropTarget, GlobalKey>{};
+
   String? selectedSolutionCommandId;
   String? selectedLoopInsertionTargetId;
-  int previousColumnCount = 0;
-  bool hasAttemptedSave = false;
-  bool isBoardGridDragActive = false;
+  bool hasPreparedLoadedProject = false;
+  bool hasShownCompletionDialog = false;
   bool isLogicDragActive = false;
   _LogicDragData? activeLogicDragData;
   _LogicDropTarget? proximityLogicDropTarget;
@@ -52,24 +52,21 @@ class _BuilderPageState extends State<BuilderPage> {
   void initState() {
     super.initState();
 
-    final project = BuilderProject.initial();
-    titleController = TextEditingController(text: project.title);
+    controller = BuilderController(
+      project: BuilderProject.initial(),
+      session: widget.session,
+      requireAllCollectablesForSuccess: false,
+    );
+    game = BuilderGame(controller: controller);
     horizontalScrollController = ScrollController();
     verticalScrollController = ScrollController();
-    controller = BuilderController(project: project, session: widget.session);
-    game = BuilderGame(controller: controller);
-    previousColumnCount = controller.project.settings.columns;
     controllerListener = _handleControllerChanged;
     controller.addListener(controllerListener);
-
-    if (widget.initialProjectId != null) {
-      controller.loadProject(widget.initialProjectId!);
-    }
+    _loadProject();
   }
 
   @override
   void dispose() {
-    titleController.dispose();
     horizontalScrollController.dispose();
     verticalScrollController.dispose();
     controller.removeListener(controllerListener);
@@ -77,30 +74,24 @@ class _BuilderPageState extends State<BuilderPage> {
     super.dispose();
   }
 
+  Future<void> _loadProject() async {
+    hasPreparedLoadedProject = false;
+    hasShownCompletionDialog = false;
+    selectedSolutionCommandId = null;
+    selectedLoopInsertionTargetId = null;
+    await controller.loadProject(widget.projectId);
+  }
+
   void _handleControllerChanged() {
-    _syncTitleField();
-    _syncHorizontalExpansion();
     _syncSelectedSolutionCommandSelection();
+    _prepareLoadedProjectForPlay();
+    _handleCompletionState();
 
     if (!mounted) {
       return;
     }
 
     setState(() {});
-  }
-
-  void _handleBoardGridDragStateChanged(bool isDragging) {
-    if (isBoardGridDragActive == isDragging) {
-      return;
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      isBoardGridDragActive = isDragging;
-    });
   }
 
   void _handleLogicDragStateChanged(bool isDragging) {
@@ -197,8 +188,7 @@ class _BuilderPageState extends State<BuilderPage> {
         continue;
       }
 
-      final rect =
-          renderObject.localToGlobal(Offset.zero) & renderObject.size;
+      final rect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
       final expandedRect = rect.inflate(_logicDropSnapPadding);
       if (!expandedRect.contains(globalPosition)) {
         continue;
@@ -258,28 +248,48 @@ class _BuilderPageState extends State<BuilderPage> {
     return Offset(size.width / 2, size.height * 0.82);
   }
 
-  void _syncTitleField() {
-    if (titleController.text == controller.project.title) {
+  void _prepareLoadedProjectForPlay() {
+    if (hasPreparedLoadedProject ||
+        controller.isLoading ||
+        controller.savedProjectId == null) {
       return;
     }
 
-    titleController.value = titleController.value.copyWith(
-      text: controller.project.title,
-      selection: TextSelection.collapsed(
-        offset: controller.project.title.length,
-      ),
-      composing: TextRange.empty,
-    );
+    hasPreparedLoadedProject = true;
+
+    if (controller.solutionCommands.isEmpty) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      controller.clearSolutionCommands(statusMessage: null);
+    });
   }
 
-  // Hot-reload compatibility shim: older in-memory listeners may still call
-  // this removed method until the page is rebuilt or the app is restarted.
-  // ignore: unused_element
-  void _syncTileSizeField() {}
+  void _handleCompletionState() {
+    final playbackState = controller.playbackState;
 
-  void _syncHorizontalExpansion() {
-    final currentColumns = controller.project.settings.columns;
-    previousColumnCount = currentColumns;
+    if (playbackState?.hasSucceeded == true) {
+      if (hasShownCompletionDialog) {
+        return;
+      }
+
+      hasShownCompletionDialog = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+
+        _showCompletionDialog(playbackState!);
+      });
+      return;
+    }
+
+    hasShownCompletionDialog = false;
   }
 
   void _syncSelectedSolutionCommandSelection() {
@@ -334,263 +344,288 @@ class _BuilderPageState extends State<BuilderPage> {
     selectedLoopInsertionTargetId = null;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final project = controller.project;
+  Future<void> _showCompletionDialog(BuilderPlaybackState playbackState) async {
+    final totalCollectables = controller.totalCollectableCount;
+    final collectedCollectables = playbackState.collectedCollectableIds.length;
+    final score = totalCollectables == 0
+        ? 100
+        : ((collectedCollectables / totalCollectables) * 100).round();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(
-            hintText: 'Game Name',
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-          ),
-          style: Theme.of(context).textTheme.titleLarge,
-          cursorColor: Colors.black,
-          maxLines: 1,
-          onChanged: controller.setTitle,
-        ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: TextButton(
-              onPressed: controller.isSaving ? null : _handlePublishPressed,
-              child: Text(
-                controller.isSaving ? 'Publishing...' : 'Publish',
-                style: const TextStyle(color: Colors.black),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: TextButton(
-              onPressed: controller.isSaving ? null : _handleSavePressed,
-              child: Text(
-                controller.isSaving ? 'Saving...' : 'Save',
-                style: const TextStyle(color: Colors.black),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: controller.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                Container(
-                  color: const Color(0xFFEAF6FF),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: _leftPanelWidth,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          border: Border(
-                            right: BorderSide(color: Colors.blueGrey.shade100),
-                          ),
-                        ),
-                        child: _buildLeftPanel(),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Center(child: _buildFixedGameWindow(project)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 18,
-                  child: Center(child: _buildTrashBin()),
-                ),
-              ],
-            ),
-    );
-  }
-
-  Future<void> _handleSavePressed() async {
-    setState(() {
-      hasAttemptedSave = true;
-    });
-
-    final saveSucceeded = await controller.saveProject();
-
-    if (!mounted) {
-      return;
-    }
-
-    if (saveSucceeded) {
-      _showNotification(
-        message: controller.lastMessage ?? 'Game saved successfully.',
-        backgroundColor: Colors.green.shade600,
-      );
-      return;
-    }
-
-    if (controller.hasBlockingValidationIssues) {
-      _showNotification(
-        message: _buildValidationNotificationMessage(),
-        backgroundColor: Colors.red.shade600,
-      );
-      return;
-    }
-
-    _showNotification(
-      message: controller.lastMessage ?? 'Failed to save game.',
-      backgroundColor: Colors.red.shade600,
-    );
-  }
-
-  Future<void> _handlePublishPressed() async {
-    setState(() {
-      hasAttemptedSave = true;
-    });
-
-    final publishSucceeded = await controller.publishProject();
-
-    if (!mounted) {
-      return;
-    }
-
-    if (publishSucceeded) {
-      _showNotification(
-        message: controller.lastMessage ?? 'Game published successfully.',
-        backgroundColor: Colors.green.shade600,
-      );
-      return;
-    }
-
-    if (controller.hasBlockingValidationIssues) {
-      _showNotification(
-        message: _buildValidationNotificationMessage(),
-        backgroundColor: Colors.red.shade600,
-      );
-      return;
-    }
-
-    _showNotification(
-      message: controller.lastMessage ?? 'Failed to publish game.',
-      backgroundColor: Colors.red.shade600,
-    );
-  }
-
-  Future<void> _handleClearLevelPressed() async {
-    final shouldClear = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Clear Level?'),
-          content: const Text(
-            'This will remove all placed items and logic steps, then rebuild the protected ground rows at the bottom.',
+          title: const Text('Level Complete'),
+          content: Text(
+            totalCollectables == 0
+                ? 'You reached the goal. Score: $score%.'
+                : 'You reached the goal and collected $collectedCollectables of $totalCollectables collectables. Score: $score%.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
             ),
             FilledButton(
-              onPressed: () => Navigator.of(dialogContext).pop(true),
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-              ),
-              child: const Text('Clear'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                controller.resetPlaybackPreview();
+              },
+              child: const Text('Replay'),
             ),
           ],
         );
       },
     );
-
-    if (!mounted || shouldClear != true) {
-      return;
-    }
-
-    setState(() {
-      hasAttemptedSave = false;
-      _setLogicSelection(null);
-    });
-
-    controller.clearLevel();
-
-    if (!mounted) {
-      return;
-    }
-
-    _showNotification(
-      message: 'Level cleared.',
-      backgroundColor: Colors.blueGrey.shade700,
-    );
   }
 
-  void _showNotification({
-    required String message,
-    required Color backgroundColor,
-  }) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: backgroundColor,
-        behavior: SnackBarBehavior.floating,
+  String get _pageTitle {
+    if (controller.savedProjectId != null && controller.project.title.isNotEmpty) {
+      return controller.project.title;
+    }
+
+    final initialTitle = widget.initialTitle?.trim();
+    if (initialTitle != null && initialTitle.isNotEmpty) {
+      return initialTitle;
+    }
+
+    return 'Play Level';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(_pageTitle)),
+      body: Stack(
+        children: [
+          Container(
+            color: const Color(0xFFEAF6FF),
+            child: controller.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : controller.savedProjectId == null
+                ? _buildLoadErrorState()
+                : Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1380),
+                        child: Column(
+                          children: [
+                            _buildTopSummary(),
+                            const SizedBox(height: 16),
+                            Expanded(
+                              child: Center(
+                                child: _buildFixedGameWindow(controller.project),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 18,
+            child: Center(child: _buildTrashBin()),
+          ),
+        ],
       ),
     );
   }
 
-  String _buildValidationNotificationMessage() {
-    final issues = <String>[
-      ...controller.validation.errors,
-      ...controller.validation.warnings,
-    ];
+  Widget _buildTrashBin() {
+    final isVisible = isLogicDragActive;
 
-    if (issues.isEmpty) {
-      return controller.lastMessage ?? 'Add the required items before saving.';
-    }
+    return DragTarget<_LogicDragData>(
+      onWillAcceptWithDetails: (details) {
+        return isLogicDragActive && details.data.existingCommandId != null;
+      },
+      onAcceptWithDetails: (details) {
+        final commandId = details.data.existingCommandId;
+        if (commandId == null) {
+          return;
+        }
 
-    return 'Add the required items before saving: ${issues.join(' ')}';
+        controller.removeSolutionCommand(commandId);
+      },
+      builder: (context, logicCandidateData, rejectedLogicData) {
+        final isHighlighted = logicCandidateData.isNotEmpty;
+
+        return AnimatedSlide(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          offset: isVisible ? Offset.zero : const Offset(0, 1.25),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 140),
+            opacity: isVisible ? 1 : 0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              decoration: BoxDecoration(
+                color: isHighlighted
+                    ? Colors.red.shade600
+                    : Colors.white.withValues(alpha: 0.96),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: isHighlighted
+                      ? Colors.red.shade300
+                      : Colors.blueGrey.shade100,
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(
+                      alpha: isHighlighted ? 0.22 : 0.1,
+                    ),
+                    blurRadius: isHighlighted ? 28 : 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.delete_outline_rounded,
+                    color: isHighlighted ? Colors.white : Colors.red.shade600,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Drop to delete',
+                    style: TextStyle(
+                      color: isHighlighted
+                          ? Colors.white
+                          : Colors.blueGrey.shade900,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  Widget _buildLeftPanel() {
-    return ListView(
-      children: [
-        _buildPanelSection(
-          title: 'Tools',
-          child: BuilderToolbar(
-            controller: controller,
-            direction: Axis.vertical,
-          ),
+  Widget _buildLoadErrorState() {
+    final message = controller.lastMessage ?? 'Failed to load this game.';
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 460),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.94),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.blueGrey.shade100),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blueGrey.withValues(alpha: 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
         ),
-        const SizedBox(height: 14),
-        _buildPanelSection(title: 'Grid', child: _buildTileSizeControls()),
-        const SizedBox(height: 14),
-        _buildPanelSection(title: 'Level Actions', child: _buildLevelActions()),
-        const SizedBox(height: 14),
-        _buildPanelSection(
-          title: 'Level Info',
-          child: BuilderStatusBar(
-            controller: controller,
-            showValidation: hasAttemptedSave,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.error_outline_rounded,
+              color: Colors.red.shade400,
+              size: 34,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: _loadProject,
+              child: const Text('Try Again'),
+            ),
+          ],
         ),
-        if (controller.lastMessage != null) ...[
-          const SizedBox(height: 14),
-          _buildMessageCard(
-            text: controller.lastMessage!,
-            backgroundColor: Colors.blue.shade50,
-            textColor: Colors.blueGrey.shade900,
+      ),
+    );
+  }
+
+  Widget _buildTopSummary() {
+    final totalCollectables = controller.totalCollectableCount;
+    final collectedCollectables = controller.collectedCollectableCount;
+    final score = totalCollectables == 0
+        ? 100
+        : ((collectedCollectables / totalCollectables) * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            'Reach the goal to complete the level. Collectables improve your score.',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.blueGrey.shade900,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          _buildSummaryPill(
+            icon: Icons.star_rounded,
+            label: totalCollectables == 0
+                ? 'Score: $score%'
+                : 'Collectables: $collectedCollectables / $totalCollectables',
+            color: const Color(0xFFF59E0B),
+          ),
+          _buildSummaryPill(
+            icon: Icons.emoji_events_outlined,
+            label: 'Current score: $score%',
+            color: const Color(0xFF2563EB),
           ),
         ],
-        if (hasAttemptedSave && controller.hasBlockingValidationIssues) ...[
-          const SizedBox(height: 14),
-          _buildValidationCard(),
+      ),
+    );
+  }
+
+  Widget _buildSummaryPill({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.24)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
-      ],
+      ),
     );
   }
 
@@ -661,10 +696,7 @@ class _BuilderPageState extends State<BuilderPage> {
                             child: SizedBox(
                               width: boardWidth,
                               height: boardHeight,
-                              child: _buildBoardToolDropTarget(
-                                project: project,
-                                child: GameWidget(game: game, autofocus: false),
-                              ),
+                              child: GameWidget(game: game, autofocus: false),
                             ),
                           ),
                         ),
@@ -678,7 +710,6 @@ class _BuilderPageState extends State<BuilderPage> {
                 right: 14,
                 bottom: -6,
                 child: _buildLogicOverlay(
-                  project: project,
                   viewportHeight: viewportHeight,
                   maxGroundOverlayHeight: protectedGroundHeight,
                 ),
@@ -690,105 +721,7 @@ class _BuilderPageState extends State<BuilderPage> {
     );
   }
 
-  Widget _buildTrashBin() {
-    final isVisible = isBoardGridDragActive || isLogicDragActive;
-
-    return DragTarget<_BoardGridDragData>(
-      onWillAcceptWithDetails: (details) => isBoardGridDragActive,
-      onAcceptWithDetails: (details) {
-        final dragData = details.data;
-        if (dragData.isEntity) {
-          controller.deleteEntity(dragData.entityId!);
-          return;
-        }
-
-        controller.deleteTileAt(dragData.fromX, dragData.fromY);
-      },
-      builder: (context, boardCandidateData, rejectedData) {
-        return DragTarget<_LogicDragData>(
-          onWillAcceptWithDetails: (details) {
-            return isLogicDragActive && details.data.existingCommandId != null;
-          },
-          onAcceptWithDetails: (details) {
-            final commandId = details.data.existingCommandId;
-            if (commandId == null) {
-              return;
-            }
-
-            controller.removeSolutionCommand(commandId);
-          },
-          builder: (context, logicCandidateData, rejectedLogicData) {
-            final isHighlighted =
-                boardCandidateData.isNotEmpty || logicCandidateData.isNotEmpty;
-
-            return AnimatedSlide(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              offset: isVisible ? Offset.zero : const Offset(0, 1.25),
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 140),
-                opacity: isVisible ? 1 : 0,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isHighlighted
-                        ? Colors.red.shade600
-                        : Colors.white.withValues(alpha: 0.96),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: isHighlighted
-                          ? Colors.red.shade300
-                          : Colors.blueGrey.shade100,
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(
-                          alpha: isHighlighted ? 0.22 : 0.1,
-                        ),
-                        blurRadius: isHighlighted ? 28 : 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.delete_outline_rounded,
-                        color: isHighlighted
-                            ? Colors.white
-                            : Colors.red.shade600,
-                        size: 24,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Drop to delete',
-                        style: TextStyle(
-                          color: isHighlighted
-                              ? Colors.white
-                              : Colors.blueGrey.shade900,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildLogicOverlay({
-    required BuilderProject project,
     required double viewportHeight,
     required double maxGroundOverlayHeight,
   }) {
@@ -850,12 +783,8 @@ class _BuilderPageState extends State<BuilderPage> {
                 const SizedBox(width: 8),
                 IconButton(
                   onPressed: controller.isPlaybackRunning
-                      ? () {
-                          controller.stopPlayback();
-                        }
-                      : () {
-                          controller.playSolution();
-                        },
+                      ? controller.stopPlayback
+                      : controller.playSolution,
                   tooltip: controller.isPlaybackRunning ? 'Stop' : 'Play',
                   style: IconButton.styleFrom(
                     backgroundColor: controller.isPlaybackRunning
@@ -883,9 +812,7 @@ class _BuilderPageState extends State<BuilderPage> {
                 const SizedBox(width: 2),
                 IconButton(
                   onPressed: controller.playbackState != null
-                      ? () {
-                          controller.resetPlaybackPreview();
-                        }
+                      ? controller.resetPlaybackPreview
                       : null,
                   tooltip: 'Reset',
                   style: IconButton.styleFrom(
@@ -927,16 +854,24 @@ class _BuilderPageState extends State<BuilderPage> {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: _buildLogicSequenceStrip(
-                      commands: commands,
-                      parentLoopId: null,
-                      selectedCommandId: selectedCommandId,
-                      activeCommandId: activeCommandId,
-                      canEditCommands: canEditCommands,
-                      isRoot: true,
-                      rootViewportWidth: constraints.maxWidth,
+                  return Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.blueGrey.shade100),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: _buildLogicSequenceStrip(
+                        commands: commands,
+                        parentLoopId: null,
+                        selectedCommandId: selectedCommandId,
+                        activeCommandId: activeCommandId,
+                        canEditCommands: canEditCommands,
+                        isRoot: true,
+                        rootViewportWidth: constraints.maxWidth - 16,
+                      ),
                     ),
                   );
                 },
@@ -949,8 +884,8 @@ class _BuilderPageState extends State<BuilderPage> {
                   child: Text(
                     controller.logicStatusMessage ??
                         (selectedLoopTargetId == null
-                            ? 'Add blocks, drag them into place, or tap a loop then add commands directly inside it.'
-                            : 'The selected loop is ready. New blocks will be added inside it, or you can drag commands into any gap.'),
+                            ? 'Add commands, then press play.'
+                            : 'Loop selected. New commands will be added inside it.'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.blueGrey.shade800,
                       fontWeight: FontWeight.w600,
@@ -1001,7 +936,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           controller.removeSolutionCommand(commandId);
                         }
                       : null,
-                  tooltip: 'Remove',
+                  tooltip: 'Delete',
                   style: IconButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1037,18 +972,6 @@ class _BuilderPageState extends State<BuilderPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildBoardToolDropTarget({
-    required BuilderProject project,
-    required Widget child,
-  }) {
-    return _BoardToolDropLayer(
-      controller: controller,
-      project: project,
-      onGridDragStateChanged: _handleBoardGridDragStateChanged,
-      child: child,
     );
   }
 
@@ -1752,7 +1675,7 @@ class _BuilderPageState extends State<BuilderPage> {
       _setLogicSelection(newLoopId, loopInsertionTargetId: newLoopId);
     });
   }
-
+  
   IconData _logicCommandIcon(LogicCommandType command) {
     switch (command) {
       case LogicCommandType.moveLeft:
@@ -1812,714 +1735,6 @@ class _BuilderPageState extends State<BuilderPage> {
         return 'UR';
     }
   }
-
-  Widget _buildPanelSection({required String title, required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FBFE),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.blueGrey.shade100),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTileSizeControls() {
-    final settings = controller.project.settings;
-    final selectedPreset = LevelSettings.closestPresetForTileSize(
-      settings.tileSize,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Grid Square Size',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            for (final preset in BuilderGridSizePreset.values) ...[
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    right: preset == BuilderGridSizePreset.large ? 0 : 8,
-                  ),
-                  child: OutlinedButton(
-                    onPressed: () => controller.setGridSizePreset(preset),
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: selectedPreset == preset
-                          ? Colors.blue.shade600
-                          : Colors.white,
-                      foregroundColor: selectedPreset == preset
-                          ? Colors.white
-                          : Colors.blueGrey.shade900,
-                      side: BorderSide(
-                        color: selectedPreset == preset
-                            ? Colors.blue.shade600
-                            : Colors.blueGrey.shade200,
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          preset.shortLabel,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${preset.columns} x ${preset.rows}',
-                          style: const TextStyle(fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        const SizedBox(height: 12),
-        Text(
-          '${selectedPreset.label}: ${settings.tileSize.round()} px squares, ${settings.columns} columns, ${settings.rows} rows.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Each preset refits the grid so it still fills the entire outer game rectangle.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelActions() {
-    final selectedPreset = LevelSettings.closestPresetForTileSize(
-      controller.project.settings.tileSize,
-    );
-    final protectedGroundRows = selectedPreset.groundRows;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        FilledButton.icon(
-          onPressed: _handleClearLevelPressed,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(46),
-            backgroundColor: Colors.red.shade600,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          icon: const Icon(Icons.layers_clear_outlined, size: 18),
-          label: const Text(
-            'Clear Level',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Reset the level layout and logic. The bottom $protectedGroundRows rows will stay ground in ${selectedPreset.label.toLowerCase()} mode.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMessageCard({
-    required String text,
-    required Color backgroundColor,
-    required Color textColor,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(text, style: TextStyle(color: textColor)),
-    );
-  }
-
-  Widget _buildValidationCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Add the required items before saving:',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          ...controller.validation.errors.map(
-            (error) =>
-                Text('- $error', style: const TextStyle(color: Colors.red)),
-          ),
-          ...controller.validation.warnings.map(
-            (warning) => Text(
-              '- $warning',
-              style: const TextStyle(color: Color(0xFF8A5A00)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-typedef _BoardGridDragStateChanged = void Function(bool isDragging);
-
-class _BoardToolDropLayer extends StatefulWidget {
-  final BuilderController controller;
-  final BuilderProject project;
-  final _BoardGridDragStateChanged onGridDragStateChanged;
-  final Widget child;
-
-  const _BoardToolDropLayer({
-    required this.controller,
-    required this.project,
-    required this.onGridDragStateChanged,
-    required this.child,
-  });
-
-  @override
-  State<_BoardToolDropLayer> createState() => _BoardToolDropLayerState();
-}
-
-class _BoardToolDropLayerState extends State<_BoardToolDropLayer> {
-  final GlobalKey _boardDropTargetKey = GlobalKey();
-
-  _BoardDropCell? hoveredToolCell;
-  _BoardDropCell? hoveredGridDragCell;
-  _BoardGridDragData? activeGridDrag;
-
-  @override
-  void dispose() {
-    widget.onGridDragStateChanged(false);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final project = widget.project;
-    final tileSize = project.settings.tileSize;
-
-    return DragTarget<BuilderTool>(
-      onWillAcceptWithDetails: (details) {
-        return !widget.controller.isPlaybackRunning;
-      },
-      onMove: (details) {
-        final targetContext = _boardDropTargetKey.currentContext;
-        final renderBox = targetContext?.findRenderObject();
-        if (renderBox is! RenderBox) {
-          return;
-        }
-
-        final localPosition = renderBox.globalToLocal(details.offset);
-        final nextCell = _boardCellFromLocalPosition(
-          localPosition: localPosition,
-          project: project,
-        );
-        final hasChanged =
-            hoveredToolCell?.x != nextCell?.x ||
-            hoveredToolCell?.y != nextCell?.y;
-
-        if (!hasChanged) {
-          return;
-        }
-
-        setState(() {
-          hoveredToolCell = nextCell;
-        });
-      },
-      onLeave: (data) {
-        if (hoveredToolCell == null) {
-          return;
-        }
-
-        setState(() {
-          hoveredToolCell = null;
-        });
-      },
-      onAcceptWithDetails: (details) {
-        if (widget.controller.isPlaybackRunning) {
-          return;
-        }
-
-        final targetContext = _boardDropTargetKey.currentContext;
-        final renderBox = targetContext?.findRenderObject();
-        if (renderBox is! RenderBox) {
-          return;
-        }
-
-        final localPosition = renderBox.globalToLocal(details.offset);
-        final cell =
-            hoveredToolCell ??
-            _boardCellFromLocalPosition(
-              localPosition: localPosition,
-              project: project,
-            );
-        if (cell == null) {
-          return;
-        }
-
-        setState(() {
-          hoveredToolCell = null;
-        });
-        widget.controller.applyToolAt(details.data, cell.x, cell.y);
-      },
-      builder: (context, candidateData, rejectedData) {
-        return DragTarget<_BoardGridDragData>(
-          onWillAcceptWithDetails: (details) {
-            return !widget.controller.isPlaybackRunning;
-          },
-          onMove: (details) {
-            final cell = _boardCellFromGlobalPosition(
-              globalPosition: details.offset,
-              project: project,
-            );
-            final hasChanged =
-                hoveredGridDragCell?.x != cell?.x ||
-                hoveredGridDragCell?.y != cell?.y;
-
-            if (!hasChanged) {
-              return;
-            }
-
-            setState(() {
-              hoveredGridDragCell = cell;
-            });
-          },
-          onLeave: (data) {
-            if (hoveredGridDragCell == null) {
-              return;
-            }
-
-            setState(() {
-              hoveredGridDragCell = null;
-            });
-          },
-          onAcceptWithDetails: (details) {
-            final cell =
-                hoveredGridDragCell ??
-                _boardCellFromGlobalPosition(
-                  globalPosition: details.offset,
-                  project: project,
-                );
-            final dragData = details.data;
-
-            _stopGridDrag();
-
-            if (cell == null) {
-              return;
-            }
-
-            if (dragData.isEntity) {
-              widget.controller.moveEntity(
-                dragData.entityId!,
-                cell.x,
-                cell.y,
-              );
-              return;
-            }
-
-            widget.controller.moveTile(
-              dragData.fromX,
-              dragData.fromY,
-              cell.x,
-              cell.y,
-            );
-          },
-          builder: (context, _, rejectedGridData) {
-            return SizedBox(
-              key: _boardDropTargetKey,
-              width: project.settings.columns * tileSize,
-              height: project.settings.rows * tileSize,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  widget.child,
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapUp: (details) {
-                        if (widget.controller.isPlaybackRunning ||
-                            candidateData.isNotEmpty) {
-                          return;
-                        }
-
-                        final cell = _boardCellFromLocalPosition(
-                          localPosition: details.localPosition,
-                          project: project,
-                        );
-                        if (cell == null) {
-                          return;
-                        }
-
-                        _handleBoardTap(cell);
-                      },
-                    ),
-                  ),
-                  ..._buildGridItemDraggables(
-                    tileSize: tileSize,
-                    toolDragInProgress: candidateData.isNotEmpty,
-                  ),
-                  if (activeGridDrag != null && hoveredGridDragCell != null)
-                    Positioned(
-                      left: hoveredGridDragCell!.x * tileSize,
-                      top: hoveredGridDragCell!.y * tileSize,
-                      child: IgnorePointer(
-                        child: _buildBoardHoverOverlay(
-                          tileSize: tileSize,
-                          fillColor: Colors.orange.withValues(alpha: 0.16),
-                          borderColor: Colors.orange.withValues(alpha: 0.78),
-                        ),
-                      ),
-                    ),
-                  if (candidateData.isNotEmpty && hoveredToolCell != null)
-                    Positioned(
-                      left: hoveredToolCell!.x * tileSize,
-                      top: hoveredToolCell!.y * tileSize,
-                      child: IgnorePointer(
-                        child: _buildBoardHoverOverlay(
-                          tileSize: tileSize,
-                          fillColor: Colors.white.withValues(alpha: 0.18),
-                          borderColor: Colors.blue.withValues(alpha: 0.65),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  List<Widget> _buildGridItemDraggables({
-    required double tileSize,
-    required bool toolDragInProgress,
-  }) {
-    final widgets = <Widget>[];
-    final entityCells = <String>{};
-    final playbackState = widget.controller.playbackState;
-
-    for (final entity in widget.project.entities) {
-      if (_shouldHideEntity(entity, playbackState)) {
-        continue;
-      }
-
-      entityCells.add('${entity.x}:${entity.y}');
-      widgets.add(_buildEntityDraggable(entity, tileSize, toolDragInProgress));
-    }
-
-    for (final tile in widget.project.tiles) {
-      if (entityCells.contains('${tile.x}:${tile.y}')) {
-        continue;
-      }
-
-      widgets.add(_buildTileDraggable(tile, tileSize, toolDragInProgress));
-    }
-
-    return widgets;
-  }
-
-  Widget _buildTileDraggable(
-    TileData tile,
-    double tileSize,
-    bool toolDragInProgress,
-  ) {
-    return _buildBoardGridDraggable(
-      left: tile.x * tileSize,
-      top: tile.y * tileSize,
-      tileSize: tileSize,
-      dragData: _BoardGridDragData.tile(fromX: tile.x, fromY: tile.y),
-      toolDragInProgress: toolDragInProgress,
-      feedback: _buildGridTileFeedback(tile, tileSize),
-      cell: _BoardDropCell(x: tile.x, y: tile.y),
-    );
-  }
-
-  Widget _buildEntityDraggable(
-    EntityData entity,
-    double tileSize,
-    bool toolDragInProgress,
-  ) {
-    return _buildBoardGridDraggable(
-      left: entity.x * tileSize,
-      top: entity.y * tileSize,
-      tileSize: tileSize,
-      dragData: _BoardGridDragData.entity(
-        entityId: entity.id,
-        fromX: entity.x,
-        fromY: entity.y,
-      ),
-      toolDragInProgress: toolDragInProgress,
-      feedback: _buildGridEntityFeedback(entity, tileSize),
-      cell: _BoardDropCell(x: entity.x, y: entity.y),
-    );
-  }
-
-  Widget _buildBoardGridDraggable({
-    required double left,
-    required double top,
-    required double tileSize,
-    required _BoardGridDragData dragData,
-    required bool toolDragInProgress,
-    required Widget feedback,
-    required _BoardDropCell cell,
-  }) {
-    return Positioned(
-      left: left,
-      top: top,
-      width: tileSize,
-      height: tileSize,
-      child: Draggable<_BoardGridDragData>(
-        data: dragData,
-        maxSimultaneousDrags: 1,
-        dragAnchorStrategy: pointerDragAnchorStrategy,
-        feedback: Material(
-          color: Colors.transparent,
-          child: feedback,
-        ),
-        childWhenDragging: const SizedBox.expand(),
-        onDragStarted: () {
-          _startGridDrag(dragData, cell);
-        },
-        onDragEnd: (details) {
-          _stopGridDrag();
-        },
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTapUp: (_) {
-            if (widget.controller.isPlaybackRunning || toolDragInProgress) {
-              return;
-            }
-
-            _handleBoardTap(cell);
-          },
-          child: Container(color: Colors.transparent),
-        ),
-      ),
-    );
-  }
-
-  void _handleBoardTap(_BoardDropCell cell) {
-    if (widget.controller.currentTool == BuilderTool.select) {
-      widget.controller.selectAt(cell.x, cell.y);
-      return;
-    }
-
-    widget.controller.placeAt(cell.x, cell.y);
-  }
-
-  void _startGridDrag(_BoardGridDragData dragData, _BoardDropCell cell) {
-    widget.controller.selectAt(cell.x, cell.y);
-    setState(() {
-      activeGridDrag = dragData;
-      hoveredGridDragCell = cell;
-      hoveredToolCell = null;
-    });
-    _notifyGridDragState();
-  }
-
-  void _stopGridDrag() {
-    if (activeGridDrag == null && hoveredGridDragCell == null) {
-      return;
-    }
-
-    setState(() {
-      activeGridDrag = null;
-      hoveredGridDragCell = null;
-    });
-    _notifyGridDragState();
-  }
-
-  _BoardDropCell? _boardCellFromLocalPosition({
-    required Offset localPosition,
-    required BuilderProject project,
-  }) {
-    if (localPosition.dx.isNaN || localPosition.dy.isNaN) {
-      return null;
-    }
-
-    final tileSize = project.settings.tileSize;
-    final x = (localPosition.dx / tileSize).floor();
-    final y = (localPosition.dy / tileSize).floor();
-
-    if (x < 0 ||
-        x >= project.settings.columns ||
-        y < 0 ||
-        y >= project.settings.rows) {
-      return null;
-    }
-
-    return _BoardDropCell(x: x, y: y);
-  }
-
-  _BoardDropCell? _boardCellFromGlobalPosition({
-    required Offset globalPosition,
-    required BuilderProject project,
-  }) {
-    final targetContext = _boardDropTargetKey.currentContext;
-    final renderBox = targetContext?.findRenderObject();
-
-    if (renderBox is! RenderBox) {
-      return null;
-    }
-
-    return _boardCellFromLocalPosition(
-      localPosition: renderBox.globalToLocal(globalPosition),
-      project: project,
-    );
-  }
-
-  void _notifyGridDragState() {
-    widget.onGridDragStateChanged(activeGridDrag != null);
-  }
-
-  Widget _buildGridTileFeedback(TileData tile, double tileSize) {
-    return _buildFeedbackTileShell(
-      tileSize: tileSize,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: _tileColorForType(tile.type),
-          borderRadius: BorderRadius.circular(tileSize * 0.08),
-          border: Border.all(
-            color: const Color(0x26000000),
-            width: tileSize * 0.04 < 1 ? 1.0 : tileSize * 0.04,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGridEntityFeedback(EntityData entity, double tileSize) {
-    return _buildFeedbackTileShell(
-      tileSize: tileSize,
-      child: Center(
-        child: Container(
-          width: tileSize * 0.64,
-          height: tileSize * 0.64,
-          decoration: BoxDecoration(
-            color: _entityColorForType(entity.type),
-            borderRadius: BorderRadius.circular(tileSize * 0.08),
-            border: Border.all(
-              color: const Color(0x26000000),
-              width: tileSize * 0.04 < 1 ? 1.0 : tileSize * 0.04,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeedbackTileShell({
-    required double tileSize,
-    required Widget child,
-  }) {
-    return SizedBox(
-      width: tileSize,
-      height: tileSize,
-      child: child,
-    );
-  }
-
-  Color _tileColorForType(String type) {
-    if (type == 'ground' || type == 'floor') {
-      return const Color(0xFF5FBF72);
-    }
-
-    if (type == 'obstacle') {
-      return const Color(0xFF7C8796);
-    }
-
-    return const Color(0xFF9AA5B5);
-  }
-
-  Color _entityColorForType(String type) {
-    switch (type) {
-      case 'playerStart':
-        return const Color(0xFF3B82F6);
-      case 'collectable':
-        return const Color(0xFFF59E0B);
-      case 'goal':
-        return const Color(0xFFEF4444);
-      default:
-        return const Color(0xFF8B5CF6);
-    }
-  }
-
-  bool _shouldHideEntity(
-    EntityData entity,
-    BuilderPlaybackState? playbackState,
-  ) {
-    if (playbackState == null) {
-      return false;
-    }
-
-    if (entity.type == 'playerStart') {
-      return true;
-    }
-
-    return entity.type == 'collectable' &&
-        playbackState.collectedCollectableIds.contains(entity.id);
-  }
-
-  Widget _buildBoardHoverOverlay({
-    required double tileSize,
-    required Color fillColor,
-    required Color borderColor,
-  }) {
-    return Container(
-      width: tileSize,
-      height: tileSize,
-      decoration: BoxDecoration(
-        color: fillColor,
-        border: Border.all(color: borderColor, width: 2),
-        borderRadius: BorderRadius.circular(tileSize * 0.08),
-      ),
-    );
-  }
 }
 
 class _LogicDragData {
@@ -2558,28 +1773,4 @@ class _LogicDropTarget {
 
   @override
   int get hashCode => Object.hash(parentLoopId, index);
-}
-
-class _BoardDropCell {
-  final int x;
-  final int y;
-
-  const _BoardDropCell({required this.x, required this.y});
-}
-
-class _BoardGridDragData {
-  final String? entityId;
-  final int fromX;
-  final int fromY;
-
-  bool get isEntity => entityId != null;
-
-  const _BoardGridDragData.tile({required this.fromX, required this.fromY})
-    : entityId = null;
-
-  const _BoardGridDragData.entity({
-    required this.entityId,
-    required this.fromX,
-    required this.fromY,
-  });
 }

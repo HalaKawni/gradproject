@@ -1,11 +1,12 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
-import 'package:client/features/auth/pages/login_page.dart';
-import 'package:client/features/auth/pages/register_page.dart';
+import 'package:client/features/auth/pages/login_page_demo.dart';
+import 'package:client/features/auth/pages/register_page_demo.dart';
+import 'package:client/features/builder/pages/builder_play_page.dart';
 import 'package:client/features/builder/pages/builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
 import 'package:client/features/builder/pages/top_view_builder_page.dart';
-import 'package:client/features/home/pages/user_home_page.dart';
+import 'package:client/features/home/pages/user_home_page_demo.dart';
 import 'package:flutter/material.dart';
 
 class AppRouter {
@@ -49,6 +50,22 @@ class AppRouter {
           settings,
           'The builder page needs an active user session.',
         );
+      case AppRoutes.builderPlay:
+        final data = settings.arguments;
+        if (data is BuilderPlayRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => BuilderPlayPage(
+              session: data.session,
+              projectId: data.projectId,
+              initialTitle: data.initialTitle,
+            ),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The play page needs an active user session and project.',
+        );
       case AppRoutes.topViewBuilder:
         final data = settings.arguments;
         if (data is TopViewBuilderRouteData) {
@@ -72,6 +89,25 @@ class AppRouter {
         return _errorRoute(
           settings,
           'The My Games page needs an active user session.',
+        );
+      case AppRoutes.myPublishedGames:
+        final data = settings.arguments;
+        if (data is MyPublishedGamesRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => MyGamesPage(
+              session: data.session,
+              title: 'My Published Games',
+              statusFilter: 'published',
+              openProjectOnTap: false,
+              playProjectOnTap: true,
+              emptyMessage: 'No published games yet.',
+            ),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The My Published Games page needs an active user session.',
         );
       default:
         return onUnknownRoute(settings);
