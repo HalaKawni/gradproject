@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(cp 'C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Water.png' C:/Users/magic/Downloads/gradproj/client/assets/images/water.png)",
+      "Bash(cp 'C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Foam/Foam.png' C:/Users/magic/Downloads/gradproj/client/assets/images/foam.png)",
+      "Bash(cp 'C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Rocks/Rocks_01.png' C:/Users/magic/Downloads/gradproj/client/assets/images/rocks.png)",
+      "Bash(cp 'C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Ground/Tilemap_Flat.png' C:/Users/magic/Downloads/gradproj/client/assets/images/tilemap_flat.png)",
+      "Bash(cp 'C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Ground/Tilemap_Elevation.png' C:/Users/magic/Downloads/gradproj/client/assets/images/tilemap_elev.png)",
+      "Bash(python -)"
+    ]
+  }
+}

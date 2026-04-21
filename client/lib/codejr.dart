@@ -738,15 +738,12 @@ class _SquigglePainter extends CustomPainter {
 
 class _IllustrationTree extends StatelessWidget {
   final Color trunkColor;
-  final bool small;
-  const _IllustrationTree(
-      {required this.trunkColor, this.small = false});
+  const _IllustrationTree({required this.trunkColor});
 
   @override
   Widget build(BuildContext context) {
-    final scale = small ? 0.75 : 1.0;
     return Transform.scale(
-      scale: scale,
+      scale: 1.0,
       alignment: Alignment.bottomCenter,
       child: Column(
         children: [

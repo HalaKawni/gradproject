@@ -86,8 +86,9 @@ class _GameGridPageState extends State<GameGridPage> {
         switch (cmd) {
           case 'move':
             int nx = _charX, ny = _charY;
-            if (_direction == 0) nx++;
-            else if (_direction == 1) ny++;
+            if (_direction == 0) {
+              nx++;
+            } else if (_direction == 1) ny++;
             else if (_direction == 2) nx--;
             else if (_direction == 3) ny--;
 

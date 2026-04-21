@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'game_grid.dart';
 import 'game_webview.dart';
+import 'monkey_game_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -153,7 +153,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                     ),
                     Text(
-                      widget.username + '!',
+                      '${widget.username}!',
                       style: GoogleFonts.nunito(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
@@ -319,10 +319,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedLevels,
                     showError: _showLevelError,
                     onToggle: (val) => setState(() {
-                      if (_selectedLevels.contains(val))
+                      if (_selectedLevels.contains(val)) {
                         _selectedLevels.remove(val);
-                      else
+                      } else {
                         _selectedLevels.add(val);
+                      }
                     }),
                   ),
                   const SizedBox(width: 60),
@@ -336,10 +337,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedCategories,
                     showError: _showCategoryError,
                     onToggle: (val) => setState(() {
-                      if (_selectedCategories.contains(val))
+                      if (_selectedCategories.contains(val)) {
                         _selectedCategories.remove(val);
-                      else
+                      } else {
                         _selectedCategories.add(val);
+                      }
                     }),
                   ),
                   const SizedBox(width: 60),
@@ -349,10 +351,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedTopics,
                     showError: _showTopicError,
                     onToggle: (val) => setState(() {
-                      if (_selectedTopics.contains(val))
+                      if (_selectedTopics.contains(val)) {
                         _selectedTopics.remove(val);
-                      else
+                      } else {
                         _selectedTopics.add(val);
+                      }
                     }),
                   ),
                   const Spacer(),
@@ -480,10 +483,11 @@ class _DashboardPageState extends State<DashboardPage> {
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () => setState(() {
-            if (allSelected)
+            if (allSelected) {
               selected.clear();
-            else
+            } else {
               selected.addAll(items);
+            }
           }),
           child: Text(
             allSelected ? 'Unselect all' : 'Select all',
@@ -556,14 +560,15 @@ class _DashboardPageState extends State<DashboardPage> {
         description: 'Linus is having fun using computers! Help him collect items he needs such as a screen and mouse. The Chameleon will raise and lower the trees making Linus reach different heights or just clearing the path.',
 
       ),
-      _CourseData(
-        topic: 'Coding',
-        level: 'Novice',
-        title: 'CodeMonkey Jr.',
-        subtitle: 'Sequencing & Loops',
-        color: const Color(0xFF7BC67E),
-        imagePath: 'assets/images/course1.jpg',
-      ),
+    _CourseData(
+  topic: 'Coding',
+  level: 'Novice',
+  title: 'CodeMonkey Jr.',
+  subtitle: 'Sequencing & Loops',
+  color: const Color(0xFF7BC67E),
+  imagePath: 'assets/images/course1.jpg',
+  description: 'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
+),
       _CourseData(
         topic: 'Coding',
         level: 'Beginner',
@@ -708,142 +713,6 @@ class _CourseData {
   });
 }
 
-// // ── COURSE CARD ──
-// class _CourseCard extends StatefulWidget {
-//   final _CourseData course;
-//   const _CourseCard({required this.course});
-
-//   @override
-//   State<_CourseCard> createState() => _CourseCardState();
-// }
-
-// class _CourseCardState extends State<_CourseCard> {
-//   bool _hovered = false;
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return MouseRegion(
-//       onEnter: (_) => setState(() => _hovered = true),
-//       onExit: (_) => setState(() => _hovered = false),
-//       child: GestureDetector(
-//         onTap: () {},
-//         child: AnimatedContainer(
-//           duration: const Duration(milliseconds: 200),
-//           width: 220,
-//           decoration: BoxDecoration(
-//             color: Colors.white,
-//             borderRadius: BorderRadius.circular(10),
-//             boxShadow: _hovered
-//                 ? [
-//                     BoxShadow(
-//                       color: Colors.black.withOpacity(0.15),
-//                       blurRadius: 12,
-//                       offset: const Offset(0, 6),
-//                     )
-//                   ]
-//                 : [
-//                     BoxShadow(
-//                       color: Colors.black.withOpacity(0.06),
-//                       blurRadius: 6,
-//                       offset: const Offset(0, 2),
-//                     )
-//                   ],
-//           ),
-//           child: Column(
-//             crossAxisAlignment: CrossAxisAlignment.start,
-//             children: [
-//               // ── TOP TAG BAR ──
-//               Container(
-//                 padding: const EdgeInsets.symmetric(
-//                     horizontal: 10, vertical: 6),
-//                 decoration: BoxDecoration(
-//                   color: widget.course.color,
-//                   borderRadius: const BorderRadius.only(
-//                     topLeft: Radius.circular(10),
-//                     topRight: Radius.circular(10),
-//                   ),
-//                 ),
-//                 child: Row(
-//                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-//                   children: [
-//                     Text(
-//                       widget.course.topic,
-//                       style: GoogleFonts.nunito(
-//                         fontSize: 11,
-//                         fontWeight: FontWeight.w700,
-//                         color: Colors.white,
-//                       ),
-//                     ),
-//                     Row(
-//                       children: [
-//                         const Icon(Icons.bar_chart,
-//                             color: Colors.white, size: 14),
-//                         const SizedBox(width: 4),
-//                         Text(
-//                           widget.course.level,
-//                           style: GoogleFonts.nunito(
-//                             fontSize: 11,
-//                             fontWeight: FontWeight.w700,
-//                             color: Colors.white,
-//                           ),
-//                         ),
-//                       ],
-//                     ),
-//                   ],
-//                 ),
-//               ),
-
-//               // ── IMAGE ──
-//               ClipRRect(
-//                 child: Image.asset(
-//                   widget.course.imagePath,
-//                   width: 220,
-//                   height: 140,
-//                   fit: BoxFit.cover,
-//                 ),
-//               ),
-
-//               // ── TITLE & SUBTITLE ──
-//               Padding(
-//                 padding: const EdgeInsets.all(12),
-//                 child: Column(
-//                   crossAxisAlignment: CrossAxisAlignment.start,
-//                   children: [
-//                     Text(
-//                       widget.course.title,
-//                       style: GoogleFonts.nunito(
-//                         fontSize: 14,
-//                         fontWeight: FontWeight.w700,
-//                         color: const Color(0xFF333333),
-//                       ),
-//                     ),
-//                     const SizedBox(height: 4),
-//                     Text(
-//                       widget.course.subtitle,
-//                       style: GoogleFonts.nunito(
-//                         fontSize: 12,
-//                         color: const Color(0xFF888888),
-//                       ),
-//                     ),
-//                     const SizedBox(height: 8),
-//                     // Progress bar
-//                     Container(
-//                       height: 4,
-//                       decoration: BoxDecoration(
-//                         color: const Color(0xFFEEEEEE),
-//                         borderRadius: BorderRadius.circular(2),
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ),
-//             ],
-//           ),
-//         ),
-//       ),
-//     );
-//   }
-// }
 class _CourseCard extends StatefulWidget {
   final _CourseData course;
   const _CourseCard({required this.course});
@@ -1132,7 +1001,18 @@ class _CourseDialogState extends State<_CourseDialog> {
   int _imageIndex = 0;
   // Add more screenshot paths per course if you have them
   List<String> get _screenshots => [widget.course.imagePath];
-
+Widget? _getGamePage(String title) {
+  switch (title) {
+    case 'CodeMonkey Jr.':
+      return const MonkeyGamePage();
+    case 'Linus the Lemur':
+      return null; // replace with LinusGamePage() when ready
+    case 'Coding Adventure':
+      return null; // replace with CodingAdventurePage() when ready
+    default:
+      return null;
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -1285,11 +1165,13 @@ class _CourseDialogState extends State<_CourseDialog> {
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
               ),
               child: ElevatedButton(
-                onPressed: () {Navigator.of(context).pop(); // closes the dialog first
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const GameWebView()),
-  );},
+                onPressed: () {
+                  Navigator.of(context).pop();
+  final page = _getGamePage(widget.course.title);
+  if (page != null) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+  },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6DB84A),
                   foregroundColor: Colors.white,
