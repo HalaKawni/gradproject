@@ -5,6 +5,7 @@ import 'package:flame/game.dart';
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/game_api_service.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  PAGE WRAPPER
@@ -33,18 +34,31 @@ class _MonkeyGamePageState extends State<MonkeyGamePage> {
     _game = MonkeySequenceGame(level: _currentLevel);
   }
 
-  Future<void> _runSequence() async {
-    if (_userSequence.isEmpty) return;
-    final result = await _game.runSequence(List.from(_userSequence));
-    if (!mounted) return;
-    setState(() {
-      if (result) {
-        _showSuccess = true;
-      } else {
-        _showFailure = true;
-      }
-    });
+Future<void> _runSequence() async {
+  if (_userSequence.isEmpty) return;
+  final result = await _game.runSequence(List.from(_userSequence));
+  if (!mounted) return;
+  if (result) {
+    await _handleSuccess();
+  } else {
+    setState(() => _showFailure = true);
   }
+}
+
+Future<void> _handleSuccess() async {
+  try {
+    await GameApiService.saveLevelResult(
+      gameId: 'codemonkey-jr',
+      level: _currentLevel,
+      stars: 3,
+      score: 100,
+    );
+  } catch (e) {
+    // silently fail if not logged in or network error
+  }
+  if (!mounted) return;
+  setState(() => _showSuccess = true);
+}
 
   void _nextLevel() {
     setState(() {
@@ -874,4 +888,7 @@ void onMount() {
     canvas.drawCircle(const Offset(40, 14), 22, p);
     canvas.drawCircle(const Offset(62, 20), 16, p);
   }
+  
+  
+
 }

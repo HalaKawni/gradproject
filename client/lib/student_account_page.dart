@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/auth_service.dart';
 import 'dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
   const StudentAccountPage({super.key});
@@ -46,8 +47,11 @@ class _StudentAccountPageState extends State<StudentAccountPage>
     super.dispose();
   }
 
-  void _onSignUp() {
-   setState(() {
+String? _apiError;
+bool _loading = false;
+
+Future<void> _onSignUp() async {
+  setState(() {
     _showEmailError = _emailController.text.isEmpty;
     _showNameError = _displayNameController.text.isEmpty;
     _showPasswordError = _passwordController.text.isEmpty;
@@ -55,24 +59,44 @@ class _StudentAccountPageState extends State<StudentAccountPage>
     _showPasswordMismatch = !_showPasswordError &&
         !_showRePasswordError &&
         _passwordController.text != _rePasswordController.text;
+    _apiError = null;
   });
 
-  if (!_showEmailError &&
-      !_showNameError &&
-      !_showPasswordError &&
-      !_showRePasswordError &&
-      !_showPasswordMismatch) {
+  if (_showEmailError ||
+      _showNameError ||
+      _showPasswordError ||
+      _showRePasswordError ||
+      _showPasswordMismatch) return;
+
+  setState(() => _loading = true);
+
+  try {
+    final result = await AuthService.register(
+      name: _displayNameController.text.trim(),
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      role: 'child',
+    );
+
+    if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => DashboardPage(
-          username: _displayNameController.text,
+          username: result['user']['name'] ?? 'Student',
         ),
       ),
-      (route) => false, // clears the whole navigation stack
+      (route) => false,
     );
-  }
-  }
+ } catch (e) {
+  print('REGISTER ERROR: $e');
+  setState(() {
+    _apiError = e.toString().replaceAll('Exception: ', '');
+    _loading = false;
+  });
+}
+}
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +180,8 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // Main white card
+                          // Main white card// ADD this above the SIGN UP button Container:
+
                           Container(
                             width: 780,
                             decoration: BoxDecoration(
@@ -279,10 +304,11 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                         ),
                                         if (_showRePasswordError)
                                           _buildError('This field is required'),
-                                        if (_showPasswordMismatch)
-                                          _buildError(
-                                              'Passwords do not match'),
-                                        const SizedBox(height: 28),
+                                       if (_showPasswordMismatch)
+  _buildError('Passwords do not match'),
+if (_apiError != null)
+  _buildError(_apiError!),
+const SizedBox(height: 28),
 
                                         // SIGN UP button
                                         Container(
@@ -297,7 +323,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _onSignUp,
+                                                onPressed: _loading ? null : _onSignUp,
                                                 style:
                                                     ElevatedButton.styleFrom(
                                                   backgroundColor:
@@ -314,15 +340,23 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                                             6),
                                                   ),
                                                 ),
-                                                child: Text(
-                                                  'SIGN UP',
-                                                  style:
-                                                      GoogleFonts.montserrat(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.5,
-                                                  ),
-                                                ),
+                                               child: _loading
+    ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          color: Color(0xFF3A2A00),
+          strokeWidth: 2,
+        ),
+      )
+    : Text(
+        'SIGN UP',
+        style: GoogleFonts.montserrat(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.5,
+        ),
+      ),
                                               ),
                                             ),
                                           ),

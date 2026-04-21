@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/auth_service.dart';
+import 'dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -71,18 +73,7 @@ class _LoginPageState extends State<LoginPage>
     ],
   ),
 ),
-//  Positioned(
-//         bottom: 0,
-//         left: 16,
-//         child: IgnorePointer(
-//           child: Image.asset(
-//             'assets/images/elephant2.png',
-//             width: 160,
-//             height: 160,
-//             fit: BoxFit.contain,
-//           ),
-//         ),
-//       ),
+
                     const SizedBox(height: 20),
 
                     // ── WHITE CARD ──
@@ -235,15 +226,32 @@ class _LoginPageState extends State<LoginPage>
                                       child: SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
-                                          onPressed: () {
-                                            if (_emailController
-                                                    .text.isEmpty ||
-                                                _passwordController
-                                                    .text.isEmpty) {
-                                              setState(
-                                                  () => _showError = true);
-                                            }
-                                          },
+                                         onPressed: () async {
+  if (_emailController.text.isEmpty ||
+      _passwordController.text.isEmpty) {
+    setState(() => _showError = true);
+    return;
+  }
+  setState(() => _showError = false);
+  try {
+    final result = await AuthService.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => DashboardPage(
+          username: result['user']['name'] ?? 'Student',
+        ),
+      ),
+    );
+  } catch (e) {
+    setState(() {
+      _showError = true;
+    });
+  }
+},
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 const Color.fromARGB(255,220, 202, 233),
