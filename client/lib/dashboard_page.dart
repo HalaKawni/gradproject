@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'game_webview.dart';
 import 'monkey_game_page.dart';
+import 'world_map_page.dart';
+import 'unlock_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -17,6 +19,16 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _showCategoryError = false;
   bool _showTopicError = false;
   String _activeTab = 'Filter';
+  @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    showDialog(
+      context: context,
+      builder: (_) => const UnlockDialog(),
+    );
+  });
+}
 
   final Set<String> _selectedLevels = {'Novice', 'Beginner', 'Intermediate', 'Advanced'};
   final Set<String> _selectedCategories = {'Main Courses', 'Mini Courses'};
@@ -63,7 +75,14 @@ class _DashboardPageState extends State<DashboardPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          _SidebarItem(label: 'COURSES', isActive: true, onTap: () {}),
+          _SidebarItem(
+  label: 'COURSES',
+  isActive: true,
+  onTap: () => showDialog(
+    context: context,
+    builder: (_) => const UnlockDialog(),
+  ),
+),
           _SidebarItem(label: 'MY CREATIONS', isActive: false, onTap: () {}),
           _SidebarItem(label: 'DISCOVER', isActive: false, onTap: () {}),
           const Spacer(),
@@ -1004,7 +1023,7 @@ class _CourseDialogState extends State<_CourseDialog> {
 Widget? _getGamePage(String title) {
   switch (title) {
     case 'CodeMonkey Jr.':
-      return const MonkeyGamePage();
+      return const  WorldMapPage();
     case 'Linus the Lemur':
       return null; // replace with LinusGamePage() when ready
     case 'Coding Adventure':
