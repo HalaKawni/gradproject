@@ -20,6 +20,8 @@ class AuthSession {
   }
 
     bool get isValid => token.isNotEmpty && user.id.isNotEmpty;
+
+    String get userRole => user.role;
 }
 
 class AuthUser {

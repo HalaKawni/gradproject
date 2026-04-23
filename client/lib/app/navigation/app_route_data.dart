@@ -45,3 +45,15 @@ class MyPublishedGamesRouteData {
 
   final AuthSession session;
 }
+
+class DiscoverRouteData {
+  const DiscoverRouteData({required this.session});
+
+  final AuthSession session;
+}
+
+class AdminRouteData {
+  const AdminRouteData({required this.session});
+  
+  final AuthSession session;
+}

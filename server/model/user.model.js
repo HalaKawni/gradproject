@@ -1,8 +1,8 @@
 const mongoose = require('mongoose');
-const db = require( '../config/db');
+const db = require('../config/db');
 const bcrypt = require("bcrypt");
 
-const {Schema} = mongoose;
+const { Schema } = mongoose;
 
 const userSchema = new Schema({
     name: {
@@ -24,28 +24,35 @@ const userSchema = new Schema({
         type: String,
         enum: ['parent', 'child', 'admin'],
         required: true
+    },
+    lastLoginAt: {
+        type: Date
+    },
+    },
+    {
+        timestamps: true
     }
-});
+);
 
-userSchema.pre('save', async function(){
-    try{
+userSchema.pre('save', async function () {
+    try {
         var user = this;
         if (!user.isModified('password')) {
             return;
         }
-        const salt = await(bcrypt.genSalt(10));
-        const hashpass = await bcrypt.hash(user.password,salt);
+        const salt = await (bcrypt.genSalt(10));
+        const hashpass = await bcrypt.hash(user.password, salt);
 
         user.password = hashpass;
     }
-    catch(err){
+    catch (err) {
         throw err
     }
 });
 
-userSchema.methods.comparePassword = async function(candidatePassword) {
+userSchema.methods.comparePassword = async function (candidatePassword) {
     return bcrypt.compare(candidatePassword, this.password);
 };
 
-const userModel = db.model('user',userSchema);
+const userModel = db.model('user', userSchema);
 module.exports = userModel;

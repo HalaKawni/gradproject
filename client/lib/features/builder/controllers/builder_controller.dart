@@ -534,7 +534,9 @@ class BuilderController extends ChangeNotifier {
   }
 
   void resetPlaybackPreview() {
-    if (playbackState == null && _playbackPlan == null && _playbackTimer == null) {
+    if (playbackState == null &&
+        _playbackPlan == null &&
+        _playbackTimer == null) {
       return;
     }
 
@@ -714,16 +716,24 @@ class BuilderController extends ChangeNotifier {
     );
   }
 
-  Future<void> loadProject(String projectId) async {
+  Future<void> loadProject(
+    String projectId, {
+    bool allowPublishedAccess = false,
+  }) async {
     try {
       isLoading = true;
       lastMessage = null;
       notifyListeners();
 
-      final response = await ApiService.getBuilderProjectById(
-        authToken: session.token,
-        projectId: projectId,
-      );
+      final response = allowPublishedAccess
+          ? await ApiService.getPublishedBuilderProjectById(
+              authToken: session.token,
+              projectId: projectId,
+            )
+          : await ApiService.getBuilderProjectById(
+              authToken: session.token,
+              projectId: projectId,
+            );
 
       if (response['success'] == true) {
         final data = response['data'];

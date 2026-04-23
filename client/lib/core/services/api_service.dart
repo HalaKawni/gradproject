@@ -26,10 +26,7 @@ class ApiService {
       final response = await http.post(
         url,
         headers: _headers,
-        body: jsonEncode({
-          'email': email,
-          'password': password,
-        }),
+        body: jsonEncode({'email': email, 'password': password}),
       );
 
       final data = _decodeResponseBody(response);
@@ -47,10 +44,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Login error: $e',
-      };
+      return {'success': false, 'message': 'Login error: $e'};
     }
   }
 
@@ -80,10 +74,7 @@ class ApiService {
         return {
           'success': true,
           'data': data,
-          'message': _extractSuccessMessage(
-            data,
-            'Registration successful',
-          ),
+          'message': _extractSuccessMessage(data, 'Registration successful'),
         };
       } else {
         return {
@@ -92,10 +83,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Registration error: $e',
-      };
+      return {'success': false, 'message': 'Registration error: $e'};
     }
   }
 
@@ -136,10 +124,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Create project error: $e',
-      };
+      return {'success': false, 'message': 'Create project error: $e'};
     }
   }
 
@@ -177,10 +162,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Update project error: $e',
-      };
+      return {'success': false, 'message': 'Update project error: $e'};
     }
   }
 
@@ -203,10 +185,7 @@ class ApiService {
       final data = _decodeResponseBody(response);
 
       if (_isSuccessful(response.statusCode)) {
-        return {
-          'success': true,
-          'data': data['data'] ?? data,
-        };
+        return {'success': true, 'data': data['data'] ?? data};
       } else {
         return {
           'success': false,
@@ -214,10 +193,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Get project error: $e',
-      };
+      return {'success': false, 'message': 'Get project error: $e'};
     }
   }
 
@@ -239,10 +215,7 @@ class ApiService {
       final data = _decodeResponseBody(response);
 
       if (_isSuccessful(response.statusCode)) {
-        return {
-          'success': true,
-          'data': data['data'] ?? [],
-        };
+        return {'success': true, 'data': data['data'] ?? []};
       } else {
         return {
           'success': false,
@@ -250,10 +223,76 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Get all projects error: $e',
-      };
+      return {'success': false, 'message': 'Get all projects error: $e'};
+    }
+  }
+
+  /// Fetches published builder projects for discovery.
+  ///
+  /// Endpoint:
+  /// GET /api/builder/projects/published
+  static Future<Map<String, dynamic>> getPublishedBuilderProjects({
+    required String authToken,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/builder/projects/published');
+
+      final response = await http.get(
+        url,
+        headers: _headersWithAuth(authToken),
+      );
+
+      final data = _decodeResponseBody(response);
+
+      if (_isSuccessful(response.statusCode)) {
+        return {'success': true, 'data': data['data'] ?? []};
+      } else {
+        return {
+          'success': false,
+          'message': _extractErrorMessage(
+            data,
+            'Failed to fetch published projects',
+          ),
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Get published projects error: $e'};
+    }
+  }
+
+  /// Fetches one published builder project for the discover/play flow.
+  ///
+  /// Endpoint:
+  /// GET /api/builder/projects/published/:id
+  static Future<Map<String, dynamic>> getPublishedBuilderProjectById({
+    required String authToken,
+    required String projectId,
+  }) async {
+    try {
+      final url = Uri.parse(
+        '$baseUrl/api/builder/projects/published/$projectId',
+      );
+
+      final response = await http.get(
+        url,
+        headers: _headersWithAuth(authToken),
+      );
+
+      final data = _decodeResponseBody(response);
+
+      if (_isSuccessful(response.statusCode)) {
+        return {'success': true, 'data': data['data'] ?? data};
+      } else {
+        return {
+          'success': false,
+          'message': _extractErrorMessage(
+            data,
+            'Failed to fetch published project',
+          ),
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Get published project error: $e'};
     }
   }
 
@@ -292,10 +331,7 @@ class ApiService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Delete project error: $e',
-      };
+      return {'success': false, 'message': 'Delete project error: $e'};
     }
   }
 
@@ -322,10 +358,7 @@ class ApiService {
   }
 
   static Map<String, String> _headersWithAuth(String authToken) {
-    return {
-      ..._headers,
-      'Authorization': 'Bearer $authToken',
-    };
+    return {..._headers, 'Authorization': 'Bearer $authToken'};
   }
 
   static String _extractSuccessMessage(

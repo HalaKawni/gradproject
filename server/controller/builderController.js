@@ -105,9 +105,80 @@ async function getAllProjects(req, res) {
   }
 }
 
+async function getPublishedProjects(req, res) {
+  try {
+    const projects = await builderService.getPublishedProjects();
+
+    return res.status(200).json({
+      success: true,
+      data: projects,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch published projects.',
+      error: error.message,
+    });
+  }
+}
+
+async function getPublishedProjectById(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.getPublishedProjectById(id);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Published project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: project,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch published project.',
+      error: error.message,
+    });
+  }
+}
+
+async function deleteProject(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.deleteProject(id, req.user);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Project deleted successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete project.',
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createProject,
   updateProject,
   getProjectById,
   getAllProjects,
+  getPublishedProjects,
+  getPublishedProjectById,
+  deleteProject,
 };

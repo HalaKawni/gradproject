@@ -79,7 +79,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     hasShownCompletionDialog = false;
     selectedSolutionCommandId = null;
     selectedLoopInsertionTargetId = null;
-    await controller.loadProject(widget.projectId);
+    await controller.loadProject(widget.projectId, allowPublishedAccess: true);
   }
 
   void _handleControllerChanged() {
@@ -118,10 +118,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     _handleLogicDragStateChanged(true);
   }
 
-  void _handleLogicDragUpdated(
-    _LogicDragData data,
-    DragUpdateDetails details,
-  ) {
+  void _handleLogicDragUpdated(_LogicDragData data, DragUpdateDetails details) {
     if (!mounted) {
       return;
     }
@@ -140,10 +137,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     });
   }
 
-  void _handleLogicDragEnded(
-    _LogicDragData data,
-    DraggableDetails details,
-  ) {
+  void _handleLogicDragEnded(_LogicDragData data, DraggableDetails details) {
     final effectiveData = activeLogicDragData ?? data;
     final target = proximityLogicDropTarget;
     activeLogicDragData = null;
@@ -380,7 +374,8 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
   }
 
   String get _pageTitle {
-    if (controller.savedProjectId != null && controller.project.title.isNotEmpty) {
+    if (controller.savedProjectId != null &&
+        controller.project.title.isNotEmpty) {
       return controller.project.title;
     }
 
@@ -415,7 +410,9 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
                             const SizedBox(height: 16),
                             Expanded(
                               child: Center(
-                                child: _buildFixedGameWindow(controller.project),
+                                child: _buildFixedGameWindow(
+                                  controller.project,
+                                ),
                               ),
                             ),
                           ],
@@ -619,10 +616,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700),
           ),
         ],
       ),
@@ -1675,7 +1669,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
       _setLogicSelection(newLoopId, loopInsertionTargetId: newLoopId);
     });
   }
-  
+
   IconData _logicCommandIcon(LogicCommandType command) {
     switch (command) {
       case LogicCommandType.moveLeft:

@@ -1,11 +1,13 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/features/admin/pages/admin_shell.dart';
 import 'package:client/features/auth/pages/login_page_demo.dart';
 import 'package:client/features/auth/pages/register_page_demo.dart';
 import 'package:client/features/builder/pages/builder_play_page.dart';
 import 'package:client/features/builder/pages/builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
 import 'package:client/features/builder/pages/top_view_builder_page.dart';
+import 'package:client/features/home/pages/discover.dart';
 import 'package:client/features/home/pages/user_home_page_demo.dart';
 import 'package:flutter/material.dart';
 
@@ -109,6 +111,31 @@ class AppRouter {
           settings,
           'The My Published Games page needs an active user session.',
         );
+      case AppRoutes.discover:
+        final data = settings.arguments;
+        if (data is DiscoverRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => DiscoverPage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The Discover page needs an active user session.',
+        );
+
+      case AppRoutes.admin:
+        final data = settings.arguments;
+        if (data is AdminRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => AdminShellPage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The admin page needs an active user session.',
+        );
       default:
         return onUnknownRoute(settings);
     }
@@ -125,10 +152,7 @@ class AppRouter {
     required RouteSettings settings,
     required WidgetBuilder builder,
   }) {
-    return MaterialPageRoute<void>(
-      settings: settings,
-      builder: builder,
-    );
+    return MaterialPageRoute<void>(settings: settings, builder: builder);
   }
 
   static MaterialPageRoute<void> _errorRoute(
@@ -142,10 +166,7 @@ class AppRouter {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-            ),
+            child: Text(message, textAlign: TextAlign.center),
           ),
         ),
       ),

@@ -38,6 +38,38 @@ const BuilderProjectSchema = new mongoose.Schema(
       type: Object,
       required: true,
     },
+    courseId: {
+      type: String,
+      //required: true,
+    },
+    orderInCourse: {
+      type: Number,
+      //required: true,
+    },
+    difficulty: {
+      type: String,
+      enum: ['easy', 'medium', 'hard'],
+      default: 'medium',
+    },
+    // sourceType: {
+    //   type: String,
+    //   enum: ['internal', 'external'],
+    //   required: true,
+    // },
+    reviewStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    publishedAt: {
+      type: Date,
+    },
+    approvedBy: {
+      type: String,
+    },
+    approvedAt: {
+      type: Date,
+    }
   },
   {
     timestamps: true,

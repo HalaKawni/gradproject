@@ -66,11 +66,21 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Login succeeded but no valid session was returned.');
         }
 
+        if(session.userRole == 'admin') {
+          Navigator.of(context).pushNamedAndRemoveUntil(
+            AppRoutes.admin,
+            (route) => false,
+            arguments: AdminRouteData(session: session),
+          );
+          return;
+        }
+
         Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.home,
           (route) => false,
           arguments: HomeRouteData(session: session),
         );
+        
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

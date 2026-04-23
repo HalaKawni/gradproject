@@ -69,9 +69,34 @@ async function getAllProjects(user) {
   }).sort({ updatedAt: -1 });
 }
 
+async function getPublishedProjects() {
+  return await BuilderProject.find({
+    status: 'published',
+  })
+    .select('_id title description status updatedAt ownerName')
+    .sort({ updatedAt: -1 });
+}
+
+async function getPublishedProjectById(projectId) {
+  return await BuilderProject.findOne({
+    _id: projectId,
+    status: 'published',
+  });
+}
+
+async function deleteProject(projectId, user) {
+  return await BuilderProject.findOneAndDelete({
+    _id: projectId,
+    ownerId: user._id.toString(),
+  });
+}
+
 module.exports = {
   createProject,
   updateProject,
   getProjectById,
   getAllProjects,
+  getPublishedProjects,
+  getPublishedProjectById,
+  deleteProject,
 };

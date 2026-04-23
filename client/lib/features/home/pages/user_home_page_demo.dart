@@ -8,16 +8,12 @@ enum _GameCreatorOption { frontView, topView }
 class UserHomePage extends StatelessWidget {
   final AuthSession session;
 
-  const UserHomePage({
-    super.key,
-    required this.session,
-  });
+  const UserHomePage({super.key, required this.session});
 
   void _logout(BuildContext context) {
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      AppRoutes.login,
-      (route) => false,
-    );
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
 
   void _openFrontViewBuilder(BuildContext context) {
@@ -31,6 +27,13 @@ class UserHomePage extends StatelessWidget {
     Navigator.of(context).pushNamed(
       AppRoutes.topViewBuilder,
       arguments: TopViewBuilderRouteData(session: session),
+    );
+  }
+
+  void _openDiscover(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.discover,
+      arguments: DiscoverRouteData(session: session),
     );
   }
 
@@ -114,7 +117,29 @@ class UserHomePage extends StatelessWidget {
               style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
             ),
           ),
+
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.menu_open, color: Colors.black),
+            
+            onSelected: (value) {
+              if (value == 'profile') {
+                print('Profile clicked');
+              } else if (value == 'settings') {
+                print('Settings clicked');
+              } else if (value == 'Sign Out') {
+                _logout(context);
+              }
+            },
+            itemBuilder: (BuildContext context) => [
+              PopupMenuItem(value: 'Language', child: Text('Language')),
+              PopupMenuItem(value: 'Home', child: Text('Home')),
+              PopupMenuItem(value: 'My Account', child: Text('My Account')),
+              PopupMenuItem(value: 'Contact Us', child: Text('Contact Us')),
+              PopupMenuItem(value: 'Sign Out', child: Text('Sign Out'), ),
+            ],
+          ),
         ],
+        backgroundColor: const Color.fromARGB(255, 69, 47, 40),
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -156,6 +181,28 @@ class UserHomePage extends StatelessWidget {
               ),
             ),
           ),
+        ),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(child: Text('Menu')),
+            ListTile(
+              title: const Text('Courses'),
+              onTap: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            ListTile(
+              title: const Text('My Games'),
+              onTap: () => _openMyGames(context),
+            ),
+            ListTile(
+              title: const Text('Discover'),
+              onTap: () => _openDiscover(context),
+            ),
+          ],
         ),
       ),
     );
