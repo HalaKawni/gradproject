@@ -3,6 +3,7 @@ const body_parser = require('body-parser');
 const userRouter = require('./routers/user.router');
 const cors = require('cors');
 const builderRoutes = require('./routers/builderRoutes');
+const adminRouter = require('./routers/admin.router');
 
 const app = express();
 
@@ -17,5 +18,6 @@ app.use(express.json());
 
 app.use('/',userRouter)
 app.use('/api/builder', builderRoutes);
+app.use('/api/admin', adminRouter)
 
 module.exports = app;   

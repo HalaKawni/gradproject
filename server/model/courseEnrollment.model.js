@@ -4,7 +4,7 @@ const bcrypt = require("bcrypt");
 
 const { Schema } = mongoose;
 
-const courseEnrollmentSchema = new Schema({
+const courseEnrollmentSchema = new mongoose.Schema({
     courseId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'course',
@@ -32,3 +32,7 @@ const courseEnrollmentSchema = new Schema({
         default: 0
     }
 });
+
+
+const courseEnrollmentModel = db.model('CourseEnrollment', courseEnrollmentSchema);
+module.exports = courseEnrollmentModel;

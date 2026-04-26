@@ -87,6 +87,30 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getProfile({required String authToken}) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/profile',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch profile',
+    );
+  }
+
+  static Future<Map<String, dynamic>> changePassword({
+    required String authToken,
+    required String currentPassword,
+    required String newPassword,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/profile/password',
+      authToken: authToken,
+      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
+      defaultSuccessMessage: 'Password changed successfully',
+      defaultErrorMessage: 'Failed to change password',
+    );
+  }
+
   // =========================
   // BUILDER PROJECTS
   // =========================
@@ -335,12 +359,262 @@ class ApiService {
     }
   }
 
-  static Map<String, dynamic> _decodeResponseBody(http.Response response) {
-    if (response.body.isEmpty) {
-      return {};
-    }
+  // =========================
+  // ADMIN
+  // =========================
 
-    final decoded = jsonDecode(response.body);
+  static Future<Map<String, dynamic>> getAdminDashboard({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/dashboard',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch dashboard',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminStatistics({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/statistics',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch statistics',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminCourses({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/courses',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch courses',
+    );
+  }
+
+  static Future<Map<String, dynamic>> createAdminCourse({
+    required String authToken,
+    required Map<String, dynamic> courseJson,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/courses',
+      authToken: authToken,
+      body: courseJson,
+      defaultSuccessMessage: 'Course created successfully',
+      defaultErrorMessage: 'Failed to create course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateAdminCourse({
+    required String authToken,
+    required String courseId,
+    required Map<String, dynamic> courseJson,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/admin/courses/$courseId',
+      authToken: authToken,
+      body: courseJson,
+      defaultSuccessMessage: 'Course updated successfully',
+      defaultErrorMessage: 'Failed to update course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteAdminCourse({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/admin/courses/$courseId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Course deleted successfully',
+      defaultErrorMessage: 'Failed to delete course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminLevels({
+    required String authToken,
+    String? status,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/levels',
+      authToken: authToken,
+      queryParameters: {
+        if (status != null && status.isNotEmpty) 'status': status,
+      },
+      defaultErrorMessage: 'Failed to fetch levels',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminLevelById({
+    required String authToken,
+    required String levelId,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/levels/$levelId',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch level',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateAdminLevel({
+    required String authToken,
+    required String levelId,
+    required Map<String, dynamic> levelJson,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/admin/levels/$levelId',
+      authToken: authToken,
+      body: levelJson,
+      defaultSuccessMessage: 'Level updated successfully',
+      defaultErrorMessage: 'Failed to update level',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteAdminLevel({
+    required String authToken,
+    required String levelId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/admin/levels/$levelId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Level deleted successfully',
+      defaultErrorMessage: 'Failed to delete level',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminUsers({
+    required String authToken,
+    String search = '',
+    int page = 1,
+    int limit = 20,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/users',
+      authToken: authToken,
+      queryParameters: {
+        'page': '$page',
+        'limit': '$limit',
+        if (search.trim().isNotEmpty) 'search': search.trim(),
+      },
+      defaultErrorMessage: 'Failed to fetch users',
+    );
+  }
+
+  static Future<Map<String, dynamic>> createAdminUser({
+    required String authToken,
+    required Map<String, dynamic> userJson,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/users/admin',
+      authToken: authToken,
+      body: userJson,
+      defaultSuccessMessage: 'Admin user created successfully',
+      defaultErrorMessage: 'Failed to create admin user',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteAdminUser({
+    required String authToken,
+    required String userId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/admin/users/$userId',
+      authToken: authToken,
+      defaultSuccessMessage: 'User deleted successfully',
+      defaultErrorMessage: 'Failed to delete user',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateAdminUserSuspension({
+    required String authToken,
+    required String userId,
+    required bool isSuspended,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/admin/users/$userId/suspension',
+      authToken: authToken,
+      body: {'isSuspended': isSuspended},
+      defaultSuccessMessage: isSuspended
+          ? 'User suspended successfully'
+          : 'User restored successfully',
+      defaultErrorMessage: isSuspended
+          ? 'Failed to suspend user'
+          : 'Failed to restore user',
+    );
+  }
+
+  static Future<Map<String, dynamic>> _sendRequest({
+    required String method,
+    required String path,
+    required String authToken,
+    Map<String, String>? queryParameters,
+    Map<String, dynamic>? body,
+    String defaultSuccessMessage = 'Request completed successfully',
+    String defaultErrorMessage = 'Request failed',
+  }) async {
+    try {
+      final url = Uri.parse(
+        '$baseUrl$path',
+      ).replace(queryParameters: queryParameters);
+      final headers = _headersWithAuth(authToken);
+      late final http.Response response;
+
+      if (method == 'POST') {
+        response = await http.post(
+          url,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
+      } else if (method == 'PUT') {
+        response = await http.put(
+          url,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
+      } else if (method == 'DELETE') {
+        response = await http.delete(url, headers: headers);
+      } else {
+        response = await http.get(url, headers: headers);
+      }
+
+      final decoded = _decodeJsonBody(response);
+      final decodedMap = _asMap(decoded);
+
+      if (_isSuccessful(response.statusCode)) {
+        return {
+          'success': true,
+          'data': _extractPayload(decoded),
+          'message': _extractSuccessMessage(decodedMap, defaultSuccessMessage),
+        };
+      }
+
+      return {
+        'success': false,
+        'message': _extractErrorMessage(decodedMap, defaultErrorMessage),
+        'errors': decodedMap['errors'],
+      };
+    } catch (e) {
+      return {'success': false, 'message': '$defaultErrorMessage: $e'};
+    }
+  }
+
+  static Map<String, dynamic> _decodeResponseBody(http.Response response) {
+    final decoded = _decodeJsonBody(response);
 
     if (decoded is Map<String, dynamic>) {
       return decoded;
@@ -351,6 +625,36 @@ class ApiService {
     }
 
     return {};
+  }
+
+  static dynamic _decodeJsonBody(http.Response response) {
+    if (response.body.isEmpty) {
+      return {};
+    }
+
+    return jsonDecode(response.body);
+  }
+
+  static Map<String, dynamic> _asMap(dynamic decoded) {
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+
+    return {};
+  }
+
+  static dynamic _extractPayload(dynamic decoded) {
+    final data = _asMap(decoded);
+
+    if (data.containsKey('data')) {
+      return data['data'];
+    }
+
+    return decoded;
   }
 
   static bool _isSuccessful(int statusCode) {

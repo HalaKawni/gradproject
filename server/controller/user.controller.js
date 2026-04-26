@@ -80,3 +80,36 @@ exports.getProfile = async (req, res, next) => {
         });
     }
 };
+
+exports.changePassword = async (req, res, next) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                status: false,
+                error: "Current password and new password are required"
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                status: false,
+                error: "New password must be at least 6 characters"
+            });
+        }
+
+        await UserService.changePassword(req.user._id, currentPassword, newPassword);
+
+        res.json({
+            status: true,
+            success: "Password changed successfully"
+        });
+    }
+    catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Failed to change password"
+        });
+    }
+};

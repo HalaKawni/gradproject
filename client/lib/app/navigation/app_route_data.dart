@@ -10,10 +10,12 @@ class BuilderRouteData {
   const BuilderRouteData({
     required this.session,
     this.initialProjectId,
+    this.useAdminLevelApi = false,
   });
 
   final AuthSession session;
   final String? initialProjectId;
+  final bool useAdminLevelApi;
 }
 
 class BuilderPlayRouteData {
@@ -52,8 +54,14 @@ class DiscoverRouteData {
   final AuthSession session;
 }
 
+class ProfileRouteData {
+  const ProfileRouteData({required this.session});
+
+  final AuthSession session;
+}
+
 class AdminRouteData {
   const AdminRouteData({required this.session});
-  
+
   final AuthSession session;
 }

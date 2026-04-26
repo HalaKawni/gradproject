@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
 const db = require('../config/db');
-const bcrypt = require("bcrypt");
-const { create, updateMany } = require('./user.model');
+
 
 const { Schema } = mongoose;
 
 
-const courseSchema = new Schema({
+const courseSchema = new mongoose.Schema({
     courseName: {
         type: String,
         required: true, 
@@ -33,15 +32,20 @@ const courseSchema = new Schema({
         default: false
     },
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'user',
         required: true
     },
     updatedBy: {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'user'
     },
     updatedAt: {
         type: Date
     }
+}, {
+    timestamps: true
 });   
+
+const courseModel = db.model('Course', courseSchema);
+module.exports = courseModel;

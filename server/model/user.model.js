@@ -25,6 +25,16 @@ const userSchema = new Schema({
         enum: ['parent', 'child', 'admin'],
         required: true
     },
+    isSuspended: {
+        type: Boolean,
+        default: false
+    },
+    suspendedAt: {
+        type: Date
+    },
+    suspendedBy: {
+        type: String
+    },
     lastLoginAt: {
         type: Date
     },

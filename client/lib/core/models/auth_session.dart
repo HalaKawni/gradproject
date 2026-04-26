@@ -2,10 +2,7 @@ class AuthSession {
   final String token;
   final AuthUser user;
 
-  const AuthSession({
-    required this.token,
-    required this.user,
-  });
+  const AuthSession({required this.token, required this.user});
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     final rawUser = json['user'];
@@ -19,9 +16,9 @@ class AuthSession {
     );
   }
 
-    bool get isValid => token.isNotEmpty && user.id.isNotEmpty;
+  bool get isValid => token.isNotEmpty && user.id.isNotEmpty;
 
-    String get userRole => user.role;
+  String get userRole => user.role;
 }
 
 class AuthUser {
@@ -39,7 +36,7 @@ class AuthUser {
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
-      id: json['id']?.toString() ?? '',
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
       name: json['name']?.toString() ?? 'User',
       email: json['email']?.toString() ?? '',
       role: json['role']?.toString() ?? '',

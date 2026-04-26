@@ -18,8 +18,14 @@ import '../widgets/builder_toolbar.dart';
 class BuilderPage extends StatefulWidget {
   final AuthSession session;
   final String? initialProjectId;
+  final bool useAdminLevelApi;
 
-  const BuilderPage({super.key, required this.session, this.initialProjectId});
+  const BuilderPage({
+    super.key,
+    required this.session,
+    this.initialProjectId,
+    this.useAdminLevelApi = false,
+  });
 
   @override
   State<BuilderPage> createState() => _BuilderPageState();
@@ -56,7 +62,11 @@ class _BuilderPageState extends State<BuilderPage> {
     titleController = TextEditingController(text: project.title);
     horizontalScrollController = ScrollController();
     verticalScrollController = ScrollController();
-    controller = BuilderController(project: project, session: widget.session);
+    controller = BuilderController(
+      project: project,
+      session: widget.session,
+      useAdminLevelApi: widget.useAdminLevelApi,
+    );
     game = BuilderGame(controller: controller);
     previousColumnCount = controller.project.settings.columns;
     controllerListener = _handleControllerChanged;
@@ -127,10 +137,7 @@ class _BuilderPageState extends State<BuilderPage> {
     _handleLogicDragStateChanged(true);
   }
 
-  void _handleLogicDragUpdated(
-    _LogicDragData data,
-    DragUpdateDetails details,
-  ) {
+  void _handleLogicDragUpdated(_LogicDragData data, DragUpdateDetails details) {
     if (!mounted) {
       return;
     }
@@ -149,10 +156,7 @@ class _BuilderPageState extends State<BuilderPage> {
     });
   }
 
-  void _handleLogicDragEnded(
-    _LogicDragData data,
-    DraggableDetails details,
-  ) {
+  void _handleLogicDragEnded(_LogicDragData data, DraggableDetails details) {
     final effectiveData = activeLogicDragData ?? data;
     final target = proximityLogicDropTarget;
     activeLogicDragData = null;
@@ -197,8 +201,7 @@ class _BuilderPageState extends State<BuilderPage> {
         continue;
       }
 
-      final rect =
-          renderObject.localToGlobal(Offset.zero) & renderObject.size;
+      final rect = renderObject.localToGlobal(Offset.zero) & renderObject.size;
       final expandedRect = rect.inflate(_logicDropSnapPadding);
       if (!expandedRect.contains(globalPosition)) {
         continue;
@@ -2153,11 +2156,7 @@ class _BoardToolDropLayerState extends State<_BoardToolDropLayer> {
             }
 
             if (dragData.isEntity) {
-              widget.controller.moveEntity(
-                dragData.entityId!,
-                cell.x,
-                cell.y,
-              );
+              widget.controller.moveEntity(dragData.entityId!, cell.x, cell.y);
               return;
             }
 
@@ -2317,10 +2316,7 @@ class _BoardToolDropLayerState extends State<_BoardToolDropLayer> {
         data: dragData,
         maxSimultaneousDrags: 1,
         dragAnchorStrategy: pointerDragAnchorStrategy,
-        feedback: Material(
-          color: Colors.transparent,
-          child: feedback,
-        ),
+        feedback: Material(color: Colors.transparent, child: feedback),
         childWhenDragging: const SizedBox.expand(),
         onDragStarted: () {
           _startGridDrag(dragData, cell);
@@ -2457,11 +2453,7 @@ class _BoardToolDropLayerState extends State<_BoardToolDropLayer> {
     required double tileSize,
     required Widget child,
   }) {
-    return SizedBox(
-      width: tileSize,
-      height: tileSize,
-      child: child,
-    );
+    return SizedBox(width: tileSize, height: tileSize, child: child);
   }
 
   Color _tileColorForType(String type) {

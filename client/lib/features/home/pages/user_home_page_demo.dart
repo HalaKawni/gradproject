@@ -88,6 +88,13 @@ class UserHomePage extends StatelessWidget {
     );
   }
 
+  void _openProfile(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.profile,
+      arguments: ProfileRouteData(session: session),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = session.user;
@@ -120,22 +127,19 @@ class UserHomePage extends StatelessWidget {
 
           PopupMenuButton<String>(
             icon: const Icon(Icons.menu_open, color: Colors.black),
-            
             onSelected: (value) {
-              if (value == 'profile') {
-                print('Profile clicked');
-              } else if (value == 'settings') {
-                print('Settings clicked');
-              } else if (value == 'Sign Out') {
+              if (value == 'account') {
+                _openProfile(context);
+              } else if (value == 'home') {
+                return;
+              } else if (value == 'signOut') {
                 _logout(context);
               }
             },
-            itemBuilder: (BuildContext context) => [
-              PopupMenuItem(value: 'Language', child: Text('Language')),
-              PopupMenuItem(value: 'Home', child: Text('Home')),
-              PopupMenuItem(value: 'My Account', child: Text('My Account')),
-              PopupMenuItem(value: 'Contact Us', child: Text('Contact Us')),
-              PopupMenuItem(value: 'Sign Out', child: Text('Sign Out'), ),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'home', child: Text('Home')),
+              PopupMenuItem(value: 'account', child: Text('My Account')),
+              PopupMenuItem(value: 'signOut', child: Text('Sign Out')),
             ],
           ),
         ],

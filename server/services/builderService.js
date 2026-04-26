@@ -26,6 +26,10 @@ async function createProject(projectData, user) {
     title: projectData.title || 'New Level',
     description: projectData.description || '',
     status: projectData.status || 'draft',
+    courseId: projectData.courseId,
+    orderInCourse: projectData.orderInCourse,
+    difficulty: projectData.difficulty || 'medium',
+    ...(projectData.status === 'published' ? { publishedAt: new Date() } : {}),
     draftData: buildDraftData(projectData, user),
   });
 
@@ -48,10 +52,14 @@ async function updateProject(projectId, projectData, user) {
       title: projectData.title || 'Untitled',
       description: projectData.description || '',
       status: projectData.status || 'draft',
+      courseId: projectData.courseId,
+      orderInCourse: projectData.orderInCourse,
+      difficulty: projectData.difficulty || 'medium',
+      ...(projectData.status === 'published' ? { publishedAt: new Date() } : {}),
       draftData: buildDraftData(projectData, user),
     },
     {
-      new: true,
+      returnDocument: 'after',
     }
   );
 }

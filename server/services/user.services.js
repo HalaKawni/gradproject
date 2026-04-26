@@ -33,6 +33,10 @@ class UserService{
                 throw new Error("Invalid email or password");
             }
 
+            if (user.isSuspended) {
+                throw new Error("There was a problem signing in.");
+            }
+
             const isPasswordValid = await user.comparePassword(password);
 
             if (!isPasswordValid) {
@@ -45,6 +49,30 @@ class UserService{
                 user,
                 token
             };
+        }
+        catch (err) {
+            throw err;
+        }
+    }
+
+    static async changePassword(userId, currentPassword, newPassword) {
+        try {
+            const user = await UserModel.findById(userId);
+
+            if (!user) {
+                throw new Error("User not found");
+            }
+
+            const isPasswordValid = await user.comparePassword(currentPassword);
+
+            if (!isPasswordValid) {
+                throw new Error("Current password is incorrect");
+            }
+
+            user.password = newPassword;
+            await user.save();
+
+            return true;
         }
         catch (err) {
             throw err;

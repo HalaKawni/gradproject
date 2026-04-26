@@ -2,17 +2,12 @@ import 'package:client/core/models/auth_session.dart';
 import 'package:client/features/admin/pages/admin_course.dart';
 import 'package:client/features/admin/pages/admin_dashboard.dart';
 import 'package:client/features/admin/pages/admin_level.dart';
+import 'package:client/features/admin/pages/admin_statistics.dart';
 import 'package:client/features/admin/pages/admin_users_detail.dart';
+import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 
-enum AdminSection {
-  dashboard,
-  courses,
-  levels,
-  users,
-  statistics,
-  profile,
-}
+enum AdminSection { dashboard, courses, levels, users, statistics, profile }
 
 class AdminShellPage extends StatefulWidget {
   final AuthSession session;
@@ -40,17 +35,17 @@ class _AdminShellPageState extends State<AdminShellPage> {
   Widget _buildPage() {
     switch (selectedSection) {
       case AdminSection.dashboard:
-        return const AdminDashboardPage();
+        return AdminDashboardPage(session: widget.session);
       case AdminSection.courses:
-        return const AdminCoursesPage();
+        return AdminCoursesPage(session: widget.session);
       case AdminSection.levels:
-        return const AdminLevelsPage();
+        return AdminLevelsPage(session: widget.session);
       case AdminSection.users:
         return AdminUserDetailsPage(session: widget.session);
       case AdminSection.statistics:
-        return const Center(child: Text('Statistics Page'));
+        return AdminStatisticsPage(session: widget.session);
       case AdminSection.profile:
-        return const Center(child: Text('Profile Page'));
+        return UserProfilePage(session: widget.session, showAppBar: false);
     }
   }
 

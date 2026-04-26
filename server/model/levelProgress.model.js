@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 const { Schema } = mongoose;
 
 
-const levelProgressSchema = new Schema({
+const levelProgressSchema = new mongoose.Schema({
     userId: {
         type: String,
         required: true
@@ -24,4 +24,7 @@ const levelProgressSchema = new Schema({
     }
 });
 
+
+const levelProgressModel = db.model('LevelProgress', levelProgressSchema);
+module.exports = levelProgressModel;
 

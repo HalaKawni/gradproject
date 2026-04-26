@@ -1,99 +1,312 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
+import 'package:client/features/admin/models/admin_course.dart';
+import 'package:client/features/admin/models/admin_level.dart';
 import 'package:flutter/material.dart';
 
-class AdminLevel {
-  final String id;
-  final String title;
-  final String creatorName;
-  final bool isCreatedByAdmin;
-  final String difficulty;
-  final String status; // published, draft, userCreated
-  final String? previewImageUrl;
-
-  const AdminLevel({
-    required this.id,
-    required this.title,
-    required this.creatorName,
-    required this.isCreatedByAdmin,
-    required this.difficulty,
-    required this.status,
-    this.previewImageUrl,
-  });
-}
-
 class AdminLevelsPage extends StatefulWidget {
-  const AdminLevelsPage({super.key});
+  const AdminLevelsPage({super.key, required this.session});
+
+  final AuthSession session;
 
   @override
   State<AdminLevelsPage> createState() => _AdminLevelsPageState();
 }
 
 class _AdminLevelsPageState extends State<AdminLevelsPage> {
-  final List<AdminLevel> allLevels = [
-    const AdminLevel(
-      id: '1',
-      title: 'Forest Escape',
-      creatorName: 'Admin Nasser',
-      isCreatedByAdmin: true,
-      difficulty: 'Easy',
-      status: 'published',
-    ),
-    const AdminLevel(
-      id: '2',
-      title: 'Logic Bridge',
-      creatorName: 'Admin Sarah',
-      isCreatedByAdmin: true,
-      difficulty: 'Medium',
-      status: 'published',
-    ),
-    const AdminLevel(
-      id: '3',
-      title: 'Desert Puzzle',
-      creatorName: 'Admin Nasser',
-      isCreatedByAdmin: true,
-      difficulty: 'Hard',
-      status: 'draft',
-    ),
-    const AdminLevel(
-      id: '4',
-      title: 'My Custom Maze',
-      creatorName: 'User Ahmad',
-      isCreatedByAdmin: false,
-      difficulty: 'Medium',
-      status: 'userCreated',
-    ),
-    const AdminLevel(
-      id: '5',
-      title: 'Speed Runner',
-      creatorName: 'User Lina',
-      isCreatedByAdmin: false,
-      difficulty: 'Hard',
-      status: 'userCreated',
-    ),
-  ];
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<AdminLevel> _levels = [];
+  List<AdminCourse> _courses = [];
 
-  List<AdminLevel> _levelsByStatus(String status) {
-    return allLevels.where((level) => level.status == status).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadLevels();
   }
 
-  void _createLevel() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Create Level clicked')),
+  Future<void> _loadLevels() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final levelsResult = await ApiService.getAdminLevels(
+      authToken: widget.session.token,
     );
-  }
+    final coursesResult = await ApiService.getAdminCourses(
+      authToken: widget.session.token,
+    );
 
-  void _editLevel(AdminLevel level) {
-    if (!level.isCreatedByAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You cannot edit levels created by users.'),
-        ),
-      );
+    if (!mounted) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Edit "${level.title}"')),
+    if (levelsResult['success'] == true && coursesResult['success'] == true) {
+      setState(() {
+        _levels = _parseList(
+          levelsResult['data'],
+        ).map(AdminLevel.fromJson).toList();
+        _courses = _parseList(
+          coursesResult['data'],
+        ).map(AdminCourse.fromJson).toList();
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _errorMessage =
+            levelsResult['message']?.toString() ??
+            coursesResult['message']?.toString() ??
+            'Failed to load levels';
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<Map<String, dynamic>> _parseList(Object? value) {
+    final rawList = value is List ? value : const [];
+
+    return rawList
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  List<AdminLevel> _levelsByStatus(String status) {
+    return _levels.where((level) => level.status == status).toList();
+  }
+
+  Future<void> _createLevel() async {
+    await Navigator.of(context).pushNamed(
+      AppRoutes.builder,
+      arguments: BuilderRouteData(session: widget.session),
     );
+
+    if (mounted) {
+      _loadLevels();
+    }
+  }
+
+  Future<void> _openLevelBuilder(AdminLevel level) async {
+    await Navigator.of(context).pushNamed(
+      AppRoutes.builder,
+      arguments: BuilderRouteData(
+        session: widget.session,
+        initialProjectId: level.id,
+        useAdminLevelApi: true,
+      ),
+    );
+
+    if (mounted) {
+      _loadLevels();
+    }
+  }
+
+  String _courseKey(AdminCourse course) {
+    return course.courseId.isNotEmpty ? course.courseId : course.id;
+  }
+
+  String? _courseDropdownValue(String courseId) {
+    if (courseId.isEmpty) {
+      return '';
+    }
+
+    for (final course in _courses) {
+      if (course.id == courseId || course.courseId == courseId) {
+        return _courseKey(course);
+      }
+    }
+
+    return courseId;
+  }
+
+  Future<void> _editLevel(AdminLevel level) async {
+    if (!level.isCreatedByAdmin) {
+      _showMessage('You cannot edit levels created by users.');
+      return;
+    }
+
+    final titleController = TextEditingController(text: level.title);
+    String difficulty = level.difficulty.toLowerCase();
+    String status = level.status;
+    String selectedCourseId = _courseDropdownValue(level.courseId) ?? '';
+
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Edit Level'),
+              content: SizedBox(
+                width: 480,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Level Title',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: difficulty,
+                        decoration: const InputDecoration(
+                          labelText: 'Difficulty',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'easy', child: Text('Easy')),
+                          DropdownMenuItem(
+                            value: 'medium',
+                            child: Text('Medium'),
+                          ),
+                          DropdownMenuItem(value: 'hard', child: Text('Hard')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            difficulty = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: status,
+                        decoration: const InputDecoration(
+                          labelText: 'Status',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: 'published',
+                            child: Text('Published'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'draft',
+                            child: Text('Draft'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            status = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedCourseId,
+                        decoration: const InputDecoration(
+                          labelText: 'Course',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('No course'),
+                          ),
+                          ..._courses.map((course) {
+                            return DropdownMenuItem(
+                              value: _courseKey(course),
+                              child: Text(course.title),
+                            );
+                          }),
+                          if (selectedCourseId.isNotEmpty &&
+                              !_courses.any(
+                                (course) =>
+                                    _courseKey(course) == selectedCourseId,
+                              ))
+                            DropdownMenuItem(
+                              value: selectedCourseId,
+                              child: Text('Current: $selectedCourseId'),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            selectedCourseId = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context, {'action': 'openBuilder'});
+                  },
+                  icon: const Icon(Icons.extension_outlined),
+                  label: const Text('Edit Layout'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final title = titleController.text.trim();
+
+                    if (title.isEmpty) {
+                      return;
+                    }
+
+                    Navigator.pop(context, {
+                      'title': title,
+                      'difficulty': difficulty,
+                      'status': status,
+                      'courseId': selectedCourseId,
+                    });
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+
+    if (payload == null) {
+      return;
+    }
+
+    if (payload['action'] == 'openBuilder') {
+      await _openLevelBuilder(level);
+      return;
+    }
+
+    final result = await ApiService.updateAdminLevel(
+      authToken: widget.session.token,
+      levelId: level.id,
+      levelJson: payload,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      await _loadLevels();
+      _showMessage('Level updated successfully');
+    } else {
+      _showMessage(result['message']?.toString() ?? 'Failed to update level');
+    }
   }
 
   Future<void> _deleteLevel(AdminLevel level) async {
@@ -119,28 +332,103 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
       },
     );
 
-    if (confirmed == true) {
-      setState(() {
-        allLevels.removeWhere((item) => item.id == level.id);
-      });
+    if (confirmed != true) {
+      return;
+    }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${level.title}" deleted')),
-      );
+    final result = await ApiService.deleteAdminLevel(
+      authToken: widget.session.token,
+      levelId: level.id,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      await _loadLevels();
+      _showMessage('"${level.title}" deleted');
+    } else {
+      _showMessage(result['message']?.toString() ?? 'Failed to delete level');
     }
   }
 
-  void _reviewLevel(AdminLevel level) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('Review "${level.title}"')),
-  );
+  Future<void> _reviewLevel(AdminLevel level) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Publish User Level'),
+          content: Text('Publish "${level.title}" so users can play it?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Publish'),
+            ),
+          ],
+        );
+      },
+    );
 
-  // Later:
-  // open the level in play/test mode for admin
-}
+    if (confirmed != true) {
+      return;
+    }
+
+    final result = await ApiService.updateAdminLevel(
+      authToken: widget.session.token,
+      levelId: level.id,
+      levelJson: {
+        'status': 'published',
+        'reviewStatus': 'approved',
+        'approvedBy': widget.session.user.id,
+      },
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      await _loadLevels();
+      _showMessage('"${level.title}" published');
+    } else {
+      _showMessage(result['message']?.toString() ?? 'Failed to publish level');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(_errorMessage!, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _loadLevels,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
     return DefaultTabController(
       length: 3,
       child: Column(
@@ -153,6 +441,12 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const Spacer(),
+              IconButton(
+                tooltip: 'Refresh levels',
+                onPressed: _loadLevels,
+                icon: const Icon(Icons.refresh),
+              ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: _createLevel,
                 icon: const Icon(Icons.add),
@@ -169,30 +463,33 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
             ],
           ),
           const SizedBox(height: 16),
-              Expanded(
-          child: TabBarView(
-            children: [
+          Expanded(
+            child: TabBarView(
+              children: [
                 _LevelsGrid(
                   levels: _levelsByStatus('published'),
                   onEdit: _editLevel,
                   onDelete: _deleteLevel,
                   onReview: _reviewLevel,
+                  onRefresh: _loadLevels,
                 ),
                 _LevelsGrid(
                   levels: _levelsByStatus('draft'),
                   onEdit: _editLevel,
                   onDelete: _deleteLevel,
                   onReview: _reviewLevel,
+                  onRefresh: _loadLevels,
                 ),
                 _LevelsGrid(
                   levels: _levelsByStatus('userCreated'),
                   onEdit: _editLevel,
                   onDelete: _deleteLevel,
                   onReview: _reviewLevel,
+                  onRefresh: _loadLevels,
                 ),
               ],
+            ),
           ),
-        ),
         ],
       ),
     );
@@ -205,19 +502,19 @@ class _LevelsGrid extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.onReview,
+    required this.onRefresh,
   });
 
   final List<AdminLevel> levels;
   final void Function(AdminLevel level) onEdit;
   final void Function(AdminLevel level) onDelete;
   final void Function(AdminLevel level) onReview;
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
     if (levels.isEmpty) {
-      return const Center(
-        child: Text('No levels found in this section.'),
-      );
+      return const Center(child: Text('No levels found in this section.'));
     }
 
     return LayoutBuilder(
@@ -236,23 +533,26 @@ class _LevelsGrid extends StatelessWidget {
           crossAxisCount = 1;
         }
 
-        return GridView.builder(
-          itemCount: levels.length,
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 0.95,
+        return RefreshIndicator(
+          onRefresh: onRefresh,
+          child: GridView.builder(
+            itemCount: levels.length,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.95,
+            ),
+            itemBuilder: (context, index) {
+              final level = levels[index];
+              return _LevelCard(
+                level: level,
+                onEdit: () => onEdit(level),
+                onDelete: () => onDelete(level),
+                onReview: () => onReview(level),
+              );
+            },
           ),
-          itemBuilder: (context, index) {
-            final level = levels[index];
-            return _LevelCard(
-              level: level,
-              onEdit: () => onEdit(level),
-              onDelete: () => onDelete(level),
-              onReview: () => onReview(level),
-            );
-          },
         );
       },
     );
@@ -312,9 +612,17 @@ class _LevelCard extends StatelessWidget {
             height: 90,
             width: double.infinity,
             color: Colors.grey.shade300,
-            child: const Center(
-              child: Icon(Icons.image_outlined, size: 32),
-            ),
+            child: level.previewImageUrl == null
+                ? const Center(child: Icon(Icons.image_outlined, size: 32))
+                : Image.network(
+                    level.previewImageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) {
+                      return const Center(
+                        child: Icon(Icons.image_outlined, size: 32),
+                      );
+                    },
+                  ),
           ),
           Expanded(
             child: Padding(
@@ -346,7 +654,9 @@ class _LevelCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: _difficultyColor(context).withOpacity(0.12),
+                          color: _difficultyColor(
+                            context,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -364,7 +674,7 @@ class _LevelCard extends StatelessWidget {
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.blue.withOpacity(0.08),
+                          color: Colors.blue.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -381,7 +691,10 @@ class _LevelCard extends StatelessWidget {
                         child: isUserCreated
                             ? OutlinedButton.icon(
                                 onPressed: onReview,
-                                icon: const Icon(Icons.play_arrow_outlined, size: 18),
+                                icon: const Icon(
+                                  Icons.verified_outlined,
+                                  size: 18,
+                                ),
                                 label: const Text('Review'),
                               )
                             : OutlinedButton.icon(

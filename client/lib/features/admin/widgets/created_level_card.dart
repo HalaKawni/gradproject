@@ -2,10 +2,7 @@ import 'package:client/features/admin/models/user_created_level.dart';
 import 'package:flutter/material.dart';
 
 class CreatedLevelCard extends StatelessWidget {
-  const CreatedLevelCard({
-    super.key,
-    required this.level,
-  });
+  const CreatedLevelCard({super.key, required this.level});
 
   final UserCreatedLevel level;
 
@@ -62,7 +59,7 @@ class CreatedLevelCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: _difficultyColor().withOpacity(0.12),
+                        color: _difficultyColor().withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
@@ -80,7 +77,7 @@ class CreatedLevelCard extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.08),
+                        color: Colors.blue.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(

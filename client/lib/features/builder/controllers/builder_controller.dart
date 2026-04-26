@@ -20,6 +20,7 @@ class BuilderController extends ChangeNotifier {
   BuilderProject project;
   final AuthSession session;
   final bool requireAllCollectablesForSuccess;
+  final bool useAdminLevelApi;
 
   BuilderTool currentTool = BuilderTool.ground;
 
@@ -60,6 +61,7 @@ class BuilderController extends ChangeNotifier {
     required this.project,
     required this.session,
     this.requireAllCollectablesForSuccess = true,
+    this.useAdminLevelApi = false,
   }) {
     project = _normalizeProject(project);
     _runValidation();
@@ -725,7 +727,12 @@ class BuilderController extends ChangeNotifier {
       lastMessage = null;
       notifyListeners();
 
-      final response = allowPublishedAccess
+      final response = useAdminLevelApi
+          ? await ApiService.getAdminLevelById(
+              authToken: session.token,
+              levelId: projectId,
+            )
+          : allowPublishedAccess
           ? await ApiService.getPublishedBuilderProjectById(
               authToken: session.token,
               projectId: projectId,
@@ -736,11 +743,22 @@ class BuilderController extends ChangeNotifier {
             );
 
       if (response['success'] == true) {
-        final data = response['data'];
-        final draftData = Map<String, dynamic>.from(data['draftData']);
+        final data = Map<String, dynamic>.from(response['data'] as Map);
+        final rawDraftData = data['draftData'];
+        final draftData = rawDraftData is Map
+            ? Map<String, dynamic>.from(rawDraftData)
+            : data;
+        final loadedProject = BuilderProject.fromJson(draftData);
 
-        project = _normalizeProject(BuilderProject.fromJson(draftData));
-        savedProjectId = data['_id'];
+        project = _normalizeProject(
+          loadedProject.copyWith(
+            title: data['title']?.toString() ?? loadedProject.title,
+            description:
+                data['description']?.toString() ?? loadedProject.description,
+            status: data['status']?.toString() ?? loadedProject.status,
+          ),
+        );
+        savedProjectId = data['_id']?.toString() ?? projectId;
 
         _runValidation();
         lastMessage = 'Project loaded successfully.';
@@ -805,6 +823,30 @@ class BuilderController extends ChangeNotifier {
           project = project.copyWith(status: previousStatus);
         }
         lastMessage = response['message'] ?? createFailureMessage;
+        return false;
+      }
+
+      if (useAdminLevelApi) {
+        final response = await ApiService.updateAdminLevel(
+          authToken: session.token,
+          levelId: savedProjectId!,
+          levelJson: {
+            'title': project.title,
+            'description': project.description,
+            'status': project.status,
+            'draftData': projectJson,
+          },
+        );
+
+        if (response['success'] == true) {
+          lastMessage = response['message'] ?? updateSuccessMessage;
+          return true;
+        }
+
+        if (statusOverride != null && previousStatus != project.status) {
+          project = project.copyWith(status: previousStatus);
+        }
+        lastMessage = response['message'] ?? updateFailureMessage;
         return false;
       }
 

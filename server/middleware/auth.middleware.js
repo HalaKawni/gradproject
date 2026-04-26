@@ -23,6 +23,13 @@ const authMiddleware = async (req, res, next) => {
             });
         }
 
+        if (user.isSuspended) {
+            return res.status(401).json({
+                status: false,
+                error: "There was a problem."
+            });
+        }
+
         req.user = user;
         next();
     }

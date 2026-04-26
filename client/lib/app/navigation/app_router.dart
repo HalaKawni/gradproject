@@ -9,6 +9,7 @@ import 'package:client/features/builder/pages/my_games_page.dart';
 import 'package:client/features/builder/pages/top_view_builder_page.dart';
 import 'package:client/features/home/pages/discover.dart';
 import 'package:client/features/home/pages/user_home_page_demo.dart';
+import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 
 class AppRouter {
@@ -45,6 +46,7 @@ class AppRouter {
             builder: (_) => BuilderPage(
               session: data.session,
               initialProjectId: data.initialProjectId,
+              useAdminLevelApi: data.useAdminLevelApi,
             ),
           );
         }
@@ -122,6 +124,18 @@ class AppRouter {
         return _errorRoute(
           settings,
           'The Discover page needs an active user session.',
+        );
+      case AppRoutes.profile:
+        final data = settings.arguments;
+        if (data is ProfileRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => UserProfilePage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The profile page needs an active user session.',
         );
 
       case AppRoutes.admin:
