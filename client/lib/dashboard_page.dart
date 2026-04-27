@@ -4,6 +4,7 @@ import 'game_webview.dart';
 import 'monkey_game_page.dart';
 import 'world_map_page.dart';
 import 'unlock_dialog.dart';
+import 'services/game_api_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -135,85 +136,219 @@ void initState() {
       ),
     );
   }
-
-  // ── HERO BANNER ──
-  Widget _buildHeroBanner() {
-    return SizedBox(
-      height: 200,
-      child: Row(
+Widget _buildHeroBanner() {
+    return Container(
+  decoration: BoxDecoration(
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.25),
+        blurRadius: 12,
+        offset: const Offset(0, 6),
+      ),
+    ],
+  ),
+  child: SizedBox(
+    height:224,
+    child: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
-            width: 460,
-            color: const Color.fromARGB(255, 254, 253, 153),
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A7DBF),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 3),
-                  ),
-                  child: const Icon(Icons.person, color: Colors.white, size: 44),
-                ),
-                const SizedBox(width: 20),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Welcome,',
-                      style: GoogleFonts.nunito(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF3A2A00),
-                      ),
-                    ),
-                    Text(
-                      '${widget.username}!',
-                      style: GoogleFonts.nunito(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF3A2A00),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          // ── FULL IMAGE — show RIGHT half ──
+          Image.asset(
+            'assets/images/hot_air_baloon.png',
+            fit: BoxFit.cover,
+            width: double.infinity,
+            alignment: Alignment.bottomLeft, // ← shows right half
           ),
-          Expanded(
+
+          // ── DARK OVERLAY on image ──
+          Container(color: Colors.black.withOpacity(0.25)),
+
+          // ── YELLOW LEFT with angled cut ──
+          ClipPath(
+            clipper: _AngledClipper(),
             child: Container(
-              color: const Color(0xFF5B9EA0),
-              child: Stack(
+              color: const Color.fromARGB(255, 254, 253, 153),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Positioned.fill(
-                    child: CustomPaint(painter: _UnderwaterPainter()),
-                  ),
-                  const Positioned(
-                    right: 280,
-                    top: 40,
-                    child: Text(
-                      'Start playing any of\nthe activities below.',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1.4,
-                      ),
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4A7DBF),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
                     ),
+                    child: const Icon(Icons.person,
+                        color: Colors.white, size: 44),
+                  ),
+                  const SizedBox(width: 20),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Welcome,',
+                        style: GoogleFonts.nunito(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF3A2A00),
+                        ),
+                      ),
+                      Text(
+                        '${widget.username}!',
+                        style: GoogleFonts.nunito(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF3A2A00),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
+
+          // ── RIGHT CONTENT sits on top of image ──
+          Positioned(
+            left: MediaQuery.of(context).size.width * 0.40,
+            right: 24,
+            top: 0,
+            bottom: 0,
+            child: Row(
+              children: [
+                // Progress circle
+               
+  FutureBuilder<Map<String, dynamic>>(
+  future: GameApiService.getProgress('codemonkey-jr'),
+  builder: (context, snapshot) {
+    final data = snapshot.data;
+    final completed = data != null
+        ? (data['highestLevelReached'] ?? 0) as int
+        : 0;
+    final total = 15; // total levels
+    final percent = (completed / total).clamp(0.0, 1.0);
+    final percentText = '${(percent * 100).round()}%';
+
+    return SizedBox(
+      width: 90,
+      height: 90,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 90,
+            height: 90,
+            child: CircularProgressIndicator(
+              value: percent,
+              strokeWidth: 8,
+              backgroundColor: Colors.white.withOpacity(0.3),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                Color(0xFF4DD0E1),
+              ),
+            ),
+          ),
+          Text(
+            percentText,
+            style: GoogleFonts.nunito(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
         ],
       ),
     );
-  }
+  },
+),
+                const SizedBox(width: 20),
 
+                // Course info
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current Course:',
+                        style: GoogleFonts.nunito(
+                          fontSize: 12,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        'CodeMonkey Jr.',
+                        style: GoogleFonts.nunito(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        'Sequencing & Loops',
+                        style: GoogleFonts.nunito(
+                          fontSize: 14,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.emoji_events,
+                              color: Color(0xFFFFD700), size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '0/3 Achievements →',
+                            style: GoogleFonts.nunito(
+                              fontSize: 12,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Continue coding button
+                ElevatedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const WorldMapPage()),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color.fromARGB(255,254, 253, 153),
+                    foregroundColor: const Color(0xFF3A2A00),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  icon: const Icon(Icons.play_circle_fill, size: 22),
+                  label: Text(
+                    'CONTINUE CODING',
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+  ),
+    );
+  }
   // ── FILTER SECTION ──
   Widget _buildFilterSection() {
     return Container(
@@ -1235,4 +1370,20 @@ class _ArrowBtn extends StatelessWidget {
       ),
     );
   }
+}
+class _AngledClipper extends CustomClipper<Path> {
+  @override
+ @override
+Path getClip(Size size) {
+  final path = Path();
+  path.moveTo(0, 0);
+  path.lineTo(size.width * 0.40, 0);
+path.lineTo(size.width * 0.42, size.height);
+  path.lineTo(0, size.height);
+  path.close();
+  return path;
+}
+
+  @override
+  bool shouldReclip(_AngledClipper old) => false;
 }

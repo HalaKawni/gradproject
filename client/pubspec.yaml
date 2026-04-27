@@ -87,6 +87,22 @@ flutter:
     - assets/images/course1.jpg
     - assets/images/course2.jpg
     - assets/images/dashboard.jpg
+    - assets/images/hot_air_baloon.png
+    - assets/images/tiny_swords/Factions/Knights/Troops/Warrior/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Pawn/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Archer/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Dead/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/Castle/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/House/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/Tower/
+    - assets/images/tiny_swords/Resources/Trees/
+    - assets/images/tiny_swords/Resources/Sheep/
+    - assets/images/tiny_swords/Terrain/Ground/
+    - assets/images/tiny_swords/Terrain/Water/
+    - assets/images/tiny_swords/Terrain/Water/Rocks/
+    - assets/images/tiny_swords/UI/Buttons/
+    - assets/images/tiny_swords/Deco/
+    
 
   # To add assets to your application, add an assets section, like this:
   # assets:
