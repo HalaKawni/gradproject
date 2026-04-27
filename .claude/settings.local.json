@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "Bash(python gen_game.py)",
+      "Bash(flutter analyze *)",
+      "Bash(python gen_game2.py)",
+      "Bash(rm gen_game2.py)",
+      "Bash(node -e ' *)",
+      "Bash(ls -la \"C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Rocks/\"*)"
+    ]
+  }
+}

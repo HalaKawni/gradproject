@@ -33,10 +33,13 @@ class UserService{
                 throw new Error("Invalid email or password");
             }
 
+<<<<<<< HEAD
             if (user.isSuspended) {
                 throw new Error("There was a problem signing in.");
             }
 
+=======
+>>>>>>> hala
             const isPasswordValid = await user.comparePassword(password);
 
             if (!isPasswordValid) {
@@ -54,6 +57,7 @@ class UserService{
             throw err;
         }
     }
+<<<<<<< HEAD
 
     static async changePassword(userId, currentPassword, newPassword) {
         try {
@@ -82,3 +86,9 @@ class UserService{
 
 
 module.exports = UserService;
+=======
+}
+
+
+module.exports = UserService;
+>>>>>>> hala

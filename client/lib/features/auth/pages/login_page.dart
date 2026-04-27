@@ -2,6 +2,8 @@ import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/services/auth_service.dart';
+import '../../home/pages/dashboard_page.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/core/models/auth_session.dart';
 
@@ -121,20 +123,22 @@ class _LoginPageState extends State<LoginPage>
 
                     // ── LOGIN TITLE ──
                     Text(
-                      'LOGIN',
-                      style: GoogleFonts.amaticSc(
-                        color: const Color.fromARGB(255, 255, 255, 255),
-                        fontSize: 60,
-                        fontWeight: FontWeight.w600,
-                        shadows: const [
-                          Shadow(
-                            offset: Offset(3, 3),
-                            color: Color.fromARGB(255, 50, 136, 189),
-                            blurRadius: 0,
-                          ),
-                        ],
-                      ),
-                    ),
+  'LOGIN',
+  style: GoogleFonts.amaticSc(
+    color: const Color.fromARGB(255, 255, 255, 255),
+    fontSize: 60,
+    fontWeight: FontWeight.w600,
+    shadows: const [
+      Shadow(
+        offset: Offset(3, 3),
+        color: Color.fromARGB(255,50, 136, 189),
+        blurRadius: 0,
+      ),
+    ],
+  ),
+),
+
+
                     //  Positioned(
                     //         bottom: 0,
                     //         left: 16,
@@ -314,6 +318,32 @@ class _LoginPageState extends State<LoginPage>
                                       child: SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
+                                        //  onPressed: () async {
+                                        //       if (_emailController.text.isEmpty ||
+                                        //           _passwordController.text.isEmpty) {
+                                        //         setState(() => _showError = true);
+                                        //         return;
+                                        //       }
+                                        //       setState(() => _showError = false);
+                                        //       try {
+                                        //         final result = await AuthService.login(
+                                        //           email: _emailController.text.trim(),
+                                        //           password: _passwordController.text.trim(),
+                                        //         );
+                                        //         if (!mounted) return;
+                                        //         Navigator.of(context).pushReplacement(
+                                        //           MaterialPageRoute(
+                                        //             builder: (_) => DashboardPage(
+                                        //               username: result['user']['name'] ?? 'Student',
+                                        //             ),
+                                        //           ),
+                                        //         );
+                                        //       } catch (e) {
+                                        //         setState(() {
+                                        //           _showError = true;
+                                        //         });
+                                        //       }
+                                        //     },
                                           onPressed: isLoading ? null : _login,
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:

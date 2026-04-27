@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'game_webview.dart';
+import 'monkey_game_page.dart';
+import 'world_map_page.dart';
+import 'unlock_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -15,6 +19,16 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _showCategoryError = false;
   bool _showTopicError = false;
   String _activeTab = 'Filter';
+  @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    showDialog(
+      context: context,
+      builder: (_) => const UnlockDialog(),
+    );
+  });
+}
 
   final Set<String> _selectedLevels = {'Novice', 'Beginner', 'Intermediate', 'Advanced'};
   final Set<String> _selectedCategories = {'Main Courses', 'Mini Courses'};
@@ -61,7 +75,14 @@ class _DashboardPageState extends State<DashboardPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          _SidebarItem(label: 'COURSES', isActive: true, onTap: () {}),
+          _SidebarItem(
+  label: 'COURSES',
+  isActive: true,
+  onTap: () => showDialog(
+    context: context,
+    builder: (_) => const UnlockDialog(),
+  ),
+),
           _SidebarItem(label: 'MY CREATIONS', isActive: false, onTap: () {}),
           _SidebarItem(label: 'DISCOVER', isActive: false, onTap: () {}),
           const Spacer(),
@@ -555,15 +576,18 @@ class _DashboardPageState extends State<DashboardPage> {
         subtitle: 'Computers',
         color: const Color(0xFF5B9EA0),
         imagePath: 'assets/images/course2.jpg',
+        description: 'Linus is having fun using computers! Help him collect items he needs such as a screen and mouse. The Chameleon will raise and lower the trees making Linus reach different heights or just clearing the path.',
+
       ),
-      _CourseData(
-        topic: 'Coding',
-        level: 'Novice',
-        title: 'CodeMonkey Jr.',
-        subtitle: 'Sequencing & Loops',
-        color: const Color(0xFF7BC67E),
-        imagePath: 'assets/images/course1.jpg',
-      ),
+    _CourseData(
+  topic: 'Coding',
+  level: 'Novice',
+  title: 'CodeMonkey Jr.',
+  subtitle: 'Sequencing & Loops',
+  color: const Color(0xFF7BC67E),
+  imagePath: 'assets/images/course1.jpg',
+  description: 'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
+),
       _CourseData(
         topic: 'Coding',
         level: 'Beginner',
@@ -670,7 +694,24 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// ── COURSE DATA MODEL ──
+// // ── COURSE DATA MODEL ──
+// class _CourseData {
+//   final String topic;
+//   final String level;
+//   final String title;
+//   final String subtitle;
+//   final Color color;
+//   final String imagePath;
+
+//   const _CourseData({
+//     required this.topic,
+//     required this.level,
+//     required this.title,
+//     required this.subtitle,
+//     required this.color,
+//     required this.imagePath,
+//   });
+// }
 class _CourseData {
   final String topic;
   final String level;
@@ -678,6 +719,7 @@ class _CourseData {
   final String subtitle;
   final Color color;
   final String imagePath;
+  final String description;
 
   const _CourseData({
     required this.topic,
@@ -686,10 +728,10 @@ class _CourseData {
     required this.subtitle,
     required this.color,
     required this.imagePath,
+    this.description = 'Start this course to learn exciting coding concepts!',
   });
 }
 
-// ── COURSE CARD ──
 class _CourseCard extends StatefulWidget {
   final _CourseData course;
   const _CourseCard({required this.course});
@@ -701,13 +743,20 @@ class _CourseCard extends StatefulWidget {
 class _CourseCardState extends State<_CourseCard> {
   bool _hovered = false;
 
+  void _showCourseDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _CourseDialog(course: widget.course),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: () {},
+        onTap: () => _showCourseDialog(context),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: 220,
@@ -715,28 +764,15 @@ class _CourseCardState extends State<_CourseCard> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
             boxShadow: _hovered
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    )
-                  ]
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    )
-                  ],
+                ? [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 6))]
+                : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── TOP TAG BAR ──
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: widget.course.color,
                   borderRadius: const BorderRadius.only(
@@ -747,41 +783,52 @@ class _CourseCardState extends State<_CourseCard> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      widget.course.topic,
-                      style: GoogleFonts.nunito(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.widgets, color: Colors.white, size: 13),
+                        const SizedBox(width: 4),
+                        Text(widget.course.topic,
+                            style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ],
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.bar_chart,
-                            color: Colors.white, size: 14),
+                        const Icon(Icons.bar_chart, color: Colors.white, size: 14),
                         const SizedBox(width: 4),
-                        Text(
-                          widget.course.level,
-                          style: GoogleFonts.nunito(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text(widget.course.level,
+                            style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
                       ],
                     ),
                   ],
                 ),
               ),
 
-              // ── IMAGE ──
-              ClipRRect(
-                child: Image.asset(
-                  widget.course.imagePath,
-                  width: 220,
-                  height: 140,
-                  fit: BoxFit.cover,
-                ),
+              // ── IMAGE WITH HOVER OVERLAY ──
+              Stack(
+                children: [
+                  ClipRRect(
+                    child: Image.asset(
+                      widget.course.imagePath,
+                      width: 220,
+                      height: 140,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  if (_hovered)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.info_outline, size: 18, color: Colors.black54),
+                      ),
+                    ),
+                ],
               ),
 
               // ── TITLE & SUBTITLE ──
@@ -790,24 +837,12 @@ class _CourseCardState extends State<_CourseCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      widget.course.title,
-                      style: GoogleFonts.nunito(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF333333),
-                      ),
-                    ),
+                    Text(widget.course.title,
+                        style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
                     const SizedBox(height: 4),
-                    Text(
-                      widget.course.subtitle,
-                      style: GoogleFonts.nunito(
-                        fontSize: 12,
-                        color: const Color(0xFF888888),
-                      ),
-                    ),
+                    Text(widget.course.subtitle,
+                        style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
                     const SizedBox(height: 8),
-                    // Progress bar
                     Container(
                       height: 4,
                       decoration: BoxDecoration(
@@ -969,4 +1004,235 @@ class _UnderwaterPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_UnderwaterPainter old) => false;
+  
+}
+
+
+class _CourseDialog extends StatefulWidget {
+  final _CourseData course;
+  const _CourseDialog({required this.course});
+
+  @override
+  State<_CourseDialog> createState() => _CourseDialogState();
+}
+
+class _CourseDialogState extends State<_CourseDialog> {
+  int _imageIndex = 0;
+  // Add more screenshot paths per course if you have them
+  List<String> get _screenshots => [widget.course.imagePath];
+Widget? _getGamePage(String title) {
+  switch (title) {
+    case 'CodeMonkey Jr.':
+      return const  WorldMapPage();
+    case 'Linus the Lemur':
+      return null; // replace with LinusGamePage() when ready
+    case 'Coding Adventure':
+      return null; // replace with CodingAdventurePage() when ready
+    default:
+      return null;
+  }
+}
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: SizedBox(
+        width: 700,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── HEADER ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF5A623),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: '${widget.course.title}: ',
+                          style: GoogleFonts.nunito(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        TextSpan(
+                          text: widget.course.subtitle,
+                          style: GoogleFonts.nunito(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF4CAF50),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── BODY ──
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── LEFT: screenshot + arrows ──
+                  Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.asset(
+                          _screenshots[_imageIndex],
+                          width: 260,
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          _ArrowBtn(
+                            icon: Icons.chevron_left,
+                            onTap: () => setState(() {
+                              _imageIndex = (_imageIndex - 1 + _screenshots.length) % _screenshots.length;
+                            }),
+                          ),
+                          const SizedBox(width: 12),
+                          _ArrowBtn(
+                            icon: Icons.chevron_right,
+                            onTap: () => setState(() {
+                              _imageIndex = (_imageIndex + 1) % _screenshots.length;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 24),
+
+                  // ── RIGHT: status + description ──
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Status badge
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFF3CD),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(color: const Color(0xFFFFD700)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.star_border, color: Color(0xFFFFB300), size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Not started',
+                                style: GoogleFonts.nunito(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF7A6000),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Description
+                        Text(
+                          widget.course.description,
+                          style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            color: const Color(0xFF444444),
+                            height: 1.6,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── FOOTER ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF5F5F5),
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+              ),
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+  final page = _getGamePage(widget.course.title);
+  if (page != null) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+  },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6DB84A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(
+                  'START CODING',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── ARROW BUTTON ──
+class _ArrowBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _ArrowBtn({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: const Color(0xFF6DB84A),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, color: Colors.white, size: 22),
+      ),
+    );
+  }
 }
