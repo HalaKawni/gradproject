@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../home/pages/dashboard_page.dart';
-import '/services/auth_service.dart';
+import '../services/auth_service.dart';
 import '../../home/pages/dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
   const StudentAccountPage({super.key});

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../api/api_constants.dart';
+import '../../../core/constants/api_constants.dart';
 
 class AuthService {
   // ── Save token locally ──────────────────────────────────────

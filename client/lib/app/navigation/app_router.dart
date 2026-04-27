@@ -1,14 +1,14 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/features/admin/pages/admin_shell.dart';
-import 'package:client/features/auth/pages/login_page_demo.dart';
-import 'package:client/features/auth/pages/register_page_demo.dart';
+import 'package:client/devDemo/login_page_demo.dart';
+import 'package:client/devDemo/register_page_demo.dart';
 import 'package:client/features/builder/pages/builder_play_page.dart';
 import 'package:client/features/builder/pages/builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
 import 'package:client/features/builder/pages/top_view_builder_page.dart';
 import 'package:client/features/home/pages/discover.dart';
-import 'package:client/features/home/pages/user_home_page_demo.dart';
+import 'package:client/devDemo/user_home_page_demo.dart';
 import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 

@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'game_webview.dart';
 import 'monkey_game_page.dart';
 import 'world_map_page.dart';
-import 'unlock_dialog.dart';
+import '../widgets/unlock_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;

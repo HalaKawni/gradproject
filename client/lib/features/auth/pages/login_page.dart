@@ -2,7 +2,7 @@ import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '/services/auth_service.dart';
+import '../services/auth_service.dart';
 import '../../home/pages/dashboard_page.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/core/models/auth_session.dart';

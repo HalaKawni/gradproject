@@ -5,7 +5,7 @@ import 'package:flame/game.dart';
 import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../services/game_api_service.dart';
+import '../services/game_api_service.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  PAGE WRAPPER
