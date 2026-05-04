@@ -5,6 +5,7 @@ import 'monkey_game_page.dart';
 import 'world_map_page.dart';
 import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
+import 'digitalgame/digital_literacy_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -1163,6 +1164,8 @@ Widget? _getGamePage(String title) {
       return null; // replace with LinusGamePage() when ready
     case 'Coding Adventure':
       return null; // replace with CodingAdventurePage() when ready
+    case 'Digital Literacy':          // ← ADD THIS
+      return const DigitalLiteracyPage();
     default:
       return null;
   }

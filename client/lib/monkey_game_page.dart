@@ -7,6 +7,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'services/game_api_service.dart';
 import 'world_map_page.dart';
 
+// ══════════════════════════════════════════════════════════════
+//  PAGE WRAPPER
+// ══════════════════════════════════════════════════════════════
 class MonkeyGamePage extends StatefulWidget {
   const MonkeyGamePage({super.key});
   @override
@@ -77,7 +80,8 @@ class _MonkeyGamePageState extends State<MonkeyGamePage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: const Color(0xFF8B6914), width: 3),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)],
+                    boxShadow: [BoxShadow(
+                        color: Colors.black.withOpacity(0.5), blurRadius: 20)],
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: GameWidget(game: _game),
@@ -111,24 +115,18 @@ class _MonkeyGamePageState extends State<MonkeyGamePage> {
       child: Row(children: [
         GestureDetector(
           onTap: () => Navigator.of(context).pop(),
-          child: Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4CAF50),
+          child: Container(width: 36, height: 36,
+            decoration: BoxDecoration(color: const Color(0xFF4CAF50),
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF2E7D32), width: 2),
-            ),
-            child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-          ),
+              border: Border.all(color: const Color(0xFF2E7D32), width: 2)),
+            child: const Icon(Icons.arrow_back, color: Colors.white, size: 20)),
         ),
         const SizedBox(width: 12),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFF8B6914),
+          decoration: BoxDecoration(color: const Color(0xFF8B6914),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: const Color(0xFFFFD700), width: 1),
-          ),
+            border: Border.all(color: const Color(0xFFFFD700), width: 1)),
           child: Text(
             'CODEMONKEY JR. – SEQUENCING: CHALLENGE #$_currentLevel',
             style: GoogleFonts.montserrat(
@@ -137,27 +135,26 @@ class _MonkeyGamePageState extends State<MonkeyGamePage> {
         ),
         const Spacer(),
         Row(children: List.generate(3, (i) => Container(
-          width: 14, height: 14,
-          margin: const EdgeInsets.only(left: 6),
+          width: 14, height: 14, margin: const EdgeInsets.only(left: 6),
           decoration: BoxDecoration(
             color: i < _currentLevel ? const Color(0xFFFFD700) : const Color(0xFF555555),
             shape: BoxShape.circle,
             border: Border.all(
                 color: i < _currentLevel ? const Color(0xFFFF8F00) : const Color(0xFF333333),
-                width: 2),
-          ),
+                width: 2)),
         ))),
       ]),
     );
   }
 }
 
-// ── COMMAND PANEL ──────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  COMMAND PANEL
+// ══════════════════════════════════════════════════════════════
 class _CommandPanel extends StatelessWidget {
   final List<String> sequence;
   final ValueChanged<String> onAddCommand;
   final VoidCallback onRemoveLast, onRun;
-
   const _CommandPanel({
     required this.sequence,
     required this.onAddCommand,
@@ -168,54 +165,40 @@ class _CommandPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF3D1F0D),
-        border: Border(top: BorderSide(color: Color(0xFF8B6914), width: 2)),
-      ),
+      decoration: const BoxDecoration(color: Color(0xFF3D1F0D),
+        border: Border(top: BorderSide(color: Color(0xFF8B6914), width: 2))),
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Row(children: [
           GestureDetector(
             onTap: onRemoveLast,
-            child: SizedBox(
-              width: 52, height: 52,
+            child: SizedBox(width: 52, height: 52,
               child: Stack(alignment: Alignment.center, children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Image.asset('assets/images/tiny_swords/UI/Buttons/Button_Red.png',
-                      width: 52, height: 52, fit: BoxFit.fill),
-                ),
+                ClipRRect(borderRadius: BorderRadius.circular(6),
+                  child: Image.asset(
+                    'assets/images/tiny_swords/UI/Buttons/Button_Red.png',
+                    width: 52, height: 52, fit: BoxFit.fill)),
                 const Icon(Icons.replay, color: Colors.white, size: 22),
-              ]),
-            ),
+              ])),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: SizedBox(
-              height: 56,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: 8,
-                separatorBuilder: (_, __) => const SizedBox(width: 4),
-                itemBuilder: (_, i) => i < sequence.length
-                    ? _CmdBlock(cmd: sequence[i])
-                    : const _CmdBlock(cmd: ''),
-              ),
-            ),
-          ),
+          Expanded(child: SizedBox(height: 56,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal, itemCount: 8,
+              separatorBuilder: (_, __) => const SizedBox(width: 4),
+              itemBuilder: (_, i) => i < sequence.length
+                  ? _CmdBlock(cmd: sequence[i])
+                  : const _CmdBlock(cmd: '')))),
           const SizedBox(width: 12),
           GestureDetector(
             onTap: onRun,
-            child: SizedBox(
-              width: 56, height: 56,
+            child: SizedBox(width: 56, height: 56,
               child: Stack(alignment: Alignment.center, children: [
-                ClipOval(
-                  child: Image.asset('assets/images/tiny_swords/UI/Buttons/Button_Blue.png',
-                      width: 56, height: 56, fit: BoxFit.fill),
-                ),
+                ClipOval(child: Image.asset(
+                    'assets/images/tiny_swords/UI/Buttons/Button_Blue.png',
+                    width: 56, height: 56, fit: BoxFit.fill)),
                 const Icon(Icons.play_arrow, color: Colors.white, size: 30),
-              ]),
-            ),
+              ])),
           ),
         ]),
         const SizedBox(height: 10),
@@ -225,7 +208,9 @@ class _CommandPanel extends StatelessWidget {
           const SizedBox(width: 8),
           GestureDetector(onTap: () => onAddCommand('left'), child: const _CmdBlock(cmd: 'left')),
           const SizedBox(width: 8),
-          GestureDetector(onTap: () => onAddCommand('jump'), child: const _CmdBlock(cmd: 'jump')),
+          GestureDetector(onTap: () => onAddCommand('up'), child: const _CmdBlock(cmd: 'up')),
+          const SizedBox(width: 8),
+          GestureDetector(onTap: () => onAddCommand('down'), child: const _CmdBlock(cmd: 'down')),
         ]),
       ]),
     );
@@ -235,110 +220,78 @@ class _CommandPanel extends StatelessWidget {
 class _CmdBlock extends StatelessWidget {
   final String cmd;
   const _CmdBlock({required this.cmd});
-
   @override
   Widget build(BuildContext context) {
     if (cmd.isEmpty) {
-      return Container(
-        width: 52, height: 52,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
+      return Container(width: 52, height: 52,
+        decoration: BoxDecoration(color: const Color(0xFF1A1A1A),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF444444), width: 2),
-        ),
-      );
+          border: Border.all(color: const Color(0xFF444444), width: 2)));
     }
     IconData icon = Icons.arrow_forward;
     if (cmd == 'left') icon = Icons.arrow_back;
-    if (cmd == 'jump') icon = Icons.arrow_upward;
-    return SizedBox(
-      width: 52, height: 52,
+    if (cmd == 'up') icon = Icons.arrow_upward;
+    if (cmd == 'down') icon = Icons.arrow_downward;
+    return SizedBox(width: 52, height: 52,
       child: Stack(alignment: Alignment.center, children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: Image.asset('assets/images/tiny_swords/UI/Buttons/Button_Blue.png',
-              width: 52, height: 52, fit: BoxFit.fill),
-        ),
+        ClipRRect(borderRadius: BorderRadius.circular(6),
+          child: Image.asset(
+              'assets/images/tiny_swords/UI/Buttons/Button_Blue.png',
+              width: 52, height: 52, fit: BoxFit.fill)),
         Icon(icon, color: Colors.white, size: 26),
-      ]),
-    );
+      ]));
   }
 }
 
-// ── RESULT OVERLAY ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+//  RESULT OVERLAY
+// ══════════════════════════════════════════════════════════════
 class _ResultOverlay extends StatelessWidget {
-  final bool isSuccess;
-  final int level;
-  final VoidCallback onAction;
+  final bool isSuccess; final int level; final VoidCallback onAction;
   const _ResultOverlay({required this.isSuccess, required this.level, required this.onAction});
-
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black.withOpacity(0.75),
-      child: Center(
-        child: Container(
-          width: 360,
-          decoration: BoxDecoration(
-            color: const Color(0xFF2C1810),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF8B6914), width: 3),
-          ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: isSuccess ? const Color(0xFF8B6914) : const Color(0xFF7F0000),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
-              ),
-              child: Text(
-                isSuccess ? '⚔️  Victory!' : '💀  Defeated!',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.nunito(fontSize: 28, fontWeight: FontWeight.w900,
-                    color: const Color(0xFFFFD700)),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(children: [
-                Text(
-                  isSuccess ? 'The warrior reached the castle!' : 'The warrior missed. Try again!',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.nunito(fontSize: 15, color: Colors.white70),
-                ),
-                if (isSuccess) ...[
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(3, (i) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Icon(i < level ? Icons.star : Icons.star_border,
-                          color: const Color(0xFFFFD700), size: 36),
-                    )),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                GestureDetector(
-                  onTap: onAction,
-                  child: SizedBox(
-                    width: 200, height: 56,
-                    child: Stack(alignment: Alignment.center, children: [
-                      Image.asset('assets/images/tiny_swords/UI/Buttons/Button_Blue_9Slides.png',
-                          width: 200, height: 56, fit: BoxFit.fill),
-                      Text(isSuccess ? 'NEXT LEVEL →' : 'TRY AGAIN',
-                          style: GoogleFonts.montserrat(
-                              fontWeight: FontWeight.w800, fontSize: 14,
-                              letterSpacing: 1.2, color: Colors.white)),
-                    ]),
-                  ),
-                ),
-              ]),
-            ),
-          ]),
-        ),
-      ),
-    );
+    return Container(color: Colors.black.withOpacity(0.75),
+      child: Center(child: Container(width: 360,
+        decoration: BoxDecoration(color: const Color(0xFF2C1810),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFF8B6914), width: 3)),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: isSuccess ? const Color(0xFF8B6914) : const Color(0xFF7F0000),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(9))),
+            child: Text(isSuccess ? '⚔️  Victory!' : '💀  Defeated!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunito(fontSize: 28, fontWeight: FontWeight.w900,
+                  color: const Color(0xFFFFD700)))),
+          Padding(padding: const EdgeInsets.all(24), child: Column(children: [
+            Text(
+              isSuccess ? 'The warrior reached the castle!' : 'The warrior missed. Try again!',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.nunito(fontSize: 15, color: Colors.white70)),
+            if (isSuccess) ...[
+              const SizedBox(height: 16),
+              Row(mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(3, (i) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(i < level ? Icons.star : Icons.star_border,
+                      color: const Color(0xFFFFD700), size: 36)))),
+            ],
+            const SizedBox(height: 24),
+            GestureDetector(onTap: onAction,
+              child: SizedBox(width: 200, height: 56,
+                child: Stack(alignment: Alignment.center, children: [
+                  Image.asset(
+                    'assets/images/tiny_swords/UI/Buttons/Button_Blue_9Slides.png',
+                    width: 200, height: 56, fit: BoxFit.fill),
+                  Text(isSuccess ? 'NEXT LEVEL →' : 'TRY AGAIN',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800,
+                        fontSize: 14, letterSpacing: 1.2, color: Colors.white)),
+                ]))),
+          ])),
+        ]))));
   }
 }
 
@@ -347,252 +300,429 @@ class _ResultOverlay extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════
 class TinySwordsGame extends FlameGame {
   final int level;
-  static const double stepSize = 96.0;
-  late int _stepsToTarget;
+  late int _steps;
   late _WarriorComponent warrior;
   late _CastleComponent castle;
   bool _animating = false;
+  static const double stepSize = 60.0;
 
-  TinySwordsGame({required this.level}) {
-    _stepsToTarget = level + 1;
-  }
+  TinySwordsGame({required this.level}) { _steps = level + 1; }
 
   @override
-  Color backgroundColor() => const Color(0xFF3AAEC8);
+  Color backgroundColor() => const Color(0xFF3BBFCC);
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    final W = size.x;
+    final H = size.y;
 
-    const tileSize = 64.0;
-    // Ground at 52% — half sky, half ground
-    final gY = size.y * 0.52;
+    // ── WATER BACKGROUND ──
+    add(_WaterBg(gameSize: size));
 
-    // ── SKY ──
-    add(_SkyComponent(gameSize: size));
+    // Render tile size = 32px for finer detail
+    const ts = 32.0;
 
-    // ── FULL GRASS GROUND ──
-    add(_TiledGround(groundY: gY, totalWidth: size.x, tileSize: tileSize));
+    // Main island dimensions — leaves water visible on all sides
+    final islandX = W * 0.06;
+    final islandY = H * 0.04;
+    final islandW = W * 0.88;
+    final islandH = H * 0.46;
+    const sandRing = 20.0;
 
-    // ── WATER POOLS (tiled water tiles) ──
-    // Left water pool around x=35%
-    add(_WaterPool(x: size.x * 0.33, y: gY + 8, width: 130, height: 40));
-    // Right water pool around x=72%
-    add(_WaterPool(x: size.x * 0.70, y: gY + 8, width: 100, height: 36));
-
-    // ── BACKGROUND TREES (far back, smaller) ──
-    final bgTrees = [
-      (0.06, 0, 0, 78.0),
-      (0.15, 0, 1, 72.0),
-      (0.30, 1, 2, 80.0), // autumn near left water
-      (0.45, 0, 3, 75.0),
-      (0.58, 1, 0, 82.0), // autumn near right water
-      (0.68, 0, 2, 70.0),
-      (0.80, 1, 1, 76.0),
-      (0.90, 0, 0, 68.0),
-      (0.96, 1, 3, 72.0),
-    ];
-    for (final t in bgTrees) {
-      final tree = SpriteComponent()
-        ..sprite = await Sprite.load('tiny_swords/Resources/Trees/Tree.png',
-            srcPosition: Vector2(t.$3 * 192.0, t.$2 * 192.0),
-            srcSize: Vector2(192, 192))
-        ..size = Vector2(t.$4, t.$4)
-        ..position = Vector2(size.x * t.$1 - t.$4 / 2, gY - t.$4 + 10);
-      add(tree);
-    }
-
-    // ── LEFT HOUSE (blue) with pawn soldier ──
-    final house1X = size.x * 0.18;
-    add(await _makeSprite(
-      'tiny_swords/Factions/Knights/Buildings/House/House_Blue.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 192),
-      size: Vector2(90, 135), pos: Vector2(house1X - 45, gY - 131),
-    ));
-    // Pawn guard left of house
-    add(await _makeAnimatedSoldier(
-      'tiny_swords/Factions/Knights/Troops/Pawn/Blue/Pawn_Blue.png',
-      pos: Vector2(house1X - 100, gY - 68), size: 56,
-      row: 0, cols: 4, stepTime: 0.18,
-    ));
-    // Sheep near house
-    add(await _makeSprite(
-      'tiny_swords/Resources/Sheep/HappySheep_Idle.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 128),
-      size: Vector2(48, 48), pos: Vector2(house1X + 60, gY - 40),
-    ));
-    add(await _makeSprite(
-      'tiny_swords/Resources/Sheep/HappySheep_Idle.png',
-      srcPos: Vector2(128, 0), srcSize: Vector2(128, 128),
-      size: Vector2(44, 44), pos: Vector2(house1X + 110, gY - 36),
+    // ── SAND BASE (beach ring) ──
+    add(_SandTileRect(
+      x: islandX - sandRing, y: islandY - sandRing * 0.5,
+      w: islandW + sandRing * 2, h: islandH + sandRing * 1.4, ts: ts,
     ));
 
-    // ── YELLOW HOUSE with archer ──
-    final house2X = size.x * 0.52;
-    add(await _makeSprite(
-      'tiny_swords/Factions/Knights/Buildings/House/House_Yellow.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 192),
-      size: Vector2(88, 132), pos: Vector2(house2X - 44, gY - 128),
-    ));
-    // Archer guard
-    add(await _makeAnimatedSoldier(
-      'tiny_swords/Factions/Knights/Troops/Archer/Blue/Archer_Blue.png',
-      pos: Vector2(house2X + 55, gY - 68), size: 56,
-      row: 0, cols: 4, stepTime: 0.18,
-    ));
-    // Sheep near yellow house
-    add(await _makeSprite(
-      'tiny_swords/Resources/Sheep/HappySheep_Idle.png',
-      srcPos: Vector2(256, 0), srcSize: Vector2(128, 128),
-      size: Vector2(46, 46), pos: Vector2(house2X - 100, gY - 38),
+    // ── GRASS ISLAND ──
+    add(_GrassTileRect(x: islandX, y: islandY, w: islandW, h: islandH, ts: ts));
+
+    // ── STONE WALL bottom of grass ──
+    add(_StoneWallRow(x: islandX, y: islandY + islandH - ts * 0.5, w: islandW, ts: ts));
+
+    // Peninsula base Y
+    final penY = islandY + islandH + ts * 0.8;
+    final penH = H * 0.28;
+
+    // ── LEFT PENINSULA ──
+    final leftPenX = islandX - sandRing;
+    final leftPenW = islandW * 0.30 + sandRing;
+    add(_SandTileRect(x: leftPenX, y: penY, w: leftPenW, h: penH, ts: ts));
+    
+
+    // ── RIGHT PENINSULA ──
+    final rightPenX = islandX + islandW * 0.70;
+    final rightPenW = (islandX + islandW + sandRing) - rightPenX;
+    add(_SandTileRect(x: rightPenX, y: penY, w: rightPenW, h: penH, ts: ts));
+    
+
+    // ── CENTER SAND PATCH ──
+    add(_SandTileRect(
+      x: islandX + islandW * 0.30, y: penY + penH * 0.18,
+      w: islandW * 0.38, h: penH * 0.62, ts: ts,
     ));
 
-    // ── TOWER with pawn ──
-    final towerX = size.x * 0.80;
-    add(await _makeSprite(
-      'tiny_swords/Factions/Knights/Buildings/Tower/Tower_Blue.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 256),
-      size: Vector2(72, 144), pos: Vector2(towerX - 36, gY - 140),
-    ));
-    // Pawn guard
-    add(await _makeAnimatedSoldier(
-      'tiny_swords/Factions/Knights/Troops/Pawn/Blue/Pawn_Blue.png',
-      pos: Vector2(towerX + 45, gY - 64), size: 52,
-      row: 0, cols: 4, stepTime: 0.2,
-    ));
-
-    // ── ROCKS in water pools ──
-    add(await _makeSprite(
-      'tiny_swords/Terrain/Water/Rocks/Rocks_01.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 128),
-      size: Vector2(44, 44), pos: Vector2(size.x * 0.35, gY + 2),
-    ));
-    add(await _makeSprite(
-      'tiny_swords/Terrain/Water/Rocks/Rocks_02.png',
-      srcPos: Vector2(0, 0), srcSize: Vector2(128, 128),
-      size: Vector2(38, 38), pos: Vector2(size.x * 0.72, gY + 4),
-    ));
-
-    // ── DECO scattered on ground ──
-    // deco_01=red mushroom, 07=green bush, 09=flower, 11=log,
-    // 16=tall grass, 18=big bush
-    final decos = [
-      (0.08,  '01.png', 36.0, 0.0),   // mushroom
-      (0.25,  '07.png', 48.0, 0.0),   // bush
-      (0.40,  '09.png', 36.0, 0.0),   // flower
-      (0.48,  '01.png', 32.0, 0.0),   // mushroom
-      (0.62,  '11.png', 44.0, 0.0),   // log
-      (0.76,  '07.png', 44.0, 0.0),   // bush
-      (0.84,  '09.png', 34.0, 0.0),   // flower
-      (0.92,  '05.png', 32.0, 0.0),   // rock
-    ];
-
-    for (final d in decos) {
-      add(await _makeSprite(
-        'tiny_swords/Deco/${d.$2}',
-        srcPos: Vector2(0, 0), srcSize: Vector2(64, 64),
-        size: Vector2(d.$3, d.$3),
-        pos: Vector2(size.x * d.$1 - d.$3 / 2, gY - d.$3 + 10),
-      ));
-    }
-
-    // ── WARRIOR ──
-    final startX = size.x * 0.05;
-    warrior = _WarriorComponent(startX: startX, groundY: gY);
-    await warrior.onLoadSprites();
-    add(warrior);
-
-    // ── CASTLE as goal ──
-    final castleX = startX + _stepsToTarget * stepSize;
-    castle = _CastleComponent(position: Vector2(castleX - 90, gY - 165));
+    // ── CASTLE ──
+    final castleX = W * 0.43;
+    final castleY = islandY + 8;
+    castle = _CastleComponent(position: Vector2(castleX, castleY));
     await castle.onLoadSprites();
     add(castle);
 
+    // ── BANNER ──
+    add(await _spr('tiny_swords/UI/Banners/Banner_Vertical.png',
+        sp: Vector2(0, 0), ss: Vector2(192, 192),
+        sz: Vector2(40, 40), pos: Vector2(castleX + 130, castleY - 6)));
+
+    // ── HOUSES ──
+    final houseData = [
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Blue.png',   W*0.07, islandY+12.0),
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Yellow.png', W*0.15, islandY+32.0),
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Blue.png',   W*0.27, islandY+44.0),
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Yellow.png', W*0.73, islandY+14.0),
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Blue.png',   W*0.81, islandY+34.0),
+      ('tiny_swords/Factions/Knights/Buildings/House/House_Yellow.png', W*0.65, islandY+50.0),
+    ];
+    for (final h in houseData) {
+      add(await _spr(h.$1,
+          sp: Vector2(0, 0), ss: Vector2(128, 192),
+          sz: Vector2(56, 84), pos: Vector2(h.$2, h.$3)));
+    }
+
+    // ── TOWERS ──
+// ── GRASS PATCHES under towers ──
+// ── GRASS PATCHES under towers ──
+    final leftGrassX = leftPenX - 4;
+    final leftGrassY = penY + 30;
+    final leftGrassW = leftPenW * 0.55;
+    final leftGrassH = penH * 0.50;
+
+    final rightGrassX = rightPenX + rightPenW * 0.45;
+    final rightGrassY = penY + 30.0;
+    final rightGrassW = rightPenW * 0.58;
+    final rightGrassH = penH * 0.50;
+
+    add(_GrassTileRect(x: leftGrassX,  y: leftGrassY,  w: leftGrassW,  h: leftGrassH,  ts: 32));
+    add(_GrassTileRect(x: rightGrassX, y: rightGrassY, w: rightGrassW, h: rightGrassH, ts: 32));
+
+    // ── STONE WALL on BOTTOM edge of each grass patch ──
+   // ── STONE WALL on BOTTOM edge of each grass patch ──
+    add(_StoneWallRow(x: leftGrassX,  y: leftGrassY  + leftGrassH  + 16, w: leftGrassW,  ts: 32));
+    add(_StoneWallRow(x: rightGrassX, y: rightGrassY + rightGrassH + 16, w: rightGrassW, ts: 32));
+
+    // ── TOWERS (rendered on top of grass patches) ──
+    add(await _spr('tiny_swords/Factions/Knights/Buildings/Tower/Tower_Blue.png',
+        sp: Vector2(0, 0), ss: Vector2(128, 256),
+        sz: Vector2(52, 104), pos: Vector2(leftPenX + 4, penY + 6)));
+    add(await _spr('tiny_swords/Factions/Knights/Buildings/Tower/Tower_Blue.png',
+        sp: Vector2(0, 0), ss: Vector2(128, 256),
+        sz: Vector2(52, 104), pos: Vector2(rightPenX + rightPenW - 58, penY + 6)));
+
+    // ── TREES ──
+    final treeData = <(double, double, int, int, double)>[
+      (W*0.05, islandY+islandH*0.04, 0, 0, 60.0),
+      (W*0.11, islandY+islandH*0.30, 0, 1, 56.0),
+      (W*0.24, islandY+islandH*0.10, 0, 2, 62.0),
+      (W*0.31, islandY+islandH*0.40, 1, 0, 54.0),
+      (W*0.36, islandY+islandH*0.06, 0, 3, 58.0),
+      (W*0.52, islandY+islandH*0.32, 0, 1, 56.0),
+      (W*0.59, islandY+islandH*0.06, 1, 2, 54.0),
+      (W*0.70, islandY+islandH*0.34, 0, 0, 52.0),
+      (W*0.76, islandY+islandH*0.08, 0, 3, 58.0),
+      (W*0.86, islandY+islandH*0.28, 1, 1, 52.0),
+      (W*0.92, islandY+islandH*0.05, 0, 2, 50.0),
+    ];
+    for (final t in treeData) {
+      add(await _spr('tiny_swords/Resources/Trees/Tree.png',
+          sp: Vector2(t.$4 * 192.0, t.$3 * 192.0),
+          ss: Vector2(192, 192), sz: Vector2(t.$5, t.$5),
+          pos: Vector2(t.$1, t.$2)));
+    }
+
+    // ── SOLDIERS ──
+    add(await _soldier('tiny_swords/Factions/Knights/Troops/Pawn/Blue/Pawn_Blue.png',
+        pos: Vector2(castleX - 58, castleY + 64), sz: 40));
+    add(await _soldier('tiny_swords/Factions/Knights/Troops/Pawn/Blue/Pawn_Blue.png',
+        pos: Vector2(castleX + 128, castleY + 56), sz: 40));
+    add(await _soldier('tiny_swords/Factions/Knights/Troops/Archer/Blue/Archer_Blue.png',
+        pos: Vector2(castleX + 44, castleY + 100), sz: 38));
+
+    // ── SHEEP ──
+    for (int i = 0; i < 4; i++) {
+      add(await _spr('tiny_swords/Resources/Sheep/HappySheep_Idle.png',
+          sp: Vector2(i * 128.0, 0), ss: Vector2(128, 128),
+          sz: Vector2(28, 28),
+          pos: Vector2(W * (0.28 + i * 0.11), islandY + islandH * 0.56)));
+    }
+
+    // ── DECO ──
+    final decoData = [
+      (W*0.10, islandY+islandH*0.58, '01.png', 26.0),
+      (W*0.21, islandY+islandH*0.22, '07.png', 30.0),
+      (W*0.44, islandY+islandH*0.52, '09.png', 24.0),
+      (W*0.56, islandY+islandH*0.24, '03.png', 28.0),
+      (W*0.74, islandY+islandH*0.56, '11.png', 28.0),
+      (W*0.89, islandY+islandH*0.53, '07.png', 26.0),
+    ];
+    for (final d in decoData) {
+      add(await _spr('tiny_swords/Deco/${d.$3}',
+          sp: Vector2(0, 0), ss: Vector2(64, 64),
+          sz: Vector2(d.$4, d.$4), pos: Vector2(d.$1, d.$2)));
+    }
+
+    // ── ROCKS IN WATER ──
+    final rockData = [
+      (W*0.02,  islandY + 20.0,              'Rocks_01.png', 28.0),
+      (W*0.02,  islandY + 60.0,              'Rocks_02.png', 24.0),
+      (W*0.96,  islandY + 30.0,              'Rocks_03.png', 26.0),
+      (W*0.96,  islandY + 70.0,              'Rocks_02.png', 22.0),
+      (W*0.36,  penY + penH + 12,            'Rocks_04.png', 26.0),
+      (W*0.50,  penY + penH + 20,            'Rocks_01.png', 22.0),
+      (W*0.63,  penY + penH + 14,            'Rocks_03.png', 24.0),
+      (leftPenX - 22,  penY + 40,            'Rocks_02.png', 22.0),
+      (rightPenX + rightPenW + 6, penY + 36, 'Rocks_04.png', 24.0),
+    ];
+    for (final r in rockData) {
+      add(await _spr('tiny_swords/Terrain/Water/Rocks/${r.$3}',
+          sp: Vector2(0, 0), ss: Vector2(128, 128),
+          sz: Vector2(r.$4, r.$4), pos: Vector2(r.$1, r.$2)));
+    }
+
+    // ── WARRIOR ──
+    final startX = W * 0.09;
+    final startY = islandY + islandH * 0.72;
+    warrior = _WarriorComponent(startX: startX, startY: startY);
+    await warrior.onLoadSprites();
+    add(warrior);
+
     // ── STEP MARKERS ──
-    for (int i = 1; i <= _stepsToTarget; i++) {
+    for (int i = 1; i <= _steps; i++) {
       add(CircleComponent(
-        radius: 5,
-        position: Vector2(startX + i * stepSize - 5, gY + 8),
+        radius: 4,
+        position: Vector2(startX + i * stepSize - 4, startY + 10),
         paint: Paint()..color = const Color(0xFFFFD700).withOpacity(0.9),
       ));
     }
   }
 
-  // Helper: make a static sprite component
-  Future<SpriteComponent> _makeSprite(
-    String path, {
-    required Vector2 srcPos,
-    required Vector2 srcSize,
-    required Vector2 size,
-    required Vector2 pos,
-  }) async {
-    return SpriteComponent()
-      ..sprite = await Sprite.load(path, srcPosition: srcPos, srcSize: srcSize)
-      ..size = size
-      ..position = pos;
-  }
+  Future<SpriteComponent> _spr(String path, {
+    required Vector2 sp, required Vector2 ss,
+    required Vector2 sz, required Vector2 pos,
+  }) async => SpriteComponent()
+    ..sprite = await Sprite.load(path, srcPosition: sp, srcSize: ss)
+    ..size = sz ..position = pos;
 
-  // Helper: make an animated soldier
-  Future<SpriteAnimationComponent> _makeAnimatedSoldier(
-    String path, {
-    required Vector2 pos,
-    required double size,
-    required int row,
-    required int cols,
-    required double stepTime,
+  Future<SpriteAnimationComponent> _soldier(String path, {
+    required Vector2 pos, required double sz,
   }) async {
     final sprites = <Sprite>[];
-    for (int i = 0; i < cols; i++) {
+    for (int i = 0; i < 4; i++) {
       sprites.add(await Sprite.load(path,
-          srcPosition: Vector2(i * 192.0, row * 192.0),
-          srcSize: Vector2(192, 192)));
+          srcPosition: Vector2(i * 192.0, 0), srcSize: Vector2(192, 192)));
     }
     return SpriteAnimationComponent(
-      animation: SpriteAnimation.spriteList(sprites, stepTime: stepTime),
-      size: Vector2(size, size),
-      position: pos,
-    );
+        animation: SpriteAnimation.spriteList(sprites, stepTime: 0.18),
+        size: Vector2(sz, sz), position: pos);
   }
 
   Future<bool> runSequence(List<String> cmds) async {
     if (_animating) return false;
     _animating = true;
     for (final cmd in cmds) {
-      if (cmd == 'right') await _move(stepSize, false);
-      else if (cmd == 'left') await _move(-stepSize, true);
-      else if (cmd == 'jump') await _jump();
+      if (cmd == 'right') await _move(stepSize, 0, false);
+      else if (cmd == 'left') await _move(-stepSize, 0, true);
+      else if (cmd == 'up') await _move(0, -stepSize, false);
+      else if (cmd == 'down') await _move(0, stepSize, false);
     }
     _animating = false;
-    final dx = (warrior.x - castle.x).abs();
-    final success = dx < 100;
+    final dx = (warrior.position.x - castle.position.x).abs();
+    final dy = (warrior.position.y - castle.position.y).abs();
+    final success = dx < 120 && dy < 120;
     if (success) { warrior.setAttack(); castle.celebrate(); }
     else warrior.setDead();
     return success;
   }
 
-  Future<void> _move(double dx, bool left) async {
-    warrior.setWalking(left);
+  Future<void> _move(double dx, double dy, bool left) async {
+    warrior.setWalking(left || (dx == 0 && dy != 0));
     final c = Completer<void>();
-    warrior.add(MoveEffect.by(Vector2(dx, 0),
-        EffectController(duration: 0.4, curve: Curves.easeInOut),
-        onComplete: () { warrior.setIdle(); c.complete(); }));
-    warrior.add(MoveEffect.by(Vector2(0, -8),
-        EffectController(duration: 0.2, reverseDuration: 0.2, curve: Curves.easeOut)));
-    await c.future;
-  }
-
-  Future<void> _jump() async {
-    warrior.setWalking(warrior.flipped);
-    final c = Completer<void>();
-    warrior.add(MoveEffect.by(Vector2(0, -55),
-        EffectController(duration: 0.26, reverseDuration: 0.26, curve: Curves.easeOut),
-        onComplete: () { warrior.setIdle(); c.complete(); }));
+    warrior.add(MoveEffect.by(
+      Vector2(dx, dy),
+      EffectController(duration: 0.4, curve: Curves.easeInOut),
+      onComplete: () { warrior.setIdle(); c.complete(); },
+    ));
     await c.future;
   }
 }
 
 // ══════════════════════════════════════════════════════════════
-//  WARRIOR COMPONENT
+//  WATER BACKGROUND
+// ══════════════════════════════════════════════════════════════
+class _WaterBg extends Component with HasGameRef<TinySwordsGame> {
+  final Vector2 gameSize;
+  late Sprite _tile;
+  bool _loaded = false;
+  _WaterBg({required this.gameSize});
+
+  @override
+  Future<void> onLoad() async {
+    _tile = await Sprite.load('tiny_swords/Terrain/Water/Water.png');
+    _loaded = true;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    if (!_loaded) return;
+    const ts = 64.0;
+    final cols = (gameSize.x / ts).ceil() + 1;
+    final rows = (gameSize.y / ts).ceil() + 1;
+    for (int r = 0; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        _tile.render(canvas,
+            position: Vector2(c * ts, r * ts), size: Vector2(ts, ts));
+      }
+    }
+    canvas.drawRect(Rect.fromLTWH(0, 0, gameSize.x, gameSize.y),
+        Paint()..color = const Color(0xFF2DB8CC).withOpacity(0.35));
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SAND TILE RECT — yellow sand, no border/shadow
+// ══════════════════════════════════════════════════════════════
+class _SandTileRect extends Component with HasGameRef<TinySwordsGame> {
+  final double x, y, w, h, ts;
+  late Sprite _top, _fill;
+  bool _ready = false;
+
+  _SandTileRect({required this.x, required this.y,
+      required this.w, required this.h, required this.ts});
+
+  @override
+  Future<void> onLoad() async {
+    // Yellow sand: col 5 srcX=320 in Tilemap_Flat
+   _top = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
+        srcPosition: Vector2(384, 0), srcSize: Vector2(64, 64));
+    _fill = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
+        srcPosition: Vector2(384, 64), srcSize: Vector2(64, 64));
+    _ready = true;
+  }
+
+  @override
+  void render(Canvas canvas) {
+    if (!_ready) return;
+    final cols = (w / ts).ceil() + 1;
+    final rows = (h / ts).ceil() + 1;
+    for (int c = 0; c < cols; c++) {
+      final tx = x + c * ts;
+      if (tx >= x + w) break;
+      _top.render(canvas, position: Vector2(tx, y), size: Vector2(ts, ts));
+    }
+    for (int r = 1; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final tx = x + c * ts;
+        if (tx >= x + w) break;
+        _fill.render(canvas,
+            position: Vector2(tx, y + r * ts), size: Vector2(ts, ts));
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  GRASS TILE RECT — green grass + foam on all 4 edges
+// ══════════════════════════════════════════════════════════════
+class _GrassTileRect extends Component with HasGameRef<TinySwordsGame> {
+  final double x, y, w, h, ts;
+  late Sprite _top, _fill;
+  bool _ready = false;
+  
+
+  _GrassTileRect({required this.x, required this.y,
+      required this.w, required this.h, required this.ts});
+
+  @override
+  Future<void> onLoad() async {
+    _top = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
+        srcPosition: Vector2(64, 0), srcSize: Vector2(64, 64));
+    _fill = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
+        srcPosition: Vector2(64, 64), srcSize: Vector2(64, 64));
+    _ready = true;
+  }
+
+
+  @override
+  void render(Canvas canvas) {
+    if (!_ready) return;
+
+    // Grass tiles
+    final cols = (w / ts).ceil() + 1;
+    final rows = (h / ts).ceil() + 1;
+    for (int c = 0; c < cols; c++) {
+      final tx = x + c * ts;
+      if (tx >= x + w) break;
+      _top.render(canvas, position: Vector2(tx, y), size: Vector2(ts, ts));
+    }
+    for (int r = 1; r < rows; r++) {
+      for (int c = 0; c < cols; c++) {
+        final tx = x + c * ts;
+        if (tx >= x + w) break;
+        _fill.render(canvas,
+            position: Vector2(tx, y + r * ts), size: Vector2(ts, ts));
+      }
+    }
+
+    // Foam on all 4 edges
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  STONE WALL ROW — elevation tiles + Shadows.png underneath
+// ══════════════════════════════════════════════════════════════
+class _StoneWallRow extends Component with HasGameRef<TinySwordsGame> {
+  final double x, y, w, ts;
+  late Sprite _tile, _shadow;
+  bool _ready = false;
+
+  _StoneWallRow({required this.x, required this.y,
+      required this.w, required this.ts});
+
+  @override
+  Future<void> onLoad() async {
+    _tile = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Elevation.png',
+        srcPosition: Vector2(64, 0), srcSize: Vector2(64, 64));
+    _shadow = await Sprite.load('tiny_swords/Terrain/Ground/Shadows.png',
+        srcPosition: Vector2(0, 0), srcSize: Vector2(192, 192));
+    _ready = true;
+  }
+
+@override
+  void render(Canvas canvas) {
+    if (!_ready) return;
+    // Shadow under the whole wall block
+    for (int c = -1; c < (w / ts).ceil() + 2; c++) {
+      final tx = x + c * ts;
+      if (tx >= x + w + ts) break;
+      _shadow.render(canvas,
+          position: Vector2(tx - ts * 0.3, y + ts * 2.2),
+          size: Vector2(ts * 1.8, ts * 0.9));
+    }
+    // 3 rows of wall tiles to make thick chunky blocks like image
+    for (int row = 0; row < 3; row++) {
+      for (int c = 0; c < (w / ts).ceil() + 1; c++) {
+        if (x + c * ts >= x + w) break;
+        _tile.render(canvas,
+            position: Vector2(x + c * ts - 1, y + row * ts),
+            size: Vector2(ts + 1, ts + 1));
+      }
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  WARRIOR
 // ══════════════════════════════════════════════════════════════
 class _WarriorComponent extends PositionComponent {
   bool flipped = false;
@@ -601,44 +731,41 @@ class _WarriorComponent extends PositionComponent {
   late SpriteComponent _deadSprite;
   bool _isDead = false;
 
-  _WarriorComponent({required double startX, required double groundY})
-      : super(position: Vector2(startX - 40, groundY - 80), size: Vector2(80, 80));
+  _WarriorComponent({required double startX, required double startY})
+      : super(position: Vector2(startX - 30, startY - 52), size: Vector2(60, 60));
 
   Future<void> onLoadSprites() async {
-    const path = 'tiny_swords/Factions/Knights/Troops/Warrior/Blue/Warrior_Blue.png';
+    const p = 'tiny_swords/Factions/Knights/Troops/Warrior/Blue/Warrior_Blue.png';
     const fw = 192.0, fh = 192.0;
 
-    final idleSprites = <Sprite>[];
+    final idle = <Sprite>[];
     for (int i = 0; i < 4; i++) {
-      idleSprites.add(await Sprite.load(path,
+      idle.add(await Sprite.load(p,
           srcPosition: Vector2(i * fw, 0), srcSize: Vector2(fw, fh)));
     }
-
-    final walkSprites = <Sprite>[];
+    final walk = <Sprite>[];
     for (int i = 0; i < 6; i++) {
-      walkSprites.add(await Sprite.load(path,
+      walk.add(await Sprite.load(p,
           srcPosition: Vector2(i * fw, fh), srcSize: Vector2(fw, fh)));
     }
-
-    final attackSprites = <Sprite>[];
+    final atk = <Sprite>[];
     for (int i = 0; i < 6; i++) {
-      attackSprites.add(await Sprite.load(path,
+      atk.add(await Sprite.load(p,
           srcPosition: Vector2(i * fw, fh * 3), srcSize: Vector2(fw, fh)));
     }
 
-    _idleAnim = SpriteAnimation.spriteList(idleSprites, stepTime: 0.15);
-    _walkAnim = SpriteAnimation.spriteList(walkSprites, stepTime: 0.1);
-    _attackAnim = SpriteAnimation.spriteList(attackSprites, stepTime: 0.1, loop: false);
+    _idleAnim   = SpriteAnimation.spriteList(idle, stepTime: 0.15);
+    _walkAnim   = SpriteAnimation.spriteList(walk, stepTime: 0.1);
+    _attackAnim = SpriteAnimation.spriteList(atk,  stepTime: 0.1, loop: false);
 
-    _anim = SpriteAnimationComponent(animation: _idleAnim, size: Vector2(80, 80));
+    _anim = SpriteAnimationComponent(animation: _idleAnim, size: Vector2(60, 60));
     add(_anim);
 
-    final deadSpr = await Sprite.load(
-      'tiny_swords/Factions/Knights/Troops/Dead/Dead.png',
-      srcPosition: Vector2(0, 0), srcSize: Vector2(128, 128),
-    );
-    _deadSprite = SpriteComponent(sprite: deadSpr, size: Vector2(72, 72))
-      ..position = Vector2(4, 4)
+    final ds = await Sprite.load(
+        'tiny_swords/Factions/Knights/Troops/Dead/Dead.png',
+        srcPosition: Vector2(0, 0), srcSize: Vector2(128, 128));
+    _deadSprite = SpriteComponent(sprite: ds, size: Vector2(54, 54))
+      ..position = Vector2(3, 3)
       ..opacity = 0;
     add(_deadSprite);
   }
@@ -647,7 +774,7 @@ class _WarriorComponent extends PositionComponent {
     if (_isDead) return;
     _anim.animation = _idleAnim;
     _anim.scale = Vector2(flipped ? -1 : 1, 1);
-    _anim.position = Vector2(flipped ? 80 : 0, 0);
+    _anim.position = Vector2(flipped ? 60 : 0, 0);
   }
 
   void setWalking(bool left) {
@@ -655,7 +782,7 @@ class _WarriorComponent extends PositionComponent {
     flipped = left;
     _anim.animation = _walkAnim;
     _anim.scale = Vector2(left ? -1 : 1, 1);
-    _anim.position = Vector2(left ? 80 : 0, 0);
+    _anim.position = Vector2(left ? 60 : 0, 0);
   }
 
   void setAttack() { _anim.animation = _attackAnim; }
@@ -668,138 +795,24 @@ class _WarriorComponent extends PositionComponent {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  CASTLE COMPONENT
+//  CASTLE
 // ══════════════════════════════════════════════════════════════
 class _CastleComponent extends PositionComponent {
   late SpriteComponent _sprite;
 
   _CastleComponent({required Vector2 position})
-      : super(position: position, size: Vector2(180, 165));
+      : super(position: position, size: Vector2(140, 128));
 
   Future<void> onLoadSprites() async {
     final spr = await Sprite.load(
-      'tiny_swords/Factions/Knights/Buildings/Castle/Castle_Blue.png',
-      srcPosition: Vector2(0, 0),
-      srcSize: Vector2(320, 256),
-    );
-    _sprite = SpriteComponent(sprite: spr, size: Vector2(180, 165));
+        'tiny_swords/Factions/Knights/Buildings/Castle/Castle_Blue.png',
+        srcPosition: Vector2(0, 0), srcSize: Vector2(320, 256));
+    _sprite = SpriteComponent(sprite: spr, size: Vector2(140, 128));
     add(_sprite);
   }
 
   void celebrate() {
     add(ScaleEffect.by(Vector2(1.1, 1.1),
         EffectController(duration: 0.2, reverseDuration: 0.2)));
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  WATER POOL — tiled water tiles
-// ══════════════════════════════════════════════════════════════
-class _WaterPool extends Component with HasGameRef<TinySwordsGame> {
-  final double x, y, width, height;
-  late Sprite _waterTile;
-  bool _loaded = false;
-
-  _WaterPool({required this.x, required this.y, required this.width, required this.height});
-
-  @override
-  Future<void> onLoad() async {
-    // Water.png: 64x64 single tile
-    _waterTile = await Sprite.load('tiny_swords/Terrain/Water/Water.png');
-    _loaded = true;
-  }
-
-  @override
-  void render(Canvas canvas) {
-    if (!_loaded) return;
-    // Rounded rect clip for water pool shape
-    canvas.save();
-    canvas.clipRRect(RRect.fromRectAndRadius(
-      Rect.fromLTWH(x, y, width, height),
-      const Radius.circular(8),
-    ));
-    const tileSize = 40.0;
-    final cols = (width / tileSize).ceil() + 1;
-    final rows = (height / tileSize).ceil() + 1;
-    for (int r = 0; r < rows; r++) {
-      for (int c = 0; c < cols; c++) {
-        _waterTile.render(canvas,
-            position: Vector2(x + c * tileSize, y + r * tileSize),
-            size: Vector2(tileSize, tileSize));
-      }
-    }
-    canvas.restore();
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  TILED GROUND
-// ══════════════════════════════════════════════════════════════
-class _TiledGround extends Component with HasGameRef<TinySwordsGame> {
-  final double groundY, totalWidth, tileSize;
-  late Sprite _topTile, _fillTile;
-  bool _loaded = false;
-
-  _TiledGround({required this.groundY, required this.totalWidth, required this.tileSize});
-
-  @override
-  Future<void> onLoad() async {
-    _topTile = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
-        srcPosition: Vector2(64, 0), srcSize: Vector2(64, 64));
-    _fillTile = await Sprite.load('tiny_swords/Terrain/Ground/Tilemap_Flat.png',
-        srcPosition: Vector2(64, 64), srcSize: Vector2(64, 64));
-    _loaded = true;
-  }
-
-  @override
-  void render(Canvas canvas) {
-    if (!_loaded) return;
-    final cols = (totalWidth / tileSize).ceil() + 1;
-    for (int c = 0; c < cols; c++) {
-      _topTile.render(canvas,
-          position: Vector2(c * tileSize, groundY),
-          size: Vector2(tileSize, tileSize));
-    }
-    for (int r = 1; r <= 10; r++) {
-      for (int c = 0; c < cols; c++) {
-        _fillTile.render(canvas,
-            position: Vector2(c * tileSize, groundY + r * tileSize),
-            size: Vector2(tileSize, tileSize));
-      }
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-//  SKY COMPONENT
-// ══════════════════════════════════════════════════════════════
-class _SkyComponent extends Component {
-  final Vector2 gameSize;
-  _SkyComponent({required this.gameSize});
-
-  @override
-  void render(Canvas canvas) {
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, gameSize.x, gameSize.y),
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF2E9EC4), Color(0xFFADE8F5)],
-        ).createShader(Rect.fromLTWH(0, 0, gameSize.x, gameSize.y)),
-    );
-    final p = Paint()..color = Colors.white.withOpacity(0.97);
-    _cloud(canvas, p, gameSize.x * 0.08, 20, 115, 46);
-    _cloud(canvas, p, gameSize.x * 0.40, 38, 95, 38);
-    _cloud(canvas, p, gameSize.x * 0.70, 16, 108, 43);
-  }
-
-  void _cloud(Canvas c, Paint p, double x, double y, double w, double h) {
-    c.drawCircle(Offset(x, y + h * 0.55), w * 0.20, p);
-    c.drawCircle(Offset(x + w * 0.28, y + h * 0.28), w * 0.28, p);
-    c.drawCircle(Offset(x + w * 0.56, y + h * 0.55), w * 0.20, p);
-    c.drawOval(Rect.fromCenter(
-        center: Offset(x + w * 0.28, y + h * 0.68),
-        width: w * 0.78, height: h * 0.52), p);
   }
 }
