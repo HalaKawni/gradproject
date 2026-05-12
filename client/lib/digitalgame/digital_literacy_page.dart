@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'digital_lesson_page.dart';
+import '../services/api_service.dart';
 
 class DigitalLiteracyPage extends StatefulWidget {
   const DigitalLiteracyPage({super.key});
@@ -11,6 +12,9 @@ class DigitalLiteracyPage extends StatefulWidget {
 
 class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
   int _completedLessons = 0;
+  bool _isLoading = true;
+
+  static const String _gameId = 'digital-literacy';
 
   final List<_LessonData> _lessons = [
     _LessonData(
@@ -34,6 +38,35 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadProgress();
+  }
+
+  Future<void> _loadProgress() async {
+    try {
+      final data = await ApiService.getProgress(_gameId);
+      if (data['completedLevels'] != null) {
+        final List<dynamic> completedLevels = data['completedLevels'];
+        setState(() {
+          for (int i = 0; i < _lessons.length; i++) {
+            if (completedLevels.contains(_lessons[i].number) ||
+                completedLevels.contains(_lessons[i].number.toString())) {
+              _lessons[i] = _lessons[i].copyWith(completed: true);
+            }
+          }
+          _completedLessons = _lessons.where((l) => l.completed).length;
+          _isLoading = false;
+        });
+      } else {
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFADE8F4),
@@ -41,32 +74,39 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
         children: [
           _buildTopNavbar(),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 28, 24, 28),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── LEFT PANEL ──
-                  _buildLeftPanel(),
-                  const SizedBox(width: 58),
-                  // ── LESSON CARDS ──
-                  Expanded(
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF4DD0C4),
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 28, 24, 28),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _lessons
-                          .map((lesson) => Padding(
-                                padding: const EdgeInsets.only(right: 40),
-                                child: _LessonCard(
-                                  lesson: lesson,
-                                  onTap: () => _openLesson(lesson),
-                                ),
-                              ))
-                          .toList(),
+                      children: [
+                        // ── LEFT PANEL ──
+                        _buildLeftPanel(),
+                        const SizedBox(width: 58),
+                        // ── LESSON CARDS ──
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: _lessons
+                                .map((lesson) => Padding(
+                                      padding:
+                                          const EdgeInsets.only(right: 40),
+                                      child: _LessonCard(
+                                        lesson: lesson,
+                                        onTap: () => _openLesson(lesson),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
@@ -82,7 +122,6 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Left: matches dashboard exactly
           Text(
             'DIGITAL LITERACY: MINI COURSE',
             style: GoogleFonts.montserrat(
@@ -91,7 +130,6 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          // Right: same as dashboard — avatar + menu only (no back)
           Row(
             children: [
               Container(
@@ -141,13 +179,13 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
             decoration: BoxDecoration(
-              color: const Color.fromARGB(255,255, 230, 154),
+              color: const Color.fromARGB(255, 255, 230, 154),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               '${_lessons.length} LESSONS',
-              style:const TextStyle(
-                        fontFamily: 'Chennai',
+              style: const TextStyle(
+                fontFamily: 'Chennai',
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 color: Color.fromARGB(255, 0, 0, 0),
@@ -161,11 +199,11 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
           Text(
             'DIGITAL LITERACY',
             style: const TextStyle(
-  fontFamily: 'Chennai',
-  fontSize: 28,
-  color: Color(0xFF1A1A2E),
-  height: 1.05,
-),
+              fontFamily: 'Chennai',
+              fontSize: 28,
+              color: Color(0xFF1A1A2E),
+              height: 1.05,
+            ),
           ),
           const SizedBox(height: 18),
 
@@ -186,10 +224,10 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
             child: Text(
               'TRACK YOUR PROGRESS',
               style: const TextStyle(
-  fontFamily: 'xolonium',
+                fontFamily: 'xolonium',
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
-                color: const Color(0xFF333333),
+                color: Color(0xFF333333),
                 letterSpacing: 0.5,
               ),
             ),
@@ -232,21 +270,22 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
                 _openLesson(_lessons[nextIdx]);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255,255, 230, 154),
-                foregroundColor: const Color.fromARGB(255, 0, 0, 0),
+                backgroundColor:
+                    const Color.fromARGB(255, 255, 230, 154),
+                foregroundColor:
+                    const Color.fromARGB(255, 0, 0, 0),
                 padding: const EdgeInsets.symmetric(vertical: 18),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 3,
-                shadowColor:
-                    const Color.fromARGB(255,255, 230, 154).withOpacity(0.4),
+                shadowColor: const Color.fromARGB(255, 255, 230, 154)
+                    .withOpacity(0.4),
               ),
-              
               label: Text(
                 'START LESSON #${(_completedLessons < _lessons.length ? _completedLessons + 1 : _lessons.length)}',
-                style :const TextStyle(
-                        fontFamily: 'Chennai',
+                style: const TextStyle(
+                  fontFamily: 'Chennai',
                   fontSize: 15,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 1,
@@ -266,7 +305,17 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
       MaterialPageRoute(
         builder: (_) => DigitalLessonPage(lesson: lesson.toMap()),
       ),
-    ).then((_) {
+    ).then((_) async {
+      try {
+        await ApiService.saveLevelResult(
+          gameId: _gameId,
+          level: lesson.number,
+          completed: true,
+          score: 100,
+        );
+      } catch (e) {
+        // silent fail
+      }
       setState(() {
         final idx =
             _lessons.indexWhere((l) => l.number == lesson.number);
@@ -296,7 +345,6 @@ class _ArcProgressPainter extends CustomPainter {
     const startAngle = 3.14159265;
     const sweepMax = 3.14159265;
 
-    // Background arc
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
       startAngle,
@@ -309,7 +357,6 @@ class _ArcProgressPainter extends CustomPainter {
         ..strokeCap = StrokeCap.round,
     );
 
-    // Progress arc
     if (progress > 0) {
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius),
@@ -445,10 +492,11 @@ class _LessonCardState extends State<_LessonCard>
                     children: [
                       Text(
                         '#${widget.lesson.number}',
-                        style: GoogleFonts.montserrat(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF333333),
+                        style: const TextStyle(
+                          fontFamily: 'Chennai',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w400,
+                          color: Color(0xFF333333),
                         ),
                       ),
                       Icon(
@@ -456,7 +504,7 @@ class _LessonCardState extends State<_LessonCard>
                             ? Icons.star
                             : Icons.star_border,
                         color: widget.lesson.completed
-                            ? const Color.fromARGB(255,255, 230, 154)
+                            ? const Color.fromARGB(255, 255, 230, 154)
                             : const Color(0xFFBBBBBB),
                         size: 22,
                       ),
@@ -486,11 +534,11 @@ class _LessonCardState extends State<_LessonCard>
                     child: Text(
                       widget.lesson.title,
                       textAlign: TextAlign.center,
-                      style:const TextStyle(
+                      style: const TextStyle(
                         fontFamily: 'Chennai',
                         fontSize: 18,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF222222),
+                        color: Color(0xFF222222),
                       ),
                     ),
                   ),
