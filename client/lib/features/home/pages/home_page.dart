@@ -19,11 +19,11 @@ class _HomeAgePageState extends State<HomeAgePage>
   bool _showError = false;
 
   // Monkey height based on age (min age 1 = small, max age 18 = tall)
-double get _monkeyHeight {
-  if (_age <= 0) return 100 + (10 - 1) * (300 / 17); // default = age 10 size
-  final clamped = _age.clamp(1, 18);
-  return 100 + (clamped - 1) * (300 / 17);
-}
+  double get _monkeyHeight {
+    if (_age <= 0) return 100 + (10 - 1) * (300 / 17); // default = age 10 size
+    final clamped = _age.clamp(1, 18);
+    return 100 + (clamped - 1) * (300 / 17);
+  }
 
   @override
   void initState() {
@@ -32,8 +32,7 @@ double get _monkeyHeight {
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
-    _cloudAnimation =
-        Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    _cloudAnimation = Tween<double>(begin: 0, end: 1).animate(_cloudController);
   }
 
   @override
@@ -83,8 +82,11 @@ double get _monkeyHeight {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.chevron_left,
-                                    color: Colors.white, size: 20),
+                                const Icon(
+                                  Icons.chevron_left,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 Text(
                                   'BACK',
                                   style: GoogleFonts.montserrat(
@@ -145,7 +147,7 @@ double get _monkeyHeight {
                             SizedBox(
                               width: 260,
                               child: Stack(
-                                   clipBehavior: Clip.none,
+                                clipBehavior: Clip.none,
                                 alignment: Alignment.bottomCenter,
                                 children: [
                                   // vertical dashed line
@@ -167,8 +169,9 @@ double get _monkeyHeight {
                                   Positioned(
                                     bottom: 0,
                                     child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 400),
+                                      duration: const Duration(
+                                        milliseconds: 400,
+                                      ),
                                       curve: Curves.easeOut,
                                       height: _monkeyHeight,
                                       child: Image.asset(
@@ -217,8 +220,9 @@ double get _monkeyHeight {
                                             border: InputBorder.none,
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 14),
+                                                  horizontal: 12,
+                                                  vertical: 14,
+                                                ),
                                           ),
                                           onChanged: (val) {
                                             setState(() {
@@ -236,8 +240,8 @@ double get _monkeyHeight {
                                               setState(() {
                                                 if (_age < 18) {
                                                   _age++;
-                                                  _ageController.text =
-                                                      _age.toString();
+                                                  _ageController.text = _age
+                                                      .toString();
                                                   _showError = false;
                                                 }
                                               });
@@ -248,15 +252,18 @@ double get _monkeyHeight {
                                               decoration: const BoxDecoration(
                                                 border: Border(
                                                   left: BorderSide(
-                                                      color: Color(0xFFCCCCCC)),
+                                                    color: Color(0xFFCCCCCC),
+                                                  ),
                                                   bottom: BorderSide(
-                                                      color: Color(0xFFCCCCCC)),
+                                                    color: Color(0xFFCCCCCC),
+                                                  ),
                                                 ),
                                               ),
                                               child: const Icon(
-                                                  Icons.keyboard_arrow_up,
-                                                  size: 16,
-                                                  color: Color(0xFF666666)),
+                                                Icons.keyboard_arrow_up,
+                                                size: 16,
+                                                color: Color(0xFF666666),
+                                              ),
                                             ),
                                           ),
                                           GestureDetector(
@@ -264,8 +271,8 @@ double get _monkeyHeight {
                                               setState(() {
                                                 if (_age > 1) {
                                                   _age--;
-                                                  _ageController.text =
-                                                      _age.toString();
+                                                  _ageController.text = _age
+                                                      .toString();
                                                   _showError = false;
                                                 }
                                               });
@@ -276,13 +283,15 @@ double get _monkeyHeight {
                                               decoration: const BoxDecoration(
                                                 border: Border(
                                                   left: BorderSide(
-                                                      color: Color(0xFFCCCCCC)),
+                                                    color: Color(0xFFCCCCCC),
+                                                  ),
                                                 ),
                                               ),
                                               child: const Icon(
-                                                  Icons.keyboard_arrow_down,
-                                                  size: 16,
-                                                  color: Color(0xFF666666)),
+                                                Icons.keyboard_arrow_down,
+                                                size: 16,
+                                                color: Color(0xFF666666),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -309,38 +318,56 @@ double get _monkeyHeight {
                                 Container(
                                   width: 140,
                                   decoration: BoxDecoration(
-                                    color: const Color.fromARGB(255,195, 158, 222),
+                                    color: const Color.fromARGB(
+                                      255,
+                                      195,
+                                      158,
+                                      222,
+                                    ),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Padding(
                                     padding: const EdgeInsets.only(bottom: 4),
                                     child: ElevatedButton(
                                       onPressed: () {
-                                        if (_ageController.text.isEmpty || _age <= 0) {
-    setState(() => _showError = true);
-  } else if (_age > 12) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const StudentAccountPage()),
-    );
-  } else {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SorryPage()),
-    );
-  }
+                                        if (_ageController.text.isEmpty ||
+                                            _age <= 0) {
+                                          setState(() => _showError = true);
+                                        } else if (_age > 12) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  const StudentAccountPage(),
+                                            ),
+                                          );
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => const SorryPage(),
+                                            ),
+                                          );
+                                        }
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            const Color.fromARGB(255,220, 202, 233),
-                                        foregroundColor:
-                                            const Color(0xFF3A2A00),
+                                        backgroundColor: const Color.fromARGB(
+                                          255,
+                                          220,
+                                          202,
+                                          233,
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF3A2A00,
+                                        ),
                                         elevation: 0,
                                         padding: const EdgeInsets.symmetric(
-                                            vertical: 14),
+                                          vertical: 14,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                         ),
                                       ),
                                       child: Text(
@@ -373,7 +400,11 @@ double get _monkeyHeight {
   }
 
   Widget _animatedCloud(
-      double offset, double top, double width, double height) {
+    double offset,
+    double top,
+    double width,
+    double height,
+  ) {
     return AnimatedBuilder(
       animation: _cloudAnimation,
       builder: (context, child) {
@@ -412,11 +443,7 @@ double get _monkeyHeight {
                 label: 'LOG IN',
                 onPressed: () => Navigator.pop(context),
               ),
-              _HoverNavButton(
-                label: 'SIGN UP',
-                onPressed: () {},
-                filled: true,
-              ),
+              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
             ],
           ),
         ],

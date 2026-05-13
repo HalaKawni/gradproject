@@ -1,3 +1,6 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
@@ -133,8 +136,8 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
     });
 
     final payload = await _showCourseDialog(
-      title: 'Create New Course',
-      actionLabel: 'Create',
+      title: AppLanguage.of(context).t('createCourse'),
+      actionLabel: AppLanguage.of(context).t('create'),
       nameController: nameController,
       courseIdController: courseIdController,
       categoryController: categoryController,
@@ -180,6 +183,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
     required ValueChanged<bool> onPublicChanged,
   }) {
     bool isPublic = initialIsPublic;
+    final language = AppLanguage.of(context);
 
     return showDialog<Map<String, dynamic>>(
       context: context,
@@ -196,25 +200,25 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                     children: [
                       TextField(
                         controller: nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Course Name',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('courseName'),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: courseIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Course ID',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('courseId'),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: categoryController,
-                        decoration: const InputDecoration(
-                          labelText: 'Category',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('category'),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -222,17 +226,19 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                         controller: descriptionController,
                         minLines: 2,
                         maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('description'),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Public'),
+                        title: Text(language.t('public')),
                         subtitle: Text(
-                          isPublic ? 'Visible to users' : 'Hidden from users',
+                          isPublic
+                              ? language.t('visibleToUsers')
+                              : language.t('hiddenFromUsers'),
                         ),
                         value: isPublic,
                         onChanged: (value) {
@@ -249,7 +255,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(language.t('cancel')),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -288,8 +294,8 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
     bool isPublic = course.isPublic;
 
     final payload = await _showCourseDialog(
-      title: 'Edit Course',
-      actionLabel: 'Save',
+      title: AppLanguage.of(context).t('editCourse'),
+      actionLabel: AppLanguage.of(context).t('save'),
       nameController: nameController,
       courseIdController: courseIdController,
       categoryController: categoryController,
@@ -326,20 +332,21 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
   }
 
   Future<void> _deleteCourse(AdminCourse course) async {
+    final language = AppLanguage.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Course'),
+          title: Text(language.t('deleteCourse')),
           content: Text('Are you sure you want to delete "${course.title}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(language.t('delete')),
             ),
           ],
         );
@@ -372,7 +379,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
       context,
       MaterialPageRoute(
         builder: (_) => CourseLevelsPage(
-          authToken: widget.session.token,
+          session: widget.session,
           course: course,
           courseLevels: _levelsForCourse(course),
           allLevels: _levels,
@@ -395,6 +402,8 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -409,7 +418,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
             FilledButton.icon(
               onPressed: _loadCourses,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -422,12 +431,12 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
         Row(
           children: [
             Text(
-              'Courses Management',
+              language.t('coursesManagement'),
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const Spacer(),
             IconButton(
-              tooltip: 'Refresh courses',
+              tooltip: language.t('refreshCourses'),
               onPressed: _loadCourses,
               icon: const Icon(Icons.refresh),
             ),
@@ -435,14 +444,14 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
             ElevatedButton.icon(
               onPressed: _showCreateCourseDialog,
               icon: const Icon(Icons.add),
-              label: const Text('Create Course'),
+              label: Text(language.t('createCourse')),
             ),
           ],
         ),
         const SizedBox(height: 16),
         Expanded(
           child: _courses.isEmpty
-              ? const Center(child: Text('No courses yet.'))
+              ? Center(child: Text(language.t('noCoursesYet')))
               : RefreshIndicator(
                   onRefresh: _loadCourses,
                   child: ListView.separated(
@@ -481,7 +490,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                                     const SizedBox(height: 6),
                                     Text(
                                       course.description.isEmpty
-                                          ? 'No description'
+                                          ? language.t('noDescription')
                                           : course.description,
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
@@ -501,8 +510,8 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                                           _CourseChip(label: course.category),
                                         _CourseChip(
                                           label: course.isPublic
-                                              ? 'Public'
-                                              : 'Private',
+                                              ? language.t('public')
+                                              : language.t('private'),
                                           isPositive: course.isPublic,
                                         ),
                                       ],
@@ -518,18 +527,18 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                                   OutlinedButton.icon(
                                     onPressed: () => _openManageLevels(course),
                                     icon: const Icon(Icons.reorder),
-                                    label: const Text('Manage Levels'),
+                                    label: Text(language.t('manageLevels')),
                                   ),
                                   OutlinedButton.icon(
                                     onPressed: () =>
                                         _showEditCourseDialog(course),
                                     icon: const Icon(Icons.edit_outlined),
-                                    label: const Text('Edit'),
+                                    label: Text(language.t('edit')),
                                   ),
                                   FilledButton.icon(
                                     onPressed: () => _deleteCourse(course),
                                     icon: const Icon(Icons.delete_outline),
-                                    label: const Text('Delete'),
+                                    label: Text(language.t('delete')),
                                   ),
                                 ],
                               ),
@@ -574,13 +583,13 @@ class _CourseChip extends StatelessWidget {
 class CourseLevelsPage extends StatefulWidget {
   const CourseLevelsPage({
     super.key,
-    required this.authToken,
+    required this.session,
     required this.course,
     required this.courseLevels,
     required this.allLevels,
   });
 
-  final String authToken;
+  final AuthSession session;
   final AdminCourse course;
   final List<AdminLevel> courseLevels;
   final List<AdminLevel> allLevels;
@@ -591,6 +600,7 @@ class CourseLevelsPage extends StatefulWidget {
 
 class _CourseLevelsPageState extends State<CourseLevelsPage> {
   late List<AdminLevel> levels;
+  late List<AdminLevel> allLevels;
   bool _isSaving = false;
   String? _selectedLevelId;
 
@@ -598,6 +608,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
   void initState() {
     super.initState();
     levels = List<AdminLevel>.from(widget.courseLevels);
+    allLevels = List<AdminLevel>.from(widget.allLevels);
   }
 
   String get _courseKey {
@@ -608,7 +619,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
 
   List<AdminLevel> get _availableLevels {
     final selectedIds = levels.map((level) => level.id).toSet();
-    final available = widget.allLevels
+    final available = allLevels
         .where((level) => !selectedIds.contains(level.id))
         .toList();
 
@@ -623,6 +634,47 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     });
 
     return available;
+  }
+
+  Future<void> _reloadLevels() async {
+    final result = await ApiService.getAdminLevels(
+      authToken: widget.session.token,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] != true) {
+      _showSaveFailure(result);
+      return;
+    }
+
+    final loaded = _parseList(result['data']).map(AdminLevel.fromJson).toList();
+
+    setState(() {
+      allLevels = loaded;
+      levels =
+          loaded.where((level) {
+            return level.courseId == widget.course.id ||
+                level.courseId == _courseKey;
+          }).toList()..sort((a, b) {
+            final orderComparison = a.orderInCourse.compareTo(b.orderInCourse);
+            if (orderComparison != 0) {
+              return orderComparison;
+            }
+            return a.title.compareTo(b.title);
+          });
+    });
+  }
+
+  List<Map<String, dynamic>> _parseList(Object? value) {
+    final rawList = value is List ? value : const [];
+
+    return rawList
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
   }
 
   void _onReorder(int oldIndex, int newIndex) {
@@ -697,7 +749,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     });
 
     final result = await ApiService.updateAdminLevel(
-      authToken: widget.authToken,
+      authToken: widget.session.token,
       levelId: selectedLevel.id,
       levelJson: {'courseId': _courseKey},
     );
@@ -737,7 +789,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     });
 
     final removeResult = await ApiService.updateAdminLevel(
-      authToken: widget.authToken,
+      authToken: widget.session.token,
       levelId: level.id,
       levelJson: {'courseId': '', 'orderInCourse': 0},
     );
@@ -774,7 +826,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     for (var index = 0; index < levels.length; index++) {
       final level = levels[index];
       final result = await ApiService.updateAdminLevel(
-        authToken: widget.authToken,
+        authToken: widget.session.token,
         levelId: level.id,
         levelJson: {'courseId': _courseKey, 'orderInCourse': index + 1},
       );
@@ -821,6 +873,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
   }
 
   Widget _buildAddLevelPanel() {
+    final language = AppLanguage.of(context);
     final availableLevels = _availableLevels;
     final selectedLevelId =
         availableLevels.any((level) => level.id == _selectedLevelId)
@@ -836,9 +889,9 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue: selectedLevelId,
-                decoration: const InputDecoration(
-                  labelText: 'Add Level',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: language.t('addLevel'),
+                  border: const OutlineInputBorder(),
                 ),
                 items: availableLevels.map((level) {
                   return DropdownMenuItem(
@@ -864,7 +917,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
                   ? null
                   : _addSelectedLevel,
               icon: const Icon(Icons.playlist_add),
-              label: const Text('Add'),
+              label: Text(language.t('add')),
             ),
           ],
         ),
@@ -872,12 +925,69 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     );
   }
 
+  Future<void> _createLevel(_CourseBuilderType builderType) async {
+    final nextOrder = levels.length + 1;
+    final routeName = builderType == _CourseBuilderType.topView
+        ? AppRoutes.topViewBuilder
+        : builderType == _CourseBuilderType.scratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builder;
+    final arguments = builderType == _CourseBuilderType.topView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: _courseKey,
+            initialOrderInCourse: nextOrder,
+          )
+        : builderType == _CourseBuilderType.scratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: _courseKey,
+            initialOrderInCourse: nextOrder,
+          )
+        : BuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: _courseKey,
+            initialOrderInCourse: nextOrder,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: arguments);
+
+    if (mounted) {
+      await _reloadLevels();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     return Scaffold(
       appBar: AppBar(
         title: Text('${widget.course.title} - Levels'),
         actions: [
+          TextButton.icon(
+            onPressed: _isSaving
+                ? null
+                : () => _createLevel(_CourseBuilderType.scratch),
+            icon: const Icon(Icons.extension_outlined),
+            label: Text(language.t('scratch')),
+          ),
+          TextButton.icon(
+            onPressed: _isSaving
+                ? null
+                : () => _createLevel(_CourseBuilderType.frontView),
+            icon: const Icon(Icons.view_week_outlined),
+            label: Text(language.t('frontView')),
+          ),
+          TextButton.icon(
+            onPressed: _isSaving
+                ? null
+                : () => _createLevel(_CourseBuilderType.topView),
+            icon: const Icon(Icons.grid_view_outlined),
+            label: Text(language.t('topView')),
+          ),
           if (_isSaving)
             const Padding(
               padding: EdgeInsets.only(right: 16),
@@ -896,7 +1006,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
           _buildAddLevelPanel(),
           Expanded(
             child: levels.isEmpty
-                ? const Center(child: Text('This course has no levels yet.'))
+                ? Center(child: Text(language.t('thisCourseHasNoLevels')))
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     buildDefaultDragHandles: false,
@@ -918,7 +1028,7 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                tooltip: 'Remove from course',
+                                tooltip: language.t('removeFromCourse'),
                                 onPressed: _isSaving
                                     ? null
                                     : () => _removeLevel(level),
@@ -943,3 +1053,5 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
     );
   }
 }
+
+enum _CourseBuilderType { scratch, frontView, topView }

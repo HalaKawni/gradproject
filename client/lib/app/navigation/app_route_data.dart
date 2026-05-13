@@ -6,16 +6,30 @@ class HomeRouteData {
   final AuthSession session;
 }
 
+class DashboardRouteData {
+  const DashboardRouteData({required this.session});
+
+  final AuthSession session;
+}
+
 class BuilderRouteData {
   const BuilderRouteData({
     required this.session,
     this.initialProjectId,
     this.useAdminLevelApi = false,
+    this.initialCourseId,
+    this.initialOrderInCourse,
+    this.initialDifficulty = 'medium',
+    this.initialStatus = 'draft',
   });
 
   final AuthSession session;
   final String? initialProjectId;
   final bool useAdminLevelApi;
+  final String? initialCourseId;
+  final int? initialOrderInCourse;
+  final String initialDifficulty;
+  final String initialStatus;
 }
 
 class BuilderPlayRouteData {
@@ -31,9 +45,55 @@ class BuilderPlayRouteData {
 }
 
 class TopViewBuilderRouteData {
-  const TopViewBuilderRouteData({required this.session});
+  const TopViewBuilderRouteData({
+    required this.session,
+    this.initialProjectId,
+    this.allowPublishedAccess = false,
+    this.playMode = false,
+    this.initialTitle,
+    this.useAdminLevelApi = false,
+    this.initialCourseId,
+    this.initialOrderInCourse,
+    this.initialDifficulty = 'medium',
+    this.initialStatus = 'draft',
+  });
 
   final AuthSession session;
+  final String? initialProjectId;
+  final bool allowPublishedAccess;
+  final bool playMode;
+  final String? initialTitle;
+  final bool useAdminLevelApi;
+  final String? initialCourseId;
+  final int? initialOrderInCourse;
+  final String initialDifficulty;
+  final String initialStatus;
+}
+
+class ScratchBuilderRouteData {
+  const ScratchBuilderRouteData({
+    required this.session,
+    this.initialProjectId,
+    this.allowPublishedAccess = false,
+    this.playMode = false,
+    this.initialTitle,
+    this.useAdminLevelApi = false,
+    this.initialCourseId,
+    this.initialOrderInCourse,
+    this.initialDifficulty = 'medium',
+    this.initialStatus = 'draft',
+  });
+
+  final AuthSession session;
+  final String? initialProjectId;
+  final bool allowPublishedAccess;
+  final bool playMode;
+  final String? initialTitle;
+  final bool useAdminLevelApi;
+  final String? initialCourseId;
+  final int? initialOrderInCourse;
+  final String initialDifficulty;
+  final String initialStatus;
 }
 
 class MyGamesRouteData {
@@ -50,6 +110,12 @@ class MyPublishedGamesRouteData {
 
 class DiscoverRouteData {
   const DiscoverRouteData({required this.session});
+
+  final AuthSession session;
+}
+
+class PublicCoursesRouteData {
+  const PublicCoursesRouteData({required this.session});
 
   final AuthSession session;
 }

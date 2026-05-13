@@ -1,4 +1,5 @@
 import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/features/admin/pages/admin_course.dart';
 import 'package:client/features/admin/pages/admin_dashboard.dart';
 import 'package:client/features/admin/pages/admin_level.dart';
@@ -50,24 +51,27 @@ class _AdminShellPageState extends State<AdminShellPage> {
   }
 
   String _buildTitle() {
+    final language = AppLanguage.of(context);
     switch (selectedSection) {
       case AdminSection.dashboard:
-        return widget.title;
+        return language.t('admin');
       case AdminSection.courses:
-        return 'Courses';
+        return language.t('courses');
       case AdminSection.levels:
-        return 'Levels';
+        return language.t('levels');
       case AdminSection.users:
-        return 'Users';
+        return language.t('users');
       case AdminSection.statistics:
-        return 'Statistics';
+        return language.t('statistics');
       case AdminSection.profile:
-        return 'Profile';
+        return language.t('profile');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     return Scaffold(
       body: Row(
         children: [
@@ -77,36 +81,36 @@ class _AdminShellPageState extends State<AdminShellPage> {
               _selectSection(AdminSection.values[index]);
             },
             labelType: NavigationRailLabelType.all,
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.dashboard_outlined),
-                selectedIcon: Icon(Icons.dashboard),
-                label: Text('Dashboard'),
+                icon: const Icon(Icons.dashboard_outlined),
+                selectedIcon: const Icon(Icons.dashboard),
+                label: Text(language.t('dashboard')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.menu_book_outlined),
-                selectedIcon: Icon(Icons.menu_book),
-                label: Text('Courses'),
+                icon: const Icon(Icons.menu_book_outlined),
+                selectedIcon: const Icon(Icons.menu_book),
+                label: Text(language.t('courses')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.extension_outlined),
-                selectedIcon: Icon(Icons.extension),
-                label: Text('Levels'),
+                icon: const Icon(Icons.extension_outlined),
+                selectedIcon: const Icon(Icons.extension),
+                label: Text(language.t('levels')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.people_outline),
-                selectedIcon: Icon(Icons.people),
-                label: Text('Users'),
+                icon: const Icon(Icons.people_outline),
+                selectedIcon: const Icon(Icons.people),
+                label: Text(language.t('users')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.bar_chart_outlined),
-                selectedIcon: Icon(Icons.bar_chart),
-                label: Text('Statistics'),
+                icon: const Icon(Icons.bar_chart_outlined),
+                selectedIcon: const Icon(Icons.bar_chart),
+                label: Text(language.t('statistics')),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.person),
-                selectedIcon: Icon(Icons.person),
-                label: Text('Profile'),
+                icon: const Icon(Icons.person),
+                selectedIcon: const Icon(Icons.person),
+                label: Text(language.t('profile')),
               ),
             ],
           ),

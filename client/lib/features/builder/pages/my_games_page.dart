@@ -5,7 +5,7 @@ import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import '../models/saved_builder_project.dart';
 
-enum _GameCreatorOption { frontView, topView }
+enum _GameCreatorOption { scratch, frontView, topView }
 
 class MyGamesPage extends StatefulWidget {
   final AuthSession session;
@@ -109,13 +109,27 @@ class _MyGamesPageState extends State<MyGamesPage> {
   }
 
   Future<void> _openProject(SavedBuilderProject project) async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.builder,
-      arguments: BuilderRouteData(
-        session: widget.session,
-        initialProjectId: project.id,
-      ),
-    );
+    final routeName = project.isTopView
+        ? AppRoutes.topViewBuilder
+        : project.isScratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builder;
+    final routeData = project.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+          )
+        : project.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+          )
+        : BuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
 
     if (!mounted) {
       return;
@@ -125,14 +139,34 @@ class _MyGamesPageState extends State<MyGamesPage> {
   }
 
   Future<void> _playProject(SavedBuilderProject project) async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.builderPlay,
-      arguments: BuilderPlayRouteData(
-        session: widget.session,
-        projectId: project.id,
-        initialTitle: project.title,
-      ),
-    );
+    final routeName = project.isTopView
+        ? AppRoutes.topViewBuilder
+        : project.isScratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builderPlay;
+    final routeData = project.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: project.title,
+          )
+        : project.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: project.title,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: project.id,
+            initialTitle: project.title,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
 
     if (!mounted) {
       return;
@@ -300,6 +334,13 @@ class _MyGamesPageState extends State<MyGamesPage> {
     );
   }
 
+  void _openScratchBuilder(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.scratchBuilder,
+      arguments: ScratchBuilderRouteData(session: widget.session),
+    );
+  }
+
   Future<void> _showCreateGameDialog(BuildContext context) async {
     final selection = await showDialog<_GameCreatorOption>(
       context: context,
@@ -308,6 +349,12 @@ class _MyGamesPageState extends State<MyGamesPage> {
           title: const Text('Create New Game'),
           content: const Text('Choose the type of game creator to open.'),
           actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(_GameCreatorOption.scratch);
+              },
+              child: const Text('Scratch Builder'),
+            ),
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(_GameCreatorOption.frontView);
@@ -330,6 +377,8 @@ class _MyGamesPageState extends State<MyGamesPage> {
     }
 
     switch (selection) {
+      case _GameCreatorOption.scratch:
+        _openScratchBuilder(context);
       case _GameCreatorOption.frontView:
         _openFrontViewBuilder(context);
       case _GameCreatorOption.topView:

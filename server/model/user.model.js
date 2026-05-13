@@ -20,6 +20,39 @@ const userSchema = new Schema({
         type: String,
         required: true
     },
+    authProvider: {
+        type: String,
+        enum: ['local', 'google'],
+        default: 'local'
+    },
+    authProviders: {
+        type: [String],
+        enum: ['local', 'google'],
+        default: ['local']
+    },
+    lastSignInProvider: {
+        type: String,
+        enum: ['local', 'google'],
+        default: 'local'
+    },
+    googleId: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    emailVerified: {
+        type: Boolean,
+        default: false
+    },
+    emailVerificationToken: {
+        type: String
+    },
+    emailVerificationExpires: {
+        type: Date
+    },
+    photoUrl: {
+        type: String
+    },
     role: {
         type: String,
         enum: ['parent', 'child', 'admin'],
@@ -38,7 +71,7 @@ const userSchema = new Schema({
     lastLoginAt: {
         type: Date
     },
-    },
+},
     {
         timestamps: true
     }

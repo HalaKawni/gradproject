@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../services/auth_service.dart';
-import '../../home/pages/dashboard_page.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/core/models/auth_session.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../services/google_auth_service.dart';
+import '../widgets/google_sign_in_button_stub.dart'
+    if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
+    as google_button;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,13 +22,16 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _cloudController;
-  late Animation<double> _cloudAnimation;
   bool _obscurePassword = true;
   bool _rememberMe = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _showError = false;
   bool isLoading = false;
+  bool isGoogleLoading = false;
+  bool _isOpeningGoogleSession = false;
+  StreamSubscription<GoogleSignInAuthenticationEvent>?
+  _googleSignInSubscription;
 
   @override
   void initState() {
@@ -32,14 +40,32 @@ class _LoginPageState extends State<LoginPage>
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
-    _cloudAnimation = Tween<double>(begin: 0, end: 1).animate(_cloudController);
-    
+    unawaited(_setUpGoogleSignIn());
   }
 
   @override
   void dispose() {
+    unawaited(_googleSignInSubscription?.cancel());
     _cloudController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _setUpGoogleSignIn() async {
+    try {
+      await GoogleAuthService.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      _googleSignInSubscription = GoogleAuthService.authenticationEvents.listen(
+        _handleGoogleAuthenticationEvent,
+      )..onError(_handleGoogleSignInError);
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    }
   }
 
   Future<void> _login() async {
@@ -62,20 +88,7 @@ class _LoginPageState extends State<LoginPage>
       }
 
       if (result['success'] == true) {
-        final rawData = result['data'];
-        final session = AuthSession.fromJson(
-          rawData is Map ? Map<String, dynamic>.from(rawData) : {},
-        );
-
-        if (!session.isValid) {
-          throw Exception('Login succeeded but no valid session was returned.');
-        }
-
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.home,
-          (route) => false,
-          arguments: HomeRouteData(session: session),
-        );
+        _openAuthenticatedSession(result['data']);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -98,6 +111,122 @@ class _LoginPageState extends State<LoginPage>
         });
       }
     }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      isGoogleLoading = true;
+    });
+
+    try {
+      final account = await GoogleAuthService.signIn();
+      await _loginWithGoogleAccount(account);
+    } on GoogleSignInException catch (e) {
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        _handleGoogleSignInError(e);
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          isGoogleLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleAuthenticationEvent(
+    GoogleSignInAuthenticationEvent event,
+  ) async {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn(user: final account):
+        if (!isGoogleLoading) {
+          await _loginWithGoogleAccount(account);
+        }
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }
+
+  Future<void> _loginWithGoogleAccount(GoogleSignInAccount account) async {
+    if (_isOpeningGoogleSession) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    _isOpeningGoogleSession = true;
+    setState(() {
+      isGoogleLoading = true;
+    });
+
+    try {
+      final result = await ApiService.loginWithGoogle(
+        idToken: GoogleAuthService.idTokenFor(account),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        _openAuthenticatedSession(result['data']);
+      } else {
+        _showErrorMessage(
+          result['message']?.toString() ?? 'Google login failed',
+        );
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      _isOpeningGoogleSession = false;
+      if (mounted) {
+        setState(() {
+          isGoogleLoading = false;
+        });
+      }
+    }
+  }
+
+  void _openAuthenticatedSession(dynamic rawData) {
+    final session = AuthSession.fromJson(
+      rawData is Map ? Map<String, dynamic>.from(rawData) : {},
+    );
+
+    if (!session.isValid) {
+      throw Exception('Login succeeded but no valid session was returned.');
+    }
+
+    final routeName = session.userRole == 'admin'
+        ? AppRoutes.admin
+        : AppRoutes.dashboard;
+    final routeData = session.userRole == 'admin'
+        ? AdminRouteData(session: session)
+        : DashboardRouteData(session: session);
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      routeName,
+      (route) => false,
+      arguments: routeData,
+    );
+  }
+
+  void _handleGoogleSignInError(Object error) {
+    debugPrint('Google sign in error: $error');
+    _showErrorMessage(error.toString().replaceAll('Exception: ', ''));
+  }
+
+  void _showErrorMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -123,21 +252,20 @@ class _LoginPageState extends State<LoginPage>
 
                     // ── LOGIN TITLE ──
                     Text(
-  'LOGIN',
-  style: GoogleFonts.amaticSc(
-    color: const Color.fromARGB(255, 255, 255, 255),
-    fontSize: 60,
-    fontWeight: FontWeight.w600,
-    shadows: const [
-      Shadow(
-        offset: Offset(3, 3),
-        color: Color.fromARGB(255,50, 136, 189),
-        blurRadius: 0,
-      ),
-    ],
-  ),
-),
-
+                      'LOGIN',
+                      style: GoogleFonts.amaticSc(
+                        color: const Color.fromARGB(255, 255, 255, 255),
+                        fontSize: 60,
+                        fontWeight: FontWeight.w600,
+                        shadows: const [
+                          Shadow(
+                            offset: Offset(3, 3),
+                            color: Color.fromARGB(255, 50, 136, 189),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                    ),
 
                     //  Positioned(
                     //         bottom: 0,
@@ -318,32 +446,32 @@ class _LoginPageState extends State<LoginPage>
                                       child: SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
-                                        //  onPressed: () async {
-                                        //       if (_emailController.text.isEmpty ||
-                                        //           _passwordController.text.isEmpty) {
-                                        //         setState(() => _showError = true);
-                                        //         return;
-                                        //       }
-                                        //       setState(() => _showError = false);
-                                        //       try {
-                                        //         final result = await AuthService.login(
-                                        //           email: _emailController.text.trim(),
-                                        //           password: _passwordController.text.trim(),
-                                        //         );
-                                        //         if (!mounted) return;
-                                        //         Navigator.of(context).pushReplacement(
-                                        //           MaterialPageRoute(
-                                        //             builder: (_) => DashboardPage(
-                                        //               username: result['user']['name'] ?? 'Student',
-                                        //             ),
-                                        //           ),
-                                        //         );
-                                        //       } catch (e) {
-                                        //         setState(() {
-                                        //           _showError = true;
-                                        //         });
-                                        //       }
-                                        //     },
+                                          //  onPressed: () async {
+                                          //       if (_emailController.text.isEmpty ||
+                                          //           _passwordController.text.isEmpty) {
+                                          //         setState(() => _showError = true);
+                                          //         return;
+                                          //       }
+                                          //       setState(() => _showError = false);
+                                          //       try {
+                                          //         final result = await AuthService.login(
+                                          //           email: _emailController.text.trim(),
+                                          //           password: _passwordController.text.trim(),
+                                          //         );
+                                          //         if (!mounted) return;
+                                          //         Navigator.of(context).pushReplacement(
+                                          //           MaterialPageRoute(
+                                          //             builder: (_) => DashboardPage(
+                                          //               username: result['user']['name'] ?? 'Student',
+                                          //             ),
+                                          //           ),
+                                          //         );
+                                          //       } catch (e) {
+                                          //         setState(() {
+                                          //           _showError = true;
+                                          //         });
+                                          //       }
+                                          //     },
                                           onPressed: isLoading ? null : _login,
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
@@ -419,10 +547,11 @@ class _LoginPageState extends State<LoginPage>
                                     ),
                                   ),
                                   const SizedBox(height: 20),
-                                  _socialButton(
-                                    'G',
-                                    'Google',
-                                    const Color(0xFFDB4437),
+                                  google_button.buildGoogleSignInButton(
+                                    onPressed: isLoading
+                                        ? null
+                                        : _signInWithGoogle,
+                                    isLoading: isGoogleLoading,
                                   ),
                                   const SizedBox(height: 12),
                                   _socialButton(

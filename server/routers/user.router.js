@@ -4,14 +4,12 @@ const authMiddleware = require("../middleware/auth.middleware");
 
 router.post('/registration',UserController.register);
 router.post('/login', UserController.login);
+router.post('/resend-verification', UserController.resendVerificationEmail);
+router.post('/login/google', UserController.googleLogin);
 router.get('/profile', authMiddleware, UserController.getProfile);
-<<<<<<< HEAD
 router.put('/profile/password', authMiddleware, UserController.changePassword);
-
-
-module.exports = router;
-=======
-
+router.get('/verify-email', UserController.verifyEmail);
 
 module.exports = router;
->>>>>>> hala
+
+

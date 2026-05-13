@@ -1,8 +1,19 @@
+import 'dart:async';
+
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../home/pages/dashboard_page.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'email_verification_page.dart';
 import '../services/auth_service.dart';
-import '../../home/pages/dashboard_page.dart';
+import '../services/google_auth_service.dart';
+import '../widgets/google_sign_in_button_stub.dart'
+    if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
+    as google_button;
+
 class StudentAccountPage extends StatefulWidget {
   const StudentAccountPage({super.key});
 
@@ -26,6 +37,10 @@ class _StudentAccountPageState extends State<StudentAccountPage>
   bool _showPasswordError = false;
   bool _showRePasswordError = false;
   bool _showPasswordMismatch = false;
+  bool _googleLoading = false;
+  bool _isOpeningGoogleSession = false;
+  StreamSubscription<GoogleSignInAuthenticationEvent>?
+  _googleSignInSubscription;
 
   @override
   void initState() {
@@ -34,12 +49,13 @@ class _StudentAccountPageState extends State<StudentAccountPage>
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
-    _cloudAnimation =
-        Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    _cloudAnimation = Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    unawaited(_setUpGoogleSignIn());
   }
 
   @override
   void dispose() {
+    unawaited(_googleSignInSubscription?.cancel());
     _cloudController.dispose();
     _emailController.dispose();
     _displayNameController.dispose();
@@ -48,56 +64,186 @@ class _StudentAccountPageState extends State<StudentAccountPage>
     super.dispose();
   }
 
-String? _apiError;
-bool _loading = false;
+  String? _apiError;
+  bool _loading = false;
 
-Future<void> _onSignUp() async {
-  setState(() {
-    _showEmailError = _emailController.text.isEmpty;
-    _showNameError = _displayNameController.text.isEmpty;
-    _showPasswordError = _passwordController.text.isEmpty;
-    _showRePasswordError = _rePasswordController.text.isEmpty;
-    _showPasswordMismatch = !_showPasswordError &&
-        !_showRePasswordError &&
-        _passwordController.text != _rePasswordController.text;
-    _apiError = null;
-  });
+  Future<void> _onSignUp() async {
+    setState(() {
+      _showEmailError = _emailController.text.isEmpty;
+      _showNameError = _displayNameController.text.isEmpty;
+      _showPasswordError = _passwordController.text.isEmpty;
+      _showRePasswordError = _rePasswordController.text.isEmpty;
+      _showPasswordMismatch =
+          !_showPasswordError &&
+          !_showRePasswordError &&
+          _passwordController.text != _rePasswordController.text;
+      _apiError = null;
+    });
 
-  if (_showEmailError ||
-      _showNameError ||
-      _showPasswordError ||
-      _showRePasswordError ||
-      _showPasswordMismatch) return;
+    if (_showEmailError ||
+        _showNameError ||
+        _showPasswordError ||
+        _showRePasswordError ||
+        _showPasswordMismatch) {
+      return;
+    }
 
-  setState(() => _loading = true);
+    setState(() => _loading = true);
 
-  try {
-    final result = await AuthService.register(
-      name: _displayNameController.text.trim(),
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-      role: 'child',
-    );
+    try {
+      await AuthService.register(
+        name: _displayNameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: 'child',
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          username: result['user']['name'] ?? 'Student',
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationPage(
+            email: _emailController.text.trim(),
+            pending: true,
+          ),
         ),
-      ),
-      (route) => false,
+        (route) => false,
+      );
+    } catch (e) {
+      debugPrint('REGISTER ERROR: $e');
+      setState(() {
+        _apiError = e.toString().replaceAll('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _setUpGoogleSignIn() async {
+    try {
+      await GoogleAuthService.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      _googleSignInSubscription = GoogleAuthService.authenticationEvents.listen(
+        _handleGoogleAuthenticationEvent,
+      )..onError(_handleGoogleSignInError);
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    }
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    setState(() {
+      _googleLoading = true;
+      _apiError = null;
+    });
+
+    try {
+      final account = await GoogleAuthService.signIn();
+      await _loginWithGoogleAccount(account);
+    } on GoogleSignInException catch (e) {
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        _handleGoogleSignInError(e);
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _googleLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleAuthenticationEvent(
+    GoogleSignInAuthenticationEvent event,
+  ) async {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn(user: final account):
+        if (!_googleLoading) {
+          await _loginWithGoogleAccount(account);
+        }
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }
+
+  Future<void> _loginWithGoogleAccount(GoogleSignInAccount account) async {
+    if (_isOpeningGoogleSession) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    _isOpeningGoogleSession = true;
+    setState(() {
+      _googleLoading = true;
+      _apiError = null;
+    });
+
+    try {
+      final result = await ApiService.loginWithGoogle(
+        idToken: GoogleAuthService.idTokenFor(account),
+        role: 'child',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        _openAuthenticatedSession(result['data']);
+      } else {
+        setState(() {
+          _apiError = result['message']?.toString() ?? 'Google signup failed';
+        });
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      _isOpeningGoogleSession = false;
+      if (mounted) {
+        setState(() {
+          _googleLoading = false;
+        });
+      }
+    }
+  }
+
+  void _openAuthenticatedSession(dynamic rawData) {
+    final session = AuthSession.fromJson(
+      rawData is Map ? Map<String, dynamic>.from(rawData) : {},
     );
- } catch (e) {
-  print('REGISTER ERROR: $e');
-  setState(() {
-    _apiError = e.toString().replaceAll('Exception: ', '');
-    _loading = false;
-  });
-}
-}
+
+    if (!session.isValid) {
+      throw Exception(
+        'Google signup succeeded but no valid session was returned.',
+      );
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.dashboard,
+      (route) => false,
+      arguments: DashboardRouteData(session: session),
+    );
+  }
+
+  void _handleGoogleSignInError(Object error) {
+    debugPrint('Google sign in error: $error');
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _apiError = error.toString().replaceAll('Exception: ', '');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -139,8 +285,11 @@ Future<void> _onSignUp() async {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.chevron_left,
-                                    color: Colors.white, size: 20),
+                                const Icon(
+                                  Icons.chevron_left,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 Text(
                                   'BACK',
                                   style: GoogleFonts.montserrat(
@@ -182,7 +331,6 @@ Future<void> _onSignUp() async {
                         clipBehavior: Clip.none,
                         children: [
                           // Main white card// ADD this above the SIGN UP button Container:
-
                           Container(
                             width: 780,
                             decoration: BoxDecoration(
@@ -222,8 +370,9 @@ Future<void> _onSignUp() async {
                                         _buildTextField(
                                           controller: _emailController,
                                           hasError: _showEmailError,
-                                          onChanged: (_) => setState(() =>
-                                              _showEmailError = false),
+                                          onChanged: (_) => setState(
+                                            () => _showEmailError = false,
+                                          ),
                                         ),
                                         if (_showEmailError)
                                           _buildError('This field is required'),
@@ -235,13 +384,15 @@ Future<void> _onSignUp() async {
                                           controller: _displayNameController,
                                           hasError: _showNameError,
                                           onChanged: (_) => setState(
-                                              () => _showNameError = false),
+                                            () => _showNameError = false,
+                                          ),
                                         ),
                                         if (_showNameError)
                                           _buildError('This field is required'),
                                         Padding(
                                           padding: const EdgeInsets.only(
-                                              top: 6),
+                                            top: 6,
+                                          ),
                                           child: Text(
                                             'To protect your privacy, do not use your full name',
                                             style: GoogleFonts.nunito(
@@ -266,9 +417,10 @@ Future<void> _onSignUp() async {
                                               color: const Color(0xFF888888),
                                               size: 20,
                                             ),
-                                            onPressed: () => setState(() =>
-                                                _obscurePassword =
-                                                    !_obscurePassword),
+                                            onPressed: () => setState(
+                                              () => _obscurePassword =
+                                                  !_obscurePassword,
+                                            ),
                                           ),
                                           onChanged: (_) => setState(() {
                                             _showPasswordError = false;
@@ -283,7 +435,8 @@ Future<void> _onSignUp() async {
                                         _buildLabel('Re-enter password'),
                                         _buildTextField(
                                           controller: _rePasswordController,
-                                          hasError: _showRePasswordError ||
+                                          hasError:
+                                              _showRePasswordError ||
                                               _showPasswordMismatch,
                                           obscure: _obscureRePassword,
                                           suffixIcon: IconButton(
@@ -294,9 +447,10 @@ Future<void> _onSignUp() async {
                                               color: const Color(0xFF888888),
                                               size: 20,
                                             ),
-                                            onPressed: () => setState(() =>
-                                                _obscureRePassword =
-                                                    !_obscureRePassword),
+                                            onPressed: () => setState(
+                                              () => _obscureRePassword =
+                                                  !_obscureRePassword,
+                                            ),
                                           ),
                                           onChanged: (_) => setState(() {
                                             _showRePasswordError = false;
@@ -305,59 +459,82 @@ Future<void> _onSignUp() async {
                                         ),
                                         if (_showRePasswordError)
                                           _buildError('This field is required'),
-                                       if (_showPasswordMismatch)
-  _buildError('Passwords do not match'),
-if (_apiError != null)
-  _buildError(_apiError!),
-const SizedBox(height: 28),
+                                        if (_showPasswordMismatch)
+                                          _buildError('Passwords do not match'),
+                                        if (_apiError != null)
+                                          _buildError(_apiError!),
+                                        const SizedBox(height: 28),
 
                                         // SIGN UP button
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: const Color.fromARGB(255,195, 158, 222),
-                                            borderRadius:
-                                                BorderRadius.circular(6),
+                                            color: const Color.fromARGB(
+                                              255,
+                                              195,
+                                              158,
+                                              222,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                           ),
                                           child: Padding(
                                             padding: const EdgeInsets.only(
-                                                bottom: 4),
+                                              bottom: 4,
+                                            ),
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _loading ? null : _onSignUp,
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                onPressed: _loading
+                                                    ? null
+                                                    : _onSignUp,
+                                                style: ElevatedButton.styleFrom(
                                                   backgroundColor:
-                                                      const Color.fromARGB(255,220, 202, 233),
-                                                  foregroundColor:
-                                                      const Color(0xFF3A2A00),
+                                                      const Color.fromARGB(
+                                                        255,
+                                                        220,
+                                                        202,
+                                                        233,
+                                                      ),
+                                                  foregroundColor: const Color(
+                                                    0xFF3A2A00,
+                                                  ),
                                                   elevation: 0,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(vertical: 16),
-                                                  shape:
-                                                      RoundedRectangleBorder(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 16,
+                                                      ),
+                                                  shape: RoundedRectangleBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            6),
+                                                          6,
+                                                        ),
                                                   ),
                                                 ),
-                                               child: _loading
-    ? const SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(
-          color: Color(0xFF3A2A00),
-          strokeWidth: 2,
-        ),
-      )
-    : Text(
-        'SIGN UP',
-        style: GoogleFonts.montserrat(
-          fontSize: 15,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.5,
-        ),
-      ),
+                                                child: _loading
+                                                    ? const SizedBox(
+                                                        width: 20,
+                                                        height: 20,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              color: Color(
+                                                                0xFF3A2A00,
+                                                              ),
+                                                              strokeWidth: 2,
+                                                            ),
+                                                      )
+                                                    : Text(
+                                                        'SIGN UP',
+                                                        style:
+                                                            GoogleFonts.montserrat(
+                                                              fontSize: 15,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              letterSpacing:
+                                                                  1.5,
+                                                            ),
+                                                      ),
                                               ),
                                             ),
                                           ),
@@ -373,7 +550,8 @@ const SizedBox(height: 28),
                                   height: 520,
                                   color: const Color(0xFFE0E0E0),
                                   margin: const EdgeInsets.symmetric(
-                                      vertical: 24),
+                                    vertical: 24,
+                                  ),
                                 ),
 
                                 // ── RIGHT: SOCIAL LOGIN ──
@@ -404,11 +582,12 @@ const SizedBox(height: 28),
                                         Row(
                                           children: [
                                             Expanded(
-                                              child: _socialButton(
-                                                'G',
-                                                'Google',
-                                                const Color(0xFFDB4437),
-                                              ),
+                                              child: google_button
+                                                  .buildGoogleSignInButton(
+                                                    onPressed:
+                                                        _signUpWithGoogle,
+                                                    isLoading: _googleLoading,
+                                                  ),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
@@ -527,21 +706,19 @@ const SizedBox(height: 28),
       obscureText: obscure,
       onChanged: onChanged,
       decoration: InputDecoration(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: hasError
-                ? const Color(0xFFE53935)
-                : const Color(0xFFDDDDDD),
+            color: hasError ? const Color(0xFFE53935) : const Color(0xFFDDDDDD),
           ),
           borderRadius: BorderRadius.circular(6),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: hasError
-                ? const Color(0xFFE53935)
-                : const Color(0xFF6DB33F),
+            color: hasError ? const Color(0xFFE53935) : const Color(0xFF6DB33F),
             width: 2,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -570,10 +747,8 @@ const SizedBox(height: 28),
       onPressed: () {},
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Color(0xFFDDDDDD)),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         backgroundColor: Colors.white,
       ),
       child: Row(
@@ -611,7 +786,11 @@ const SizedBox(height: 28),
   }
 
   Widget _animatedCloud(
-      double offset, double top, double width, double height) {
+    double offset,
+    double top,
+    double width,
+    double height,
+  ) {
     return AnimatedBuilder(
       animation: _cloudAnimation,
       builder: (context, child) {
@@ -650,11 +829,7 @@ const SizedBox(height: 28),
                 label: 'LOG IN',
                 onPressed: () => Navigator.pop(context),
               ),
-              _HoverNavButton(
-                label: 'SIGN UP',
-                onPressed: () {},
-                filled: true,
-              ),
+              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
             ],
           ),
         ],

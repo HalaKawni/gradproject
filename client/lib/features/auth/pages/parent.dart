@@ -1,5 +1,19 @@
+import 'dart:async';
+
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import 'email_verification_page.dart';
+import '../services/auth_service.dart';
+import '../services/google_auth_service.dart';
+import '../widgets/google_sign_in_button_stub.dart'
+    if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
+    as google_button;
 
 class parentAccountPage extends StatefulWidget {
   const parentAccountPage({super.key});
@@ -24,6 +38,12 @@ class _parentAccountPageState extends State<parentAccountPage>
   bool _showPasswordError = false;
   bool _showRePasswordError = false;
   bool _showPasswordMismatch = false;
+  bool _loading = false;
+  bool _googleLoading = false;
+  bool _isOpeningGoogleSession = false;
+  String? _apiError;
+  StreamSubscription<GoogleSignInAuthenticationEvent>?
+  _googleSignInSubscription;
 
   @override
   void initState() {
@@ -32,12 +52,13 @@ class _parentAccountPageState extends State<parentAccountPage>
       vsync: this,
       duration: const Duration(seconds: 20),
     )..repeat();
-    _cloudAnimation =
-        Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    _cloudAnimation = Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    unawaited(_setUpGoogleSignIn());
   }
 
   @override
   void dispose() {
+    unawaited(_googleSignInSubscription?.cancel());
     _cloudController.dispose();
     _emailController.dispose();
     _displayNameController.dispose();
@@ -46,15 +67,183 @@ class _parentAccountPageState extends State<parentAccountPage>
     super.dispose();
   }
 
-  void _onSignUp() {
+  Future<void> _onSignUp() async {
     setState(() {
       _showEmailError = _emailController.text.isEmpty;
       _showNameError = _displayNameController.text.isEmpty;
       _showPasswordError = _passwordController.text.isEmpty;
       _showRePasswordError = _rePasswordController.text.isEmpty;
-      _showPasswordMismatch = !_showPasswordError &&
+      _showPasswordMismatch =
+          !_showPasswordError &&
           !_showRePasswordError &&
           _passwordController.text != _rePasswordController.text;
+      _apiError = null;
+    });
+
+    if (_showEmailError ||
+        _showNameError ||
+        _showPasswordError ||
+        _showRePasswordError ||
+        _showPasswordMismatch) {
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      await AuthService.register(
+        name: _displayNameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: 'parent',
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EmailVerificationPage(
+            email: _emailController.text.trim(),
+            pending: true,
+          ),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      debugPrint('REGISTER ERROR: $e');
+      if (!mounted) return;
+
+      setState(() {
+        _apiError = e.toString().replaceAll('Exception: ', '');
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _setUpGoogleSignIn() async {
+    try {
+      await GoogleAuthService.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      _googleSignInSubscription = GoogleAuthService.authenticationEvents.listen(
+        _handleGoogleAuthenticationEvent,
+      )..onError(_handleGoogleSignInError);
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    }
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    setState(() {
+      _googleLoading = true;
+      _apiError = null;
+    });
+
+    try {
+      final account = await GoogleAuthService.signIn();
+      await _loginWithGoogleAccount(account);
+    } on GoogleSignInException catch (e) {
+      if (e.code != GoogleSignInExceptionCode.canceled) {
+        _handleGoogleSignInError(e);
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _googleLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleAuthenticationEvent(
+    GoogleSignInAuthenticationEvent event,
+  ) async {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn(user: final account):
+        if (!_googleLoading) {
+          await _loginWithGoogleAccount(account);
+        }
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }
+
+  Future<void> _loginWithGoogleAccount(GoogleSignInAccount account) async {
+    if (_isOpeningGoogleSession) {
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    _isOpeningGoogleSession = true;
+    setState(() {
+      _googleLoading = true;
+      _apiError = null;
+    });
+
+    try {
+      final result = await ApiService.loginWithGoogle(
+        idToken: GoogleAuthService.idTokenFor(account),
+        role: 'parent',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        _openAuthenticatedSession(result['data']);
+      } else {
+        setState(() {
+          _apiError = result['message']?.toString() ?? 'Google signup failed';
+        });
+      }
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      _isOpeningGoogleSession = false;
+      if (mounted) {
+        setState(() {
+          _googleLoading = false;
+        });
+      }
+    }
+  }
+
+  void _openAuthenticatedSession(dynamic rawData) {
+    final session = AuthSession.fromJson(
+      rawData is Map ? Map<String, dynamic>.from(rawData) : {},
+    );
+
+    if (!session.isValid) {
+      throw Exception(
+        'Google signup succeeded but no valid session was returned.',
+      );
+    }
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.dashboard,
+      (route) => false,
+      arguments: DashboardRouteData(session: session),
+    );
+  }
+
+  void _handleGoogleSignInError(Object error) {
+    debugPrint('Google sign in error: $error');
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _apiError = error.toString().replaceAll('Exception: ', '');
     });
   }
 
@@ -98,8 +287,11 @@ class _parentAccountPageState extends State<parentAccountPage>
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.chevron_left,
-                                    color: Colors.white, size: 20),
+                                const Icon(
+                                  Icons.chevron_left,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
                                 Text(
                                   'BACK',
                                   style: GoogleFonts.montserrat(
@@ -180,8 +372,9 @@ class _parentAccountPageState extends State<parentAccountPage>
                                         _buildTextField(
                                           controller: _emailController,
                                           hasError: _showEmailError,
-                                          onChanged: (_) => setState(() =>
-                                              _showEmailError = false),
+                                          onChanged: (_) => setState(
+                                            () => _showEmailError = false,
+                                          ),
                                         ),
                                         if (_showEmailError)
                                           _buildError('This field is required'),
@@ -193,13 +386,15 @@ class _parentAccountPageState extends State<parentAccountPage>
                                           controller: _displayNameController,
                                           hasError: _showNameError,
                                           onChanged: (_) => setState(
-                                              () => _showNameError = false),
+                                            () => _showNameError = false,
+                                          ),
                                         ),
                                         if (_showNameError)
                                           _buildError('This field is required'),
                                         Padding(
                                           padding: const EdgeInsets.only(
-                                              top: 6),
+                                            top: 6,
+                                          ),
                                           child: Text(
                                             'To protect your privacy, do not use your full name',
                                             style: GoogleFonts.nunito(
@@ -224,9 +419,10 @@ class _parentAccountPageState extends State<parentAccountPage>
                                               color: const Color(0xFF888888),
                                               size: 20,
                                             ),
-                                            onPressed: () => setState(() =>
-                                                _obscurePassword =
-                                                    !_obscurePassword),
+                                            onPressed: () => setState(
+                                              () => _obscurePassword =
+                                                  !_obscurePassword,
+                                            ),
                                           ),
                                           onChanged: (_) => setState(() {
                                             _showPasswordError = false;
@@ -241,7 +437,8 @@ class _parentAccountPageState extends State<parentAccountPage>
                                         _buildLabel('Re-enter password'),
                                         _buildTextField(
                                           controller: _rePasswordController,
-                                          hasError: _showRePasswordError ||
+                                          hasError:
+                                              _showRePasswordError ||
                                               _showPasswordMismatch,
                                           obscure: _obscureRePassword,
                                           suffixIcon: IconButton(
@@ -252,9 +449,10 @@ class _parentAccountPageState extends State<parentAccountPage>
                                               color: const Color(0xFF888888),
                                               size: 20,
                                             ),
-                                            onPressed: () => setState(() =>
-                                                _obscureRePassword =
-                                                    !_obscureRePassword),
+                                            onPressed: () => setState(
+                                              () => _obscureRePassword =
+                                                  !_obscureRePassword,
+                                            ),
                                           ),
                                           onChanged: (_) => setState(() {
                                             _showRePasswordError = false;
@@ -264,49 +462,78 @@ class _parentAccountPageState extends State<parentAccountPage>
                                         if (_showRePasswordError)
                                           _buildError('This field is required'),
                                         if (_showPasswordMismatch)
-                                          _buildError(
-                                              'Passwords do not match'),
+                                          _buildError('Passwords do not match'),
+                                        if (_apiError != null)
+                                          _buildError(_apiError!),
                                         const SizedBox(height: 28),
 
                                         // SIGN UP button
                                         Container(
                                           decoration: BoxDecoration(
-                                            color: const Color.fromARGB(255,195, 158, 222),
-                                            borderRadius:
-                                                BorderRadius.circular(6),
+                                            color: const Color.fromARGB(
+                                              255,
+                                              195,
+                                              158,
+                                              222,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                           ),
                                           child: Padding(
                                             padding: const EdgeInsets.only(
-                                                bottom: 4),
+                                              bottom: 4,
+                                            ),
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _onSignUp,
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                onPressed: _loading
+                                                    ? null
+                                                    : _onSignUp,
+                                                style: ElevatedButton.styleFrom(
                                                   backgroundColor:
-                                                      const Color.fromARGB(255,220, 202, 233),
-                                                  foregroundColor:
-                                                      const Color(0xFF3A2A00),
+                                                      const Color.fromARGB(
+                                                        255,
+                                                        220,
+                                                        202,
+                                                        233,
+                                                      ),
+                                                  foregroundColor: const Color(
+                                                    0xFF3A2A00,
+                                                  ),
                                                   elevation: 0,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(vertical: 16),
-                                                  shape:
-                                                      RoundedRectangleBorder(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 16,
+                                                      ),
+                                                  shape: RoundedRectangleBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            6),
+                                                          6,
+                                                        ),
                                                   ),
                                                 ),
-                                                child: Text(
-                                                  'SIGN UP',
-                                                  style:
-                                                      GoogleFonts.montserrat(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.5,
-                                                  ),
-                                                ),
+                                                child: _loading
+                                                    ? const SizedBox(
+                                                        width: 20,
+                                                        height: 20,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                          color:
+                                                              Color(0xFF3A2A00),
+                                                          strokeWidth: 2,
+                                                        ),
+                                                      )
+                                                    : Text(
+                                                        'SIGN UP',
+                                                        style:
+                                                            GoogleFonts.montserrat(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          letterSpacing: 1.5,
+                                                        ),
+                                                      ),
                                               ),
                                             ),
                                           ),
@@ -322,7 +549,8 @@ class _parentAccountPageState extends State<parentAccountPage>
                                   height: 520,
                                   color: const Color(0xFFE0E0E0),
                                   margin: const EdgeInsets.symmetric(
-                                      vertical: 24),
+                                    vertical: 24,
+                                  ),
                                 ),
 
                                 // ── RIGHT: SOCIAL LOGIN ──
@@ -353,11 +581,12 @@ class _parentAccountPageState extends State<parentAccountPage>
                                         Row(
                                           children: [
                                             Expanded(
-                                              child: _socialButton(
-                                                'G',
-                                                'Google',
-                                                const Color(0xFFDB4437),
-                                              ),
+                                              child: google_button
+                                                  .buildGoogleSignInButton(
+                                                    onPressed:
+                                                        _signUpWithGoogle,
+                                                    isLoading: _googleLoading,
+                                                  ),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
@@ -476,21 +705,19 @@ class _parentAccountPageState extends State<parentAccountPage>
       obscureText: obscure,
       onChanged: onChanged,
       decoration: InputDecoration(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: hasError
-                ? const Color(0xFFE53935)
-                : const Color(0xFFDDDDDD),
+            color: hasError ? const Color(0xFFE53935) : const Color(0xFFDDDDDD),
           ),
           borderRadius: BorderRadius.circular(6),
         ),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(
-            color: hasError
-                ? const Color(0xFFE53935)
-                : const Color(0xFF6DB33F),
+            color: hasError ? const Color(0xFFE53935) : const Color(0xFF6DB33F),
             width: 2,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -519,10 +746,8 @@ class _parentAccountPageState extends State<parentAccountPage>
       onPressed: () {},
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Color(0xFFDDDDDD)),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         backgroundColor: Colors.white,
       ),
       child: Row(
@@ -560,7 +785,11 @@ class _parentAccountPageState extends State<parentAccountPage>
   }
 
   Widget _animatedCloud(
-      double offset, double top, double width, double height) {
+    double offset,
+    double top,
+    double width,
+    double height,
+  ) {
     return AnimatedBuilder(
       animation: _cloudAnimation,
       builder: (context, child) {
@@ -599,11 +828,7 @@ class _parentAccountPageState extends State<parentAccountPage>
                 label: 'LOG IN',
                 onPressed: () => Navigator.pop(context),
               ),
-              _HoverNavButton(
-                label: 'SIGN UP',
-                onPressed: () {},
-                filled: true,
-              ),
+              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
             ],
           ),
         ],

@@ -1,20 +1,28 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/features/admin/pages/admin_shell.dart';
 import 'package:client/devDemo/login_page_demo.dart';
 import 'package:client/devDemo/register_page_demo.dart';
-import 'package:client/features/builder/pages/builder_play_page.dart';
-import 'package:client/features/builder/pages/builder_page.dart';
+import 'package:client/features/auth/pages/email_verification_page.dart';
+import 'package:client/features/builder/front_view/pages/builder_play_page.dart';
+import 'package:client/features/builder/front_view/pages/builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
-import 'package:client/features/builder/pages/top_view_builder_page.dart';
+import 'package:client/features/builder/scratch_builder/pages/scratch_builder_page.dart';
+import 'package:client/features/builder/top_view/pages/top_view_builder_page.dart';
 import 'package:client/features/home/pages/discover.dart';
+import 'package:client/features/home/pages/dashboard_page.dart';
+import 'package:client/features/home/pages/public_courses_page.dart';
 import 'package:client/devDemo/user_home_page_demo.dart';
 import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 
 class AppRouter {
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
-    switch (settings.name) {
+    final uri = Uri.tryParse(settings.name ?? '');
+    final routeName = uri?.path ?? settings.name;
+
+    switch (routeName) {
       case Navigator.defaultRouteName:
       case AppRoutes.login:
         return _pageRoute(
@@ -25,6 +33,12 @@ class AppRouter {
         return _pageRoute(
           settings: settings,
           builder: (_) => const RegisterPage(),
+        );
+      case AppRoutes.verifyEmail:
+        final token = uri?.queryParameters['token'];
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => EmailVerificationPage(token: token),
         );
       case AppRoutes.home:
         final data = settings.arguments;
@@ -38,6 +52,18 @@ class AppRouter {
           settings,
           'The home page needs an active user session.',
         );
+      case AppRoutes.dashboard:
+        final data = settings.arguments;
+        if (data is DashboardRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => DashboardPage(username: data.session.user.name),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The dashboard page needs an active user session.',
+        );
       case AppRoutes.builder:
         final data = settings.arguments;
         if (data is BuilderRouteData) {
@@ -47,6 +73,10 @@ class AppRouter {
               session: data.session,
               initialProjectId: data.initialProjectId,
               useAdminLevelApi: data.useAdminLevelApi,
+              initialCourseId: data.initialCourseId,
+              initialOrderInCourse: data.initialOrderInCourse,
+              initialDifficulty: data.initialDifficulty,
+              initialStatus: data.initialStatus,
             ),
           );
         }
@@ -75,12 +105,46 @@ class AppRouter {
         if (data is TopViewBuilderRouteData) {
           return _pageRoute(
             settings: settings,
-            builder: (_) => TopViewBuilderPage(session: data.session),
+            builder: (_) => TopViewBuilderPage(
+              session: data.session,
+              initialProjectId: data.initialProjectId,
+              allowPublishedAccess: data.allowPublishedAccess,
+              playMode: data.playMode,
+              initialTitle: data.initialTitle,
+              useAdminLevelApi: data.useAdminLevelApi,
+              initialCourseId: data.initialCourseId,
+              initialOrderInCourse: data.initialOrderInCourse,
+              initialDifficulty: data.initialDifficulty,
+              initialStatus: data.initialStatus,
+            ),
           );
         }
         return _errorRoute(
           settings,
           'The top view builder page needs an active user session.',
+        );
+      case AppRoutes.scratchBuilder:
+        final data = settings.arguments;
+        if (data is ScratchBuilderRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => ScratchBuilderPage(
+              session: data.session,
+              initialProjectId: data.initialProjectId,
+              allowPublishedAccess: data.allowPublishedAccess,
+              playMode: data.playMode,
+              initialTitle: data.initialTitle,
+              useAdminLevelApi: data.useAdminLevelApi,
+              initialCourseId: data.initialCourseId,
+              initialOrderInCourse: data.initialOrderInCourse,
+              initialDifficulty: data.initialDifficulty,
+              initialStatus: data.initialStatus,
+            ),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The scratch builder page needs an active user session.',
         );
       case AppRoutes.myGames:
         final data = settings.arguments;
@@ -125,6 +189,18 @@ class AppRouter {
           settings,
           'The Discover page needs an active user session.',
         );
+      case AppRoutes.publicCourses:
+        final data = settings.arguments;
+        if (data is PublicCoursesRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => PublicCoursesPage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The Courses page needs an active user session.',
+        );
       case AppRoutes.profile:
         final data = settings.arguments;
         if (data is ProfileRouteData) {
@@ -166,7 +242,16 @@ class AppRouter {
     required RouteSettings settings,
     required WidgetBuilder builder,
   }) {
-    return MaterialPageRoute<void>(settings: settings, builder: builder);
+    return MaterialPageRoute<void>(
+      settings: settings,
+      builder: (context) {
+        final language = AppLanguage.of(context);
+        return Directionality(
+          textDirection: language.textDirection,
+          child: builder(context),
+        );
+      },
+    );
   }
 
   static MaterialPageRoute<void> _errorRoute(

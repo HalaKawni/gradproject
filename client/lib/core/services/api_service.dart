@@ -48,6 +48,43 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> loginWithGoogle({
+    required String idToken,
+    String? role,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/login/google');
+      final body = <String, dynamic>{'idToken': idToken};
+
+      if (role != null) {
+        body['role'] = role;
+      }
+
+      final response = await http.post(
+        url,
+        headers: _headers,
+        body: jsonEncode(body),
+      );
+
+      final data = _decodeResponseBody(response);
+
+      if (_isSuccessful(response.statusCode)) {
+        return {
+          'success': true,
+          'data': data,
+          'message': _extractSuccessMessage(data, 'Google login successful'),
+        };
+      } else {
+        return {
+          'success': false,
+          'message': _extractErrorMessage(data, 'Google login failed'),
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Google login error: $e'};
+    }
+  }
+
   static Future<Map<String, dynamic>> register({
     required String email,
     required String password,
@@ -357,6 +394,33 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'message': 'Delete project error: $e'};
     }
+  }
+
+  // =========================
+  // PUBLIC COURSES
+  // =========================
+
+  static Future<Map<String, dynamic>> getPublicCourses({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/courses/public',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch courses',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getPublicCourseLevels({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/courses/$courseId/levels',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch course levels',
+    );
   }
 
   // =========================

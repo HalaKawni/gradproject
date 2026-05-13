@@ -34,9 +34,18 @@ const BuilderProjectSchema = new mongoose.Schema(
       enum: ['draft', 'published'],
       default: 'draft',
     },
+    builderType: {
+      type: String,
+      enum: ['frontView', 'topView', 'scratch'],
+      default: 'frontView',
+    },
     draftData: {
       type: Object,
       required: true,
+    },
+    frontViewDetails: {
+      type: Object,
+      default: null,
     },
     courseId: {
       type: String,

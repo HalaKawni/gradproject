@@ -1,3 +1,4 @@
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_user.dart';
@@ -87,6 +88,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
   }
 
   Future<void> _showCreateAdminDialog() async {
+    final language = AppLanguage.of(context);
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
@@ -95,7 +97,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Create Admin User'),
+          title: Text(language.t('createAdminUser')),
           content: SizedBox(
             width: 420,
             child: Column(
@@ -103,27 +105,27 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
               children: [
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: language.t('name'),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: language.t('email'),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: language.t('password'),
+                    border: const OutlineInputBorder(),
                   ),
                 ),
               ],
@@ -132,7 +134,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () {
@@ -150,7 +152,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                   'password': password,
                 });
               },
-              child: const Text('Create'),
+              child: Text(language.t('create')),
             ),
           ],
         );
@@ -183,6 +185,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
   }
 
   Future<void> _deleteUser(AdminUser user) async {
+    final language = AppLanguage.of(context);
     if (user.role == 'admin') {
       _showMessage('Admin accounts cannot be deleted.');
       return;
@@ -192,16 +195,16 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete User'),
+          title: Text(language.t('delete')),
           content: Text('Are you sure you want to delete "${user.name}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(language.t('delete')),
             ),
           ],
         );
@@ -230,6 +233,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
   }
 
   Future<void> _toggleUserSuspension(AdminUser user) async {
+    final language = AppLanguage.of(context);
     if (user.role == 'admin') {
       _showMessage('Admin accounts cannot be suspended.');
       return;
@@ -240,7 +244,9 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(shouldSuspend ? 'Suspend User' : 'Restore User'),
+          title: Text(
+            shouldSuspend ? language.t('suspend') : language.t('restore'),
+          ),
           content: Text(
             shouldSuspend
                 ? 'Suspend "${user.name}"? They will not be able to sign in.'
@@ -249,11 +255,13 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: Text(shouldSuspend ? 'Suspend' : 'Restore'),
+              child: Text(
+                shouldSuspend ? language.t('suspend') : language.t('restore'),
+              ),
             ),
           ],
         );
@@ -290,11 +298,21 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
   }
 
   String _roleLabel(String role) {
+    final language = AppLanguage.of(context);
     if (role.isEmpty) {
-      return 'Unknown';
+      return language.t('unknown');
     }
 
-    return role[0].toUpperCase() + role.substring(1);
+    switch (role) {
+      case 'admin':
+        return language.t('adminRole');
+      case 'parent':
+        return language.t('parentRole');
+      case 'child':
+        return language.t('studentRole');
+      default:
+        return role[0].toUpperCase() + role.substring(1);
+    }
   }
 
   String _joinedLabel(DateTime date) {
@@ -309,6 +327,8 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -323,7 +343,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
             FilledButton.icon(
               onPressed: () => _loadUsers(),
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -335,9 +355,12 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
       children: [
         Row(
           children: [
-            Text('Users', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              language.t('users'),
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(width: 12),
-            Text('$_total total'),
+            Text(language.t('totalCount', params: {'count': '$_total'})),
             const Spacer(),
             SizedBox(
               width: 280,
@@ -346,10 +369,10 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                 textInputAction: TextInputAction.search,
                 onSubmitted: (_) => _loadUsers(page: 1),
                 decoration: InputDecoration(
-                  hintText: 'Search users',
+                  hintText: language.t('searchUsers'),
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
-                    tooltip: 'Search',
+                    tooltip: language.t('search'),
                     onPressed: () => _loadUsers(page: 1),
                     icon: const Icon(Icons.arrow_forward),
                   ),
@@ -360,7 +383,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              tooltip: 'Refresh users',
+              tooltip: language.t('refreshUsers'),
               onPressed: () => _loadUsers(),
               icon: const Icon(Icons.refresh),
             ),
@@ -368,14 +391,14 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
             ElevatedButton.icon(
               onPressed: _showCreateAdminDialog,
               icon: const Icon(Icons.person_add_alt),
-              label: const Text('Create Admin'),
+              label: Text(language.t('createAdmin')),
             ),
           ],
         ),
         const SizedBox(height: 16),
         Expanded(
           child: _users.isEmpty
-              ? const Center(child: Text('No users found.'))
+              ? Center(child: Text(language.t('noUsersFound')))
               : RefreshIndicator(
                   onRefresh: () => _loadUsers(),
                   child: ListView.separated(
@@ -396,20 +419,22 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                             ),
                           ),
                           title: Text(
-                            user.name.isEmpty ? 'Unnamed User' : user.name,
+                            user.name.isEmpty
+                                ? language.t('unnamedUser')
+                                : user.name,
                           ),
                           subtitle: Text(
-                            '${user.email} - ${_roleLabel(user.role)} - Joined ${_joinedLabel(user.joinedAt)}',
+                            '${user.email} - ${_roleLabel(user.role)} - ${language.t('joined')} ${_joinedLabel(user.joinedAt)}',
                           ),
                           trailing: Wrap(
                             spacing: 8,
                             crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               if (isCurrentUser)
-                                const Chip(label: Text('Current admin')),
+                                Chip(label: Text(language.t('currentAdmin'))),
                               if (user.isSuspended)
                                 Chip(
-                                  label: const Text('Suspended'),
+                                  label: Text(language.t('suspended')),
                                   backgroundColor: Theme.of(
                                     context,
                                   ).colorScheme.errorContainer,
@@ -424,7 +449,9 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                                       : Icons.block,
                                 ),
                                 label: Text(
-                                  user.isSuspended ? 'Restore' : 'Suspend',
+                                  user.isSuspended
+                                      ? language.t('restore')
+                                      : language.t('suspend'),
                                 ),
                               ),
                               FilledButton.icon(
@@ -432,7 +459,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                                     ? null
                                     : () => _deleteUser(user),
                                 icon: const Icon(Icons.delete_outline),
-                                label: const Text('Delete'),
+                                label: Text(language.t('delete')),
                               ),
                             ],
                           ),
@@ -452,18 +479,23 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                     ? null
                     : () => _loadUsers(page: _page - 1),
                 icon: const Icon(Icons.chevron_left),
-                label: const Text('Previous'),
+                label: Text(language.t('previous')),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('Page $_page of $_totalPages'),
+                child: Text(
+                  language.t(
+                    'pageOf',
+                    params: {'page': '$_page', 'total': '$_totalPages'},
+                  ),
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: _page >= _totalPages
                     ? null
                     : () => _loadUsers(page: _page + 1),
                 icon: const Icon(Icons.chevron_right),
-                label: const Text('Next'),
+                label: Text(language.t('next')),
               ),
             ],
           ),

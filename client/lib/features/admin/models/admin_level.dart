@@ -5,6 +5,7 @@ class AdminLevel {
   final bool isCreatedByAdmin;
   final String difficulty;
   final String status; // published, draft, userCreated
+  final String builderType;
   final String courseId;
   final int orderInCourse;
   final String? previewImageUrl;
@@ -16,6 +17,7 @@ class AdminLevel {
     required this.isCreatedByAdmin,
     required this.difficulty,
     required this.status,
+    required this.builderType,
     this.courseId = '',
     this.orderInCourse = 0,
     this.previewImageUrl,
@@ -42,6 +44,10 @@ class AdminLevel {
         _readString(json, 'difficulty', fallback: 'medium'),
       ),
       status: isCreatedByAdmin ? rawStatus : 'userCreated',
+      builderType:
+          json['builderType']?.toString() ??
+          draftDataMap['builderType']?.toString() ??
+          'frontView',
       courseId: _readString(json, 'courseId'),
       orderInCourse: _readInt(json['orderInCourse']),
       previewImageUrl:

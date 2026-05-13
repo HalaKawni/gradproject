@@ -1,3 +1,4 @@
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -78,6 +79,8 @@ class _AdminStatisticsPageState extends State<AdminStatisticsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -92,7 +95,7 @@ class _AdminStatisticsPageState extends State<AdminStatisticsPage> {
             FilledButton.icon(
               onPressed: _loadStatistics,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -113,12 +116,12 @@ class _AdminStatisticsPageState extends State<AdminStatisticsPage> {
             Row(
               children: [
                 Text(
-                  'Statistics',
+                  language.t('statistics'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const Spacer(),
                 IconButton(
-                  tooltip: 'Refresh statistics',
+                  tooltip: language.t('refreshStatistics'),
                   onPressed: _loadStatistics,
                   icon: const Icon(Icons.refresh),
                 ),
@@ -132,21 +135,26 @@ class _AdminStatisticsPageState extends State<AdminStatisticsPage> {
                 SizedBox(
                   width: 260,
                   child: _StatisticCard(
-                    title: 'Total Courses',
-                    rows: [_CountRow(label: 'Courses', count: totalCourses)],
+                    title: language.t('totalCourses'),
+                    rows: [
+                      _CountRow(
+                        label: language.t('courses'),
+                        count: totalCourses,
+                      ),
+                    ],
                   ),
                 ),
                 SizedBox(
                   width: 320,
                   child: _StatisticCard(
-                    title: 'Users by Role',
+                    title: language.t('usersByRole'),
                     rows: usersByRole,
                   ),
                 ),
                 SizedBox(
                   width: 320,
                   child: _StatisticCard(
-                    title: 'Levels by Status',
+                    title: language.t('levelsByStatus'),
                     rows: levelsByStatus,
                   ),
                 ),
@@ -174,6 +182,8 @@ class _StatisticCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -183,7 +193,7 @@ class _StatisticCard extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
             if (rows.isEmpty)
-              const Text('No data yet.')
+              Text(language.t('noDataYet'))
             else
               ...rows.map(
                 (row) => Padding(

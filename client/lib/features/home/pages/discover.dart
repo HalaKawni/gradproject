@@ -91,14 +91,34 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   Future<void> _openGame(SavedBuilderProject game) async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.builderPlay,
-      arguments: BuilderPlayRouteData(
-        session: widget.session,
-        projectId: game.id,
-        initialTitle: game.title,
-      ),
-    );
+    final routeName = game.isTopView
+        ? AppRoutes.topViewBuilder
+        : game.isScratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builderPlay;
+    final routeData = game.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+          )
+        : game.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: game.id,
+            initialTitle: game.title,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
   }
 
   @override

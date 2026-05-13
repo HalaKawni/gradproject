@@ -1,3 +1,4 @@
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -66,6 +67,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -76,28 +79,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     final cards = [
       _DashboardCardData(
-        'Total Courses',
+        language.t('totalCourses'),
         '${_readInt('totalCourses')}',
         Icons.menu_book,
       ),
       _DashboardCardData(
-        'Total Levels',
+        language.t('totalLevels'),
         '${_readInt('totalLevels')}',
         Icons.extension,
       ),
-      _DashboardCardData('Users', '${_readInt('totalUsers')}', Icons.people),
       _DashboardCardData(
-        'Published Levels',
+        language.t('users'),
+        '${_readInt('totalUsers')}',
+        Icons.people,
+      ),
+      _DashboardCardData(
+        language.t('publishedLevels'),
         '${_readInt('publishedLevels')}',
         Icons.public,
       ),
       _DashboardCardData(
-        'Draft Levels',
+        language.t('draftLevels'),
         '${_readInt('draftLevels')}',
         Icons.edit_note,
       ),
       _DashboardCardData(
-        'User Created',
+        language.t('userCreated'),
         '${_readInt('userCreatedLevels')}',
         Icons.person_add_alt,
       ),
@@ -121,26 +128,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   .toList(),
             ),
             const SizedBox(height: 24),
-            Text('Overview', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              language.t('overview'),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 12),
             Card(
               child: Column(
                 children: [
                   ListTile(
                     leading: const Icon(Icons.public_outlined),
-                    title: const Text('Published levels'),
+                    title: Text(language.t('publishedLevels')),
                     trailing: Text('${_readInt('publishedLevels')}'),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.edit_outlined),
-                    title: const Text('Draft levels'),
+                    title: Text(language.t('draftLevels')),
                     trailing: Text('${_readInt('draftLevels')}'),
                   ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.people_outline),
-                    title: const Text('User created levels'),
+                    title: Text(language.t('userCreatedLevels')),
                     trailing: Text('${_readInt('userCreatedLevels')}'),
                   ),
                 ],
@@ -203,6 +213,8 @@ class _AdminErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -219,7 +231,7 @@ class _AdminErrorState extends StatelessWidget {
                 FilledButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+                  label: Text(language.t('retry')),
                 ),
               ],
             ),

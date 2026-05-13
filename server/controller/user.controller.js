@@ -1,5 +1,16 @@
 const UserService = require("../services/user.services");
 
+const buildAuthUserResponse = (user) => ({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    emailVerified: user.emailVerified,
+    authProvider: user.authProvider,
+    authProviders: user.authProviders,
+    lastSignInProvider: user.lastSignInProvider
+});
+
 
 exports.register = async(req,res,next)=>{
     try{
@@ -13,17 +24,11 @@ exports.register = async(req,res,next)=>{
         }
 
         const successRes = await UserService.registerUser(name,email,password,role);
-        res.status(201).json({
-            status:true,
-            success:"User Registered Successfully",
-            token: successRes.token,
-            user: {
-                id: successRes.user._id,
-                name: successRes.user.name,
-                email: successRes.user.email,
-                role: successRes.user.role
-            }
-        });
+res.status(201).json({
+    status: true,
+    success: "User registered successfully. Please check your email to verify your account.",
+    user: buildAuthUserResponse(successRes.user)
+});
     }
     catch(err){
         res.status(400).json({
@@ -50,18 +55,66 @@ exports.login = async (req, res, next) => {
             status: true,
             success: "User logged in successfully",
             token: successRes.token,
-            user: {
-                id: successRes.user._id,
-                name: successRes.user.name,
-                email: successRes.user.email,
-                role: successRes.user.role
-            }
+            user: buildAuthUserResponse(successRes.user)
         });
     }
     catch (err) {
         res.status(401).json({
             status: false,
             error: err.message || "Login failed"
+        });
+    }
+};
+
+exports.resendVerificationEmail = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                status: false,
+                error: "Email is required"
+            });
+        }
+
+        await UserService.resendVerificationEmail(email);
+
+        res.json({
+            status: true,
+            success: "Verification email sent. Please check your inbox."
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Failed to resend verification email"
+        });
+    }
+};
+
+exports.googleLogin = async (req, res, next) => {
+    try {
+        const { idToken, role } = req.body;
+
+        if (!idToken) {
+            return res.status(400).json({
+                status: false,
+                error: "Google ID token is required"
+            });
+        }
+
+        const successRes = await UserService.loginWithGoogle(idToken, role);
+
+        res.json({
+            status: true,
+            success: "User logged in with Google successfully",
+            token: successRes.token,
+            user: buildAuthUserResponse(successRes.user)
+        });
+    }
+    catch (err) {
+        res.status(401).json({
+            status: false,
+            error: err.message || "Google login failed"
         });
     }
 };
@@ -113,3 +166,31 @@ exports.changePassword = async (req, res, next) => {
         });
     }
 };
+
+
+exports.verifyEmail = async (req, res) => {
+    try {
+        const { token } = req.query;
+
+        if (!token) {
+            return res.status(400).json({
+                status: false,
+                error: "Verification token is required"
+            });
+        }
+
+        await UserService.verifyEmail(token);
+
+        res.json({
+            status: true,
+            success: "Email verified successfully"
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Email verification failed"
+        });
+    }
+};
+
+

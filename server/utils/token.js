@@ -8,7 +8,11 @@ const signToken = (user) => {
         {
             id: user._id,
             email: user.email,
-            role: user.role
+            role: user.role,
+            emailVerified: user.emailVerified,
+            authProvider: user.authProvider,
+            authProviders: user.authProviders,
+            lastSignInProvider: user.lastSignInProvider
         },
         JWT_SECRET,
         { expiresIn: JWT_EXPIRES_IN }

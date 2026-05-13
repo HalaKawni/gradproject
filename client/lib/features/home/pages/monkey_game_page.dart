@@ -249,7 +249,7 @@ class _CommandPanel extends StatelessWidget {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: 8,
-                    separatorBuilder: (_, __) => const SizedBox(width: 4),
+                    separatorBuilder: (_, _) => const SizedBox(width: 4),
                     itemBuilder: (_, i) {
                       if (i < sequence.length) {
                         return _CommandBlock(cmd: sequence[i], filled: true);
@@ -475,7 +475,7 @@ class MonkeySequenceGame extends FlameGame {
     add(_Cloud(position: Vector2(300, 55), speed: 8));
     add(_Cloud(position: Vector2(580, 28), speed: 15));
     for (final x in [size.x * 0.22, size.x * 0.48, size.x * 0.72]) {
-      add(_Flower(position: Vector2(x, groundY - 16)));
+      add(_Flower(position: Vector2(x, groundY - 16), color: const Color(0xFFFF69B4)));
     }
   }
 
@@ -840,7 +840,7 @@ class _Bush extends PositionComponent {
 
 class _Flower extends PositionComponent {
   final Color color;
-  _Flower({required Vector2 position, this.color = const Color(0xFFFF69B4)})
+  _Flower({required Vector2 position, required this.color})
       : super(position: position, size: Vector2(16, 20));
 
   @override
@@ -872,7 +872,7 @@ class _Cloud extends PositionComponent {
 @override
 void onMount() {
   super.onMount();
-  _maxX = (findGame()! as FlameGame).size.x + 100;
+  _maxX = (findGame()!).size.x + 100;
 }
   @override
   void update(double dt) {

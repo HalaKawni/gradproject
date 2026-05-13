@@ -3,7 +3,7 @@ import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:flutter/material.dart';
 
-enum _GameCreatorOption { frontView, topView }
+enum _GameCreatorOption { scratch, frontView, topView }
 
 class UserHomePage extends StatelessWidget {
   final AuthSession session;
@@ -30,10 +30,24 @@ class UserHomePage extends StatelessWidget {
     );
   }
 
+  void _openScratchBuilder(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.scratchBuilder,
+      arguments: ScratchBuilderRouteData(session: session),
+    );
+  }
+
   void _openDiscover(BuildContext context) {
     Navigator.of(context).pushNamed(
       AppRoutes.discover,
       arguments: DiscoverRouteData(session: session),
+    );
+  }
+
+  void _openCourses(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.publicCourses,
+      arguments: PublicCoursesRouteData(session: session),
     );
   }
 
@@ -45,6 +59,12 @@ class UserHomePage extends StatelessWidget {
           title: const Text('Create New Game'),
           content: const Text('Choose the type of game creator to open.'),
           actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(_GameCreatorOption.scratch);
+              },
+              child: const Text('Scratch Builder'),
+            ),
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(_GameCreatorOption.frontView);
@@ -67,6 +87,8 @@ class UserHomePage extends StatelessWidget {
     }
 
     switch (selection) {
+      case _GameCreatorOption.scratch:
+        _openScratchBuilder(context);
       case _GameCreatorOption.frontView:
         _openFrontViewBuilder(context);
       case _GameCreatorOption.topView:
@@ -180,6 +202,15 @@ class UserHomePage extends StatelessWidget {
                         label: const Text('My Published Games'),
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _openCourses(context),
+                        icon: const Icon(Icons.menu_book_outlined),
+                        label: const Text('Courses'),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -196,6 +227,7 @@ class UserHomePage extends StatelessWidget {
               title: const Text('Courses'),
               onTap: () {
                 Navigator.of(context).pop();
+                _openCourses(context);
               },
             ),
             ListTile(

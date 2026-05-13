@@ -53,6 +53,14 @@ exports.updateLevel = async (id, data) => {
     update.title = data.title;
   }
 
+  if (data.description !== undefined) {
+    update.description = data.description;
+  }
+
+  if (data.builderType !== undefined) {
+    update.builderType = data.builderType;
+  }
+
   if (data.difficulty !== undefined) {
     update.difficulty = data.difficulty;
   }

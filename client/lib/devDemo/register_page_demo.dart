@@ -68,9 +68,9 @@ class _RegisterPageState extends State<RegisterPage> {
         }
 
         Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.home,
+          AppRoutes.dashboard,
           (route) => false,
-          arguments: HomeRouteData(session: session),
+          arguments: DashboardRouteData(session: session),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

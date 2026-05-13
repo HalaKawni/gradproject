@@ -1,5 +1,6 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
@@ -128,15 +129,16 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   String _roleLabel(String role) {
+    final language = AppLanguage.of(context);
     switch (role) {
       case 'admin':
-        return 'Admin';
+        return language.t('adminRole');
       case 'parent':
-        return 'Parent';
+        return language.t('parentRole');
       case 'child':
-        return 'Student';
+        return language.t('studentRole');
       default:
-        return role.isEmpty ? 'User' : role;
+        return role.isEmpty ? language.t('userRole') : role;
     }
   }
 
@@ -189,7 +191,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Change Password'),
+              title: Text(AppLanguage.of(context).t('changePassword')),
               content: SizedBox(
                 width: 420,
                 child: Column(
@@ -199,12 +201,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       controller: currentPasswordController,
                       obscureText: hideCurrentPassword,
                       decoration: InputDecoration(
-                        labelText: 'Current Password',
+                        labelText: AppLanguage.of(context).t('currentPassword'),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           tooltip: hideCurrentPassword
-                              ? 'Show password'
-                              : 'Hide password',
+                              ? AppLanguage.of(context).t('showPassword')
+                              : AppLanguage.of(context).t('hidePassword'),
                           onPressed: () {
                             setDialogState(() {
                               hideCurrentPassword = !hideCurrentPassword;
@@ -223,12 +225,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       controller: newPasswordController,
                       obscureText: hideNewPassword,
                       decoration: InputDecoration(
-                        labelText: 'New Password',
+                        labelText: AppLanguage.of(context).t('newPassword'),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           tooltip: hideNewPassword
-                              ? 'Show password'
-                              : 'Hide password',
+                              ? AppLanguage.of(context).t('showPassword')
+                              : AppLanguage.of(context).t('hidePassword'),
                           onPressed: () {
                             setDialogState(() {
                               hideNewPassword = !hideNewPassword;
@@ -247,12 +249,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
                       controller: confirmPasswordController,
                       obscureText: hideConfirmPassword,
                       decoration: InputDecoration(
-                        labelText: 'Confirm New Password',
+                        labelText: AppLanguage.of(
+                          context,
+                        ).t('confirmNewPassword'),
                         border: const OutlineInputBorder(),
                         suffixIcon: IconButton(
                           tooltip: hideConfirmPassword
-                              ? 'Show password'
-                              : 'Hide password',
+                              ? AppLanguage.of(context).t('showPassword')
+                              : AppLanguage.of(context).t('hidePassword'),
                           onPressed: () {
                             setDialogState(() {
                               hideConfirmPassword = !hideConfirmPassword;
@@ -286,7 +290,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                   onPressed: isSubmitting
                       ? null
                       : () => Navigator.pop(dialogContext, false),
-                  child: const Text('Cancel'),
+                  child: Text(AppLanguage.of(context).t('cancel')),
                 ),
                 FilledButton(
                   onPressed: isSubmitting
@@ -355,7 +359,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Change'),
+                      : Text(AppLanguage.of(context).t('change')),
                 ),
               ],
             );
@@ -373,7 +377,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Password changed successfully')),
+      SnackBar(content: Text(AppLanguage.of(context).t('passwordChanged'))),
     );
   }
 
@@ -392,12 +396,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: Text(AppLanguage.of(context).t('profile'))),
       body: content,
     );
   }
 
   Widget _buildContent(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -412,7 +418,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
             FilledButton.icon(
               onPressed: _loadProfile,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -437,85 +443,87 @@ class _UserProfilePageState extends State<UserProfilePage> {
             children: [
               _StatTile(
                 icon: Icons.extension_outlined,
-                label: 'Projects',
+                label: language.t('projects'),
                 value: '$_totalProjects',
               ),
               _StatTile(
                 icon: Icons.public_outlined,
-                label: 'Published',
+                label: language.t('published'),
                 value: '$_publishedProjects',
               ),
               _StatTile(
                 icon: Icons.edit_note_outlined,
-                label: 'Drafts',
+                label: language.t('drafts'),
                 value: '$_draftProjects',
               ),
             ],
           ),
           const SizedBox(height: 16),
           _SectionPanel(
-            title: 'Account Details',
+            title: language.t('accountDetails'),
             children: [
               _DetailRow(
                 icon: Icons.mail_outline,
-                label: 'Email',
+                label: language.t('email'),
                 value: _profileUser.email,
               ),
               _DetailRow(
                 icon: Icons.verified_user_outlined,
-                label: 'Role',
+                label: language.t('role'),
                 value: _roleLabel(_profileUser.role),
               ),
               if (_createdAt.isNotEmpty)
                 _DetailRow(
                   icon: Icons.calendar_today_outlined,
-                  label: 'Created',
+                  label: language.t('created'),
                   value: _createdAt,
                 ),
               if (_updatedAt.isNotEmpty)
                 _DetailRow(
                   icon: Icons.update_outlined,
-                  label: 'Last Updated',
+                  label: language.t('lastUpdated'),
                   value: _updatedAt,
                 ),
               if (_lastLoginAt.isNotEmpty)
                 _DetailRow(
                   icon: Icons.login_outlined,
-                  label: 'Last Login',
+                  label: language.t('lastLogin'),
                   value: _lastLoginAt,
                 ),
             ],
           ),
           const SizedBox(height: 16),
           _SectionPanel(
-            title: 'Quick Actions',
+            title: language.t('quickActions'),
             children: [
+              _LanguageSelector(),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
                   _ActionTile(
                     icon: Icons.lock_reset_outlined,
-                    title: 'Change Password',
-                    subtitle: 'Update your account password',
+                    title: language.t('changePassword'),
+                    subtitle: language.t('updatePasswordSubtitle'),
                     onPressed: _showChangePasswordDialog,
                   ),
                   _ActionTile(
                     icon: Icons.folder_copy_outlined,
-                    title: 'My Games',
-                    subtitle: 'Open your saved builder projects',
+                    title: language.t('myGames'),
+                    subtitle: language.t('myGamesSubtitle'),
                     onPressed: _openMyGames,
                   ),
                   _ActionTile(
                     icon: Icons.public_outlined,
-                    title: 'Published Games',
-                    subtitle: 'Play and review shared games',
+                    title: language.t('publishedGames'),
+                    subtitle: language.t('publishedGamesSubtitle'),
                     onPressed: _openPublishedGames,
                   ),
                   _ActionTile(
                     icon: Icons.logout,
-                    title: 'Logout',
-                    subtitle: 'Sign out of this session',
+                    title: language.t('logout'),
+                    subtitle: language.t('logoutSubtitle'),
                     onPressed: _logout,
                     isDestructive: true,
                   ),
@@ -642,6 +650,44 @@ class _SectionPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _LanguageSelector extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
+    return Row(
+      children: [
+        const Icon(Icons.language, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(language.t('appLanguage')),
+              const SizedBox(height: 2),
+              Text(
+                language.t('languageSubtitle'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        SegmentedButton<String>(
+          segments: [
+            ButtonSegment(value: 'en', label: Text(language.t('english'))),
+            ButtonSegment(value: 'ar', label: Text(language.t('arabic'))),
+          ],
+          selected: {language.locale.languageCode},
+          onSelectionChanged: (selection) {
+            AppLanguage.instance.setLanguage(selection.first);
+          },
+        ),
+      ],
     );
   }
 }

@@ -1,10 +1,13 @@
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/admin/models/admin_level.dart';
 import 'package:flutter/material.dart';
+
+enum _AdminBuilderType { scratch, frontView, topView }
 
 class AdminLevelsPage extends StatefulWidget {
   const AdminLevelsPage({super.key, required this.session});
@@ -79,25 +82,124 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
   }
 
   Future<void> _createLevel() async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.builder,
-      arguments: BuilderRouteData(session: widget.session),
-    );
+    await _createLevelWithMetadata();
 
     if (mounted) {
       _loadLevels();
     }
   }
 
-  Future<void> _openLevelBuilder(AdminLevel level) async {
-    await Navigator.of(context).pushNamed(
-      AppRoutes.builder,
-      arguments: BuilderRouteData(
-        session: widget.session,
-        initialProjectId: level.id,
-        useAdminLevelApi: true,
-      ),
+  Future<void> _createLevelWithMetadata({String? courseId}) async {
+    final builderType = await _chooseBuilderType(
+      title: AppLanguage.of(context).t('createLevel'),
     );
+    if (!mounted || builderType == null) {
+      return;
+    }
+
+    switch (builderType) {
+      case _AdminBuilderType.scratch:
+        await Navigator.of(context).pushNamed(
+          AppRoutes.scratchBuilder,
+          arguments: ScratchBuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: courseId,
+          ),
+        );
+      case _AdminBuilderType.frontView:
+        await Navigator.of(context).pushNamed(
+          AppRoutes.builder,
+          arguments: BuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: courseId,
+          ),
+        );
+      case _AdminBuilderType.topView:
+        await Navigator.of(context).pushNamed(
+          AppRoutes.topViewBuilder,
+          arguments: TopViewBuilderRouteData(
+            session: widget.session,
+            useAdminLevelApi: true,
+            initialCourseId: courseId,
+          ),
+        );
+    }
+  }
+
+  Future<_AdminBuilderType?> _chooseBuilderType({required String title}) {
+    final language = AppLanguage.of(context);
+    return showDialog<_AdminBuilderType>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: Text(title),
+          children: [
+            SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.pop(context, _AdminBuilderType.scratch),
+              child: ListTile(
+                leading: const Icon(Icons.extension_outlined),
+                title: Text(language.t('scratchBuilder')),
+                subtitle: Text(language.t('scratchBuilderDescription')),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.pop(context, _AdminBuilderType.frontView),
+              child: ListTile(
+                leading: const Icon(Icons.view_week_outlined),
+                title: Text(language.t('frontViewBlockPuzzle')),
+                subtitle: Text(language.t('frontViewDescription')),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.pop(context, _AdminBuilderType.topView),
+              child: ListTile(
+                leading: const Icon(Icons.grid_view_outlined),
+                title: Text(language.t('topViewCodingLevel')),
+                subtitle: Text(language.t('topViewDescription')),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openLevelBuilder(AdminLevel level) async {
+    if (level.builderType == 'scratch') {
+      await Navigator.of(context).pushNamed(
+        AppRoutes.scratchBuilder,
+        arguments: ScratchBuilderRouteData(
+          session: widget.session,
+          initialProjectId: level.id,
+          useAdminLevelApi: true,
+          initialTitle: level.title,
+        ),
+      );
+    } else if (level.builderType == 'topView') {
+      await Navigator.of(context).pushNamed(
+        AppRoutes.topViewBuilder,
+        arguments: TopViewBuilderRouteData(
+          session: widget.session,
+          initialProjectId: level.id,
+          useAdminLevelApi: true,
+          initialTitle: level.title,
+        ),
+      );
+    } else {
+      await Navigator.of(context).pushNamed(
+        AppRoutes.builder,
+        arguments: BuilderRouteData(
+          session: widget.session,
+          initialProjectId: level.id,
+          useAdminLevelApi: true,
+        ),
+      );
+    }
 
     if (mounted) {
       _loadLevels();
@@ -123,6 +225,7 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
   }
 
   Future<void> _editLevel(AdminLevel level) async {
+    final language = AppLanguage.of(context);
     if (!level.isCreatedByAdmin) {
       _showMessage('You cannot edit levels created by users.');
       return;
@@ -139,7 +242,7 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Edit Level'),
+              title: Text(language.t('editLevel')),
               content: SizedBox(
                 width: 480,
                 child: SingleChildScrollView(
@@ -148,25 +251,31 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                     children: [
                       TextField(
                         controller: titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Level Title',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('levelTitle'),
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: difficulty,
-                        decoration: const InputDecoration(
-                          labelText: 'Difficulty',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('difficulty'),
+                          border: const OutlineInputBorder(),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'easy', child: Text('Easy')),
+                        items: [
+                          DropdownMenuItem(
+                            value: 'easy',
+                            child: Text(language.t('easy')),
+                          ),
                           DropdownMenuItem(
                             value: 'medium',
-                            child: Text('Medium'),
+                            child: Text(language.t('medium')),
                           ),
-                          DropdownMenuItem(value: 'hard', child: Text('Hard')),
+                          DropdownMenuItem(
+                            value: 'hard',
+                            child: Text(language.t('hard')),
+                          ),
                         ],
                         onChanged: (value) {
                           if (value == null) {
@@ -180,18 +289,18 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: status,
-                        decoration: const InputDecoration(
-                          labelText: 'Status',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('status'),
+                          border: const OutlineInputBorder(),
                         ),
-                        items: const [
+                        items: [
                           DropdownMenuItem(
                             value: 'published',
-                            child: Text('Published'),
+                            child: Text(language.t('published')),
                           ),
                           DropdownMenuItem(
                             value: 'draft',
-                            child: Text('Draft'),
+                            child: Text(language.t('draft')),
                           ),
                         ],
                         onChanged: (value) {
@@ -206,14 +315,14 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
                         initialValue: selectedCourseId,
-                        decoration: const InputDecoration(
-                          labelText: 'Course',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: language.t('courses'),
+                          border: const OutlineInputBorder(),
                         ),
                         items: [
-                          const DropdownMenuItem(
+                          DropdownMenuItem(
                             value: '',
-                            child: Text('No course'),
+                            child: Text(language.t('noCourse')),
                           ),
                           ..._courses.map((course) {
                             return DropdownMenuItem(
@@ -250,11 +359,11 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                     Navigator.pop(context, {'action': 'openBuilder'});
                   },
                   icon: const Icon(Icons.extension_outlined),
-                  label: const Text('Edit Layout'),
+                  label: Text(language.t('editLayout')),
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(language.t('cancel')),
                 ),
                 FilledButton(
                   onPressed: () {
@@ -271,7 +380,7 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                       'courseId': selectedCourseId,
                     });
                   },
-                  child: const Text('Save'),
+                  child: Text(language.t('save')),
                 ),
               ],
             );
@@ -310,22 +419,23 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
   }
 
   Future<void> _deleteLevel(AdminLevel level) async {
+    final language = AppLanguage.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete Level'),
+          title: Text(language.t('deleteLevel')),
           content: Text(
             'Are you sure you want to delete "${level.title}"?\n\nThis action cannot be undone.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Delete'),
+              child: Text(language.t('delete')),
             ),
           ],
         );
@@ -354,20 +464,21 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
   }
 
   Future<void> _reviewLevel(AdminLevel level) async {
+    final language = AppLanguage.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Publish User Level'),
+          title: Text(language.t('publishUserLevel')),
           content: Text('Publish "${level.title}" so users can play it?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Publish'),
+              child: Text(language.t('publish')),
             ),
           ],
         );
@@ -408,6 +519,8 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -422,7 +535,7 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
             FilledButton.icon(
               onPressed: _loadLevels,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -437,12 +550,12 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
           Row(
             children: [
               Text(
-                'Levels Management',
+                language.t('levelsManagement'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const Spacer(),
               IconButton(
-                tooltip: 'Refresh levels',
+                tooltip: language.t('refreshLevels'),
                 onPressed: _loadLevels,
                 icon: const Icon(Icons.refresh),
               ),
@@ -450,16 +563,16 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
               ElevatedButton.icon(
                 onPressed: _createLevel,
                 icon: const Icon(Icons.add),
-                label: const Text('Create Level'),
+                label: Text(language.t('createLevel')),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          const TabBar(
+          TabBar(
             tabs: [
-              Tab(text: 'Published'),
-              Tab(text: 'Drafts'),
-              Tab(text: 'User Created'),
+              Tab(text: language.t('published')),
+              Tab(text: language.t('drafts')),
+              Tab(text: language.t('userCreated')),
             ],
           ),
           const SizedBox(height: 16),
@@ -513,8 +626,10 @@ class _LevelsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
+
     if (levels.isEmpty) {
-      return const Center(child: Text('No levels found in this section.'));
+      return Center(child: Text(language.t('noLevelsFound')));
     }
 
     return LayoutBuilder(
@@ -585,14 +700,15 @@ class _LevelCard extends StatelessWidget {
     }
   }
 
-  String _statusLabel() {
+  String _statusLabel(BuildContext context) {
+    final language = AppLanguage.of(context);
     switch (level.status) {
       case 'published':
-        return 'Published';
+        return language.t('published');
       case 'draft':
-        return 'Draft';
+        return language.t('draft');
       case 'userCreated':
-        return 'User Created';
+        return language.t('userCreated');
       default:
         return level.status;
     }
@@ -600,6 +716,7 @@ class _LevelCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final isUserCreated = !level.isCreatedByAdmin;
 
     return Card(
@@ -638,7 +755,7 @@ class _LevelCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Creator: ${level.creatorName}',
+                    '${language.t('creator')}: ${level.creatorName}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
@@ -678,7 +795,25 @@ class _LevelCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          _statusLabel(),
+                          _statusLabel(context),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          level.builderType == 'topView'
+                              ? language.t('topView')
+                              : level.builderType == 'scratch'
+                              ? language.t('scratch')
+                              : language.t('frontView'),
                           style: const TextStyle(fontSize: 12),
                         ),
                       ),
@@ -695,12 +830,12 @@ class _LevelCard extends StatelessWidget {
                                   Icons.verified_outlined,
                                   size: 18,
                                 ),
-                                label: const Text('Review'),
+                                label: Text(language.t('review')),
                               )
                             : OutlinedButton.icon(
                                 onPressed: onEdit,
                                 icon: const Icon(Icons.edit_outlined, size: 18),
-                                label: const Text('Edit'),
+                                label: Text(language.t('edit')),
                               ),
                       ),
                       const SizedBox(width: 8),
@@ -708,7 +843,7 @@ class _LevelCard extends StatelessWidget {
                         child: FilledButton.icon(
                           onPressed: onDelete,
                           icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text('Delete'),
+                          label: Text(language.t('delete')),
                         ),
                       ),
                     ],

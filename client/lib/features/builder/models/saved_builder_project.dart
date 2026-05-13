@@ -3,7 +3,11 @@ class SavedBuilderProject {
   final String title;
   final String description;
   final String status;
+  final String builderType;
   final String publisherName;
+  final String difficulty;
+  final String courseId;
+  final int orderInCourse;
   final DateTime? updatedAt;
 
   const SavedBuilderProject({
@@ -11,7 +15,11 @@ class SavedBuilderProject {
     required this.title,
     required this.description,
     required this.status,
+    required this.builderType,
     required this.publisherName,
+    required this.difficulty,
+    required this.courseId,
+    required this.orderInCourse,
     required this.updatedAt,
   });
 
@@ -21,9 +29,39 @@ class SavedBuilderProject {
       title: json['title']?.toString() ?? 'Untitled',
       description: json['description']?.toString() ?? '',
       status: json['status']?.toString() ?? 'draft',
+      builderType: _readBuilderType(json),
       publisherName: _readPublisherName(json),
+      difficulty: json['difficulty']?.toString() ?? 'medium',
+      courseId: json['courseId']?.toString() ?? '',
+      orderInCourse: _readInt(json['orderInCourse']),
       updatedAt: _tryParseDateTime(json['updatedAt']?.toString()),
     );
+  }
+
+  bool get isTopView => builderType == 'topView';
+
+  bool get isScratch => builderType == 'scratch';
+
+  static String _readBuilderType(Map<String, dynamic> json) {
+    final directType = json['builderType']?.toString().trim();
+    if (directType == 'topView' ||
+        directType == 'frontView' ||
+        directType == 'scratch') {
+      return directType!;
+    }
+
+    final draftData = json['draftData'];
+    if (draftData is Map) {
+      final draftDataMap = Map<String, dynamic>.from(draftData);
+      final draftType = draftDataMap['builderType']?.toString().trim();
+      if (draftType == 'topView' ||
+          draftType == 'frontView' ||
+          draftType == 'scratch') {
+        return draftType!;
+      }
+    }
+
+    return 'frontView';
   }
 
   static String _readPublisherName(Map<String, dynamic> json) {
@@ -55,4 +93,16 @@ class SavedBuilderProject {
 
     return DateTime.tryParse(value);
   }
+}
+
+int _readInt(Object? value) {
+  if (value is int) {
+    return value;
+  }
+
+  if (value is num) {
+    return value.toInt();
+  }
+
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

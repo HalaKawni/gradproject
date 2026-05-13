@@ -1,8 +1,16 @@
+import 'dart:async';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/auth/services/google_auth_service.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
+import 'google_sign_in_button_stub.dart'
+    if (dart.library.js_util) 'google_sign_in_button_web.dart'
+    as google_button;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,16 +25,44 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController passwordController = TextEditingController();
   final FocusNode emailFocusNode = FocusNode();
   final FocusNode passwordFocusNode = FocusNode();
+  StreamSubscription<GoogleSignInAuthenticationEvent>?
+  _googleSignInSubscription;
 
   bool isLoading = false;
+  bool isGoogleLoading = false;
+  bool _isOpeningGoogleSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_setUpGoogleSignIn());
+  }
 
   @override
   void dispose() {
+    unawaited(_googleSignInSubscription?.cancel());
     emailController.dispose();
     passwordController.dispose();
     emailFocusNode.dispose();
     passwordFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _setUpGoogleSignIn() async {
+    try {
+      await GoogleAuthService.initialize();
+
+      if (!mounted) {
+        return;
+      }
+
+      _googleSignInSubscription =
+          GoogleAuthService.authenticationEvents.listen(
+            _handleGoogleAuthenticationEvent,
+          )..onError(_handleGoogleSignInError);
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    }
   }
 
   Future<void> _login() async {
@@ -35,9 +71,7 @@ class _LoginPageState extends State<LoginPage> {
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email and password are required'),
-        ),
+        const SnackBar(content: Text('Email and password are required')),
       );
       return;
     }
@@ -47,10 +81,7 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final result = await ApiService.login(
-        email: email,
-        password: password,
-      );
+      final result = await ApiService.login(email: email, password: password);
 
       if (!mounted) {
         return;
@@ -66,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Login succeeded but no valid session was returned.');
         }
 
-        if(session.userRole == 'admin') {
+        if (session.userRole == 'admin') {
           Navigator.of(context).pushNamedAndRemoveUntil(
             AppRoutes.admin,
             (route) => false,
@@ -76,11 +107,10 @@ class _LoginPageState extends State<LoginPage> {
         }
 
         Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.home,
+          AppRoutes.dashboard,
           (route) => false,
-          arguments: HomeRouteData(session: session),
+          arguments: DashboardRouteData(session: session),
         );
-        
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -93,9 +123,9 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) {
         setState(() {
@@ -107,6 +137,127 @@ class _LoginPageState extends State<LoginPage> {
 
   void _openRegisterPage() {
     Navigator.of(context).pushNamed(AppRoutes.register);
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() {
+      isGoogleLoading = true;
+    });
+
+    try {
+      final account = await GoogleAuthService.signIn();
+      await _openGoogleSession(account);
+    } on GoogleSignInException catch (e) {
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        debugPrint('User cancelled sign in');
+        return;
+      }
+
+      debugPrint('Google sign in error: $e');
+      _showGoogleSignInError(e.toString());
+    } catch (e) {
+      debugPrint('Google sign in error: $e');
+      _showGoogleSignInError(e.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          isGoogleLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleAuthenticationEvent(
+    GoogleSignInAuthenticationEvent event,
+  ) async {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn(user: final account):
+        await _openGoogleSession(account);
+      case GoogleSignInAuthenticationEventSignOut():
+        debugPrint('Google user signed out');
+    }
+  }
+
+  void _handleGoogleSignInError(Object error) {
+    debugPrint('Google sign in error: $error');
+    _showGoogleSignInError(error.toString());
+  }
+
+  Future<void> _openGoogleSession(GoogleSignInAccount account) async {
+    if (_isOpeningGoogleSession) {
+      return;
+    }
+
+    _isOpeningGoogleSession = true;
+    if (mounted) {
+      setState(() {
+        isGoogleLoading = true;
+      });
+    }
+
+    try {
+      final result = await ApiService.loginWithGoogle(
+        idToken: GoogleAuthService.idTokenFor(account),
+        role: 'child',
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] != true) {
+        _showGoogleSignInError(
+          result['message']?.toString() ?? 'Google login failed',
+        );
+        return;
+      }
+
+      final rawData = result['data'];
+      final session = AuthSession.fromJson(
+        rawData is Map ? Map<String, dynamic>.from(rawData) : {},
+      );
+
+      if (!session.isValid) {
+        _showGoogleSignInError(
+          'Google login succeeded but no valid session was returned.',
+        );
+        return;
+      }
+
+      if (session.userRole == 'admin') {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          AppRoutes.admin,
+          (route) => false,
+          arguments: AdminRouteData(session: session),
+        );
+        return;
+      }
+
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.dashboard,
+        (route) => false,
+        arguments: DashboardRouteData(session: session),
+      );
+    } catch (e) {
+      _handleGoogleSignInError(e);
+    } finally {
+      _isOpeningGoogleSession = false;
+      if (mounted) {
+        setState(() {
+          isGoogleLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showGoogleSignInError(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Google sign in error: $message')));
   }
 
   @override
@@ -185,6 +336,11 @@ class _LoginPageState extends State<LoginPage> {
                                   ),
                                 )
                               : const Text('Login'),
+                        ),
+                        const SizedBox(height: 12),
+                        google_button.buildGoogleSignInButton(
+                          onPressed: isLoading ? null : _signInWithGoogle,
+                          isLoading: isGoogleLoading,
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton(

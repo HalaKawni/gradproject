@@ -54,7 +54,6 @@ class AuthService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 201 && data['status'] == true) {
-      await saveToken(data['token']);
       await saveUser(data['user']);
       return data;
     } else {
@@ -62,7 +61,36 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> verifyEmail(String token) async {
+    final response = await http.get(Uri.parse(ApiConstants.verifyEmail(token)));
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['status'] == true) {
+      return data;
+    } else {
+      throw Exception(data['error'] ?? 'Email verification failed');
+    }
+  }
+
   // ── Login ───────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> resendVerificationEmail({
+    required String email,
+  }) async {
+    final response = await http.post(
+      Uri.parse(ApiConstants.resendVerification),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['status'] == true) {
+      return data;
+    } else {
+      throw Exception(data['error'] ?? 'Failed to resend verification email');
+    }
+  }
+
   static Future<Map<String, dynamic>> login({
     required String email,
     required String password,
