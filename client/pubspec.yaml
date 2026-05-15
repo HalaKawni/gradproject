@@ -234,6 +234,12 @@ flutter:
     - assets/images/16.jpeg
     - assets/images/17.jpeg
     - assets/images/18.jpeg
+    - assets/images/digitalbackground.jpg
+    - assets/images/digitalbackground.png
+    - assets/images/spider.png
+    - assets/images/spider2.png
+
+
 
   fonts:
     - family: Xolonium
