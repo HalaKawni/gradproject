@@ -4,71 +4,56 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'digital_review_page.dart';
 import '../services/api_service.dart';
-import 'cyber_match_game.dart';
+import 'digital_review_pagelesson3.dart';
 
-class DigitalPlayPageLesson2WordMatch extends StatefulWidget {
+
+class DigitalPlayPageLesson3 extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalPlayPageLesson2WordMatch({super.key, required this.lesson});
+  const DigitalPlayPageLesson3({super.key, required this.lesson});
 
   @override
-  State<DigitalPlayPageLesson2WordMatch> createState() =>
-      _DigitalPlayPageLesson2WordMatchState();
+  State<DigitalPlayPageLesson3> createState() =>
+      _DigitalPlayPageLesson3State();
 }
 
-class _DigitalPlayPageLesson2WordMatchState
-    extends State<DigitalPlayPageLesson2WordMatch> {
+class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
 
-  // ── GAME AREA KEY ──
   final GlobalKey _gameAreaKey = GlobalKey();
-
-  // ── LINE PROGRESS ──
   final Map<String, double> _lineProgress = {};
 
-  // ── PAIRS — Lesson 2 content ──
   final List<_Pair> _pairs = [
     _Pair(
-      word: 'Phishing',
-      definition: 'Stealing personal information, usually through email messages.',
+      word: 'Virtual Reality',
+      definition: 'An application that makes you feel like you are in another place.',
     ),
     _Pair(
-      word: 'Digital balance',
-      definition: 'Healthy combination of digital and non-digital activities in life.',
+      word: 'Digital Collaboration',
+      definition: 'The ability for several people to work on documents and other applications while being in different locations.',
     ),
     _Pair(
-      word: 'Cyberbullying',
-      definition: 'Mean behavior to others when online.',
+      word: 'Video Conference',
+      definition: 'An application where you can see and talk to others even though you are not in the same room.',
     ),
     _Pair(
-      word: 'Strong password',
-      definition: 'A combination of letters, numbers, and characters to protect your information.',
-    ),
-    _Pair(
-      word: 'Fake news',
-      definition: 'Stories and images that are not real.',
+      word: 'Global Trend',
+      definition: 'When people around the world start doing the same new thing.',
     ),
   ];
 
-  // ── STATE ──
   String? _selectedWord;
   String? _selectedDef;
   final Map<String, String> _matched = {};
   final Set<String> _wrongWords = {};
   final Set<String> _wrongDefs = {};
-
-  // ── LINES ──
   final List<_MatchLine> _lines = [];
-
-  // ── KEYS for line drawing ──
   final Map<String, GlobalKey> _wordKeys = {};
   final Map<String, GlobalKey> _defKeys = {};
 
-  // ── SCORES ──
   int _playScore = 0;
-  final int _playTotal = 5;
+  final int _playTotal = 4;
   final int _reviewScore = 0;
   final int _reviewTotal = 5;
 
-  // ── SHUFFLED DISPLAY ORDER ──
   late List<_Pair> _shuffledWords;
   late List<_Pair> _shuffledDefs;
 
@@ -137,7 +122,6 @@ class _DigitalPlayPageLesson2WordMatchState
         _playScore = min(_playScore + 1, _playTotal);
       });
 
-      // ── ANIMATE LINE DRAWING ──
       const steps = 30;
       int step = 0;
       Timer.periodic(const Duration(milliseconds: 16), (timer) {
@@ -192,9 +176,7 @@ class _DigitalPlayPageLesson2WordMatchState
                 backgroundColor: const Color(0xFFF5A623)),
             child: const Text('CONTINUE',
                 style: TextStyle(
-                    fontFamily: 'Chennai',
-                    color: Colors.white,
-                    fontSize: 16)),
+                    fontFamily: 'Chennai', color: Colors.white, fontSize: 16)),
           ),
         ],
       ),
@@ -210,7 +192,7 @@ class _DigitalPlayPageLesson2WordMatchState
       backgroundColor: const Color(0xFF7B9FD4),
       body: Column(
         children: [
-          // ── CODEMONKEY NAVBAR ──
+          // ── NAVBAR ──
           Container(
             color: const Color.fromARGB(255, 252, 183, 199),
             height: 52,
@@ -218,48 +200,38 @@ class _DigitalPlayPageLesson2WordMatchState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 38, height: 38,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF8B5E3C),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.pets, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    Text('name of web',
-                        style: GoogleFonts.montserrat(
+                Row(children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF8B5E3C), shape: BoxShape.circle),
+                    child: const Icon(Icons.pets, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('name of web',
+                      style: GoogleFonts.montserrat(
                           color: const Color(0xFFF5A623),
                           fontSize: 18, fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        )),
-                    const SizedBox(width: 24),
-                    Text(
-                      'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
-                      style: GoogleFonts.montserrat(
+                          letterSpacing: 0.5)),
+                  const SizedBox(width: 24),
+                  Text(
+                    'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
+                    style: GoogleFonts.montserrat(
                         color: Colors.white70,
-                        fontSize: 13, fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4A7DBF),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white24, width: 2),
-                      ),
-                      child: const Icon(Icons.person, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.menu, color: Colors.white, size: 24),
-                  ],
-                ),
+                        fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ]),
+                Row(children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 2)),
+                    child: const Icon(Icons.person, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  const Icon(Icons.menu, color: Colors.white, size: 24),
+                ]),
               ],
             ),
           ),
@@ -275,8 +247,7 @@ class _DigitalPlayPageLesson2WordMatchState
                 Expanded(
                   child: Center(
                     child: SizedBox(
-                      width: 1170,
-                      height: 700,
+                      width: 1170, height: 700,
                       child: _buildGameArea(),
                     ),
                   ),
@@ -287,8 +258,7 @@ class _DigitalPlayPageLesson2WordMatchState
                   onTap: _matched.length == _pairs.length
                       ? () => Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (_) =>
-                                 CyberMatchGame(lesson: widget.lesson),
+                             builder: (_) => DigitalReviewPageLesson3(lesson: widget.lesson),
                             ),
                           )
                       : null,
@@ -315,18 +285,16 @@ class _DigitalPlayPageLesson2WordMatchState
               width: 52, height: 52,
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: const Color(0xFF5B8FD4),
-                borderRadius: BorderRadius.circular(8),
-              ),
+                  color: const Color(0xFF5B8FD4),
+                  borderRadius: BorderRadius.circular(8)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.arrow_back_ios, color: Colors.white, size: 14),
                   Text('BACK TO\nCOURSE',
                       style: GoogleFonts.nunito(
-                        color: Colors.white, fontSize: 7,
-                        fontWeight: FontWeight.w800, height: 1.1,
-                      ),
+                          color: Colors.white, fontSize: 7,
+                          fontWeight: FontWeight.w800, height: 1.1),
                       textAlign: TextAlign.center),
                 ],
               ),
@@ -335,32 +303,21 @@ class _DigitalPlayPageLesson2WordMatchState
           const SizedBox(width: 10),
           Text('#$lessonNumber',
               style: const TextStyle(
-                  fontFamily: 'Chennai',
-                  color: Color(0xFF333333), fontSize: 22)),
+                  fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 22)),
           const SizedBox(width: 8),
           Text(lessonTitle,
               style: const TextStyle(
-                  fontFamily: 'Chennai',
-                  color: Color(0xFF333333), fontSize: 24)),
+                  fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
-          _buildTopBox(
-            icon: Icons.menu_book,
-            iconColor: const Color(0xFF5B8FD4),
-            label: 'LEARN',
-            value: '17/17',
-            bgColor: const Color(0xFF5B8FD4).withOpacity(0.15),
-          ),
+          _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
+              label: 'LEARN', value: '12/12',
+              bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
           const SizedBox(width: 8),
           _buildPlayBox(),
           const SizedBox(width: 8),
-          _buildTopBox(
-            icon: Icons.chat_bubble_outline,
-            iconColor: const Color(0xFF888888),
-            label: 'REVIEW',
-            value: '$_reviewScore/$_reviewTotal',
-            bgColor: Colors.grey.withOpacity(0.15),
-            locked: true,
-          ),
+          _buildTopBox(icon: Icons.chat_bubble_outline, iconColor: const Color(0xFF888888),
+              label: 'REVIEW', value: '$_reviewScore/$_reviewTotal',
+              bgColor: Colors.grey.withOpacity(0.15), locked: true),
         ],
       ),
     );
@@ -374,8 +331,7 @@ class _DigitalPlayPageLesson2WordMatchState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        color: bgColor, borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.white.withOpacity(0.4)),
       ),
       child: Row(children: [
@@ -389,8 +345,7 @@ class _DigitalPlayPageLesson2WordMatchState
                 fontSize: 9, fontWeight: FontWeight.w800,
                 color: const Color(0xFF555555))),
             Row(children: [
-              if (locked)
-                const Icon(Icons.lock, size: 10, color: Color(0xFF888888)),
+              if (locked) const Icon(Icons.lock, size: 10, color: Color(0xFF888888)),
               Text(value, style: GoogleFonts.nunito(
                   fontSize: 11, fontWeight: FontWeight.w800,
                   color: const Color(0xFF333333))),
@@ -438,11 +393,10 @@ class _DigitalPlayPageLesson2WordMatchState
                         width: 1),
                   ),
                   child: i == _playScore
-                      ? Center(
-                          child: Text('${i + 1}',
-                              style: const TextStyle(
-                                  fontSize: 7, fontWeight: FontWeight.bold,
-                                  color: Color(0xFF333333))))
+                      ? Center(child: Text('${i + 1}',
+                          style: const TextStyle(fontSize: 7,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333))))
                       : null,
                 );
               }),
@@ -463,13 +417,8 @@ class _DigitalPlayPageLesson2WordMatchState
         key: _gameAreaKey,
         clipBehavior: Clip.none,
         children: [
-          // ── BACKGROUND IMAGE ──
-          Image.asset(
-            'assets/images/digitalbackground.png',
-            width: w, height: h, fit: BoxFit.cover,
-          ),
-
-          // ── MATCH LINES ──
+          Image.asset('assets/images/digitalbackground.png',
+              width: w, height: h, fit: BoxFit.cover),
           Positioned.fill(
             child: CustomPaint(
               painter: _LinePainter(
@@ -482,7 +431,6 @@ class _DigitalPlayPageLesson2WordMatchState
               ),
             ),
           ),
-
           // ── LEFT WORDS ──
           Positioned(
             left: 12, top: 0, bottom: 0,
@@ -494,7 +442,6 @@ class _DigitalPlayPageLesson2WordMatchState
                 final isMatched = _matched.containsKey(p.word);
                 final isSelected = _selectedWord == p.word;
                 final isWrong = _wrongWords.contains(p.word);
-
                 return GestureDetector(
                   onTap: () => _onWordTap(p.word),
                   child: AnimatedContainer(
@@ -502,90 +449,56 @@ class _DigitalPlayPageLesson2WordMatchState
                     clipBehavior: Clip.none,
                     duration: const Duration(milliseconds: 200),
                     width: w * 0.28,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 22),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
                     decoration: BoxDecoration(
-                      color: isMatched
-                          ? const Color(0xFFB8EEB8)
-                          : isWrong
-                              ? const Color(0xFFEF9A9A)
-                              : isSelected
-                                  ? const Color(0xFFD1C4E9)
-                                  : const Color(0xFFEAE8F5),
+                      color: isMatched ? const Color(0xFFB8EEB8)
+                          : isWrong ? const Color(0xFFEF9A9A)
+                          : isSelected ? const Color(0xFFD1C4E9)
+                          : const Color(0xFFEAE8F5),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF7B1FA2)
-                            : isMatched
-                                ? const Color(0xFF4CAF50)
-                                : isWrong
-                                    ? const Color(0xFFE53935)
-                                    : const Color(0xFF777777),
+                        color: isSelected ? const Color(0xFF7B1FA2)
+                            : isMatched ? const Color(0xFF4CAF50)
+                            : isWrong ? const Color(0xFFE53935)
+                            : const Color(0xFF777777),
                         width: 4.5,
                       ),
-                      boxShadow: [
-                        BoxShadow(
+                      boxShadow: [BoxShadow(
                           color: Colors.black.withOpacity(0.18),
-                          blurRadius: 10, spreadRadius: 0,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                          blurRadius: 10, offset: const Offset(0, 4))],
                     ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Text(p.word,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontFamily: 'Chennai',
-                                fontSize: 20, color: Colors.black87)),
-                        // ── RIGHT DOT ──
-                        Positioned(
-                          top: 0, right: 0,
-                          child: Container(
-                            width: 16, height: 16,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
-                                  blurRadius: 2,
-                                  offset: const Offset(1, 1),
-                                ),
-                              ],
-                            ),
+                    child: Stack(clipBehavior: Clip.none, children: [
+                      Text(p.word, textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontFamily: 'Chennai', fontSize: 20,
+                              color: Colors.black87)),
+                      Positioned(top: 0, right: 0,
+                          child: Container(width: 16, height: 16,
+                              decoration: BoxDecoration(color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(
+                                      color: Colors.black.withOpacity(0.15),
+                                      blurRadius: 2,
+                                      offset: const Offset(1, 1))]))),
+                      if (isSelected)
+                        Positioned(left: 255, top: -60,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 1.0, end: 0.0),
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) => Transform.translate(
+                                offset: Offset(-value * 100, 0),
+                                child: Opacity(opacity: 1 - value, child: child)),
+                            child: Image.asset('assets/images/spider2.png',
+                                width: 150, height: 150),
                           ),
                         ),
-                        // ── ANIMAL SLIDE IN FROM LEFT ON SELECT ──
-                        if (isSelected)
-                          Positioned(
-                            left: 255, top: -60,
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 1.0, end: 0.0),
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, child) {
-                                return Transform.translate(
-                                  offset: Offset(-value * 100, 0),
-                                  child: Opacity(
-                                      opacity: 1 - value, child: child),
-                                );
-                              },
-                              child: Image.asset(
-                                'assets/images/spider2.png',
-                                width: 150, height: 150,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                    ]),
                   ),
                 );
               }).toList(),
             ),
           ),
-
           // ── RIGHT DEFINITIONS ──
           Positioned(
             right: 12, top: 0, bottom: 0,
@@ -597,7 +510,6 @@ class _DigitalPlayPageLesson2WordMatchState
                 final isMatched = _matched.values.contains(p.definition);
                 final isSelected = _selectedDef == p.definition;
                 final isWrong = _wrongDefs.contains(p.definition);
-
                 return GestureDetector(
                   onTap: () => _onDefTap(p.definition),
                   child: AnimatedContainer(
@@ -605,77 +517,47 @@ class _DigitalPlayPageLesson2WordMatchState
                     clipBehavior: Clip.none,
                     duration: const Duration(milliseconds: 200),
                     width: w * 0.32,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 22),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
                     decoration: BoxDecoration(
-                      color: isMatched
-                          ? const Color(0xFFB8EEB8)
-                          : isWrong
-                              ? const Color(0xFFEF9A9A)
-                              : isSelected
-                                  ? const Color(0xFFD1C4E9)
-                                  : const Color(0xFFEAE8F5),
+                      color: isMatched ? const Color(0xFFB8EEB8)
+                          : isWrong ? const Color(0xFFEF9A9A)
+                          : isSelected ? const Color(0xFFD1C4E9)
+                          : const Color(0xFFEAE8F5),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF7B1FA2)
-                            : isMatched
-                                ? const Color(0xFF4CAF50)
-                                : isWrong
-                                    ? const Color(0xFFE53935)
-                                    : const Color(0xFF777777),
+                        color: isSelected ? const Color(0xFF7B1FA2)
+                            : isMatched ? const Color(0xFF4CAF50)
+                            : isWrong ? const Color(0xFFE53935)
+                            : const Color(0xFF777777),
                         width: 4.5,
                       ),
-                      boxShadow: [
-                        BoxShadow(
+                      boxShadow: [BoxShadow(
                           color: Colors.black.withOpacity(0.18),
-                          blurRadius: 10, spreadRadius: 0,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                          blurRadius: 10, offset: const Offset(0, 4))],
                     ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Text(p.definition,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontFamily: 'Chennai',
-                                fontSize: 20, color: Colors.black87)),
-                        // ── RIGHT DOT ──
-                        Positioned(
-                          top: 0, right: 0,
-                          child: Container(
-                            width: 16, height: 16,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                            ),
+                    child: Stack(clipBehavior: Clip.none, children: [
+                      Text(p.definition, textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontFamily: 'Chennai', fontSize: 20,
+                              color: Colors.black87)),
+                      Positioned(top: 0, right: 0,
+                          child: Container(width: 16, height: 16,
+                              decoration: const BoxDecoration(
+                                  color: Colors.white, shape: BoxShape.circle))),
+                      if (isSelected)
+                        Positioned(right: 310, top: -45,
+                          child: TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 1.0, end: 0.0),
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOutCubic,
+                            builder: (context, value, child) => Transform.translate(
+                                offset: Offset(value * 100, 0),
+                                child: Opacity(opacity: 1 - value, child: child)),
+                            child: Image.asset('assets/images/spider.png',
+                                width: 150, height: 150),
                           ),
                         ),
-                        // ── ANIMAL SLIDE IN FROM RIGHT ON SELECT ──
-                        if (isSelected)
-                          Positioned(
-                            right: 310, top: -45,
-                            child: TweenAnimationBuilder<double>(
-                              tween: Tween(begin: 1.0, end: 0.0),
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOutCubic,
-                              builder: (context, value, child) {
-                                return Transform.translate(
-                                  offset: Offset(value * 100, 0),
-                                  child: Opacity(
-                                      opacity: 1 - value, child: child),
-                                );
-                              },
-                              child: Image.asset(
-                                'assets/images/spider.png',
-                                width: 150, height: 150,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
+                    ]),
                   ),
                 );
               }).toList(),
@@ -686,37 +568,30 @@ class _DigitalPlayPageLesson2WordMatchState
     });
   }
 
-  // ── SIDE BUTTON ──
   Widget _buildSideButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onTap,
+    required IconData icon, required String label, required VoidCallback? onTap,
   }) {
     final bool enabled = onTap != null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
-        height: double.infinity,
-        color: const Color.fromARGB(255,123, 159, 212),
+        width: 100, height: double.infinity,
+        color: const Color(0xFF7B7FD4),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 70, height: 70,
               decoration: BoxDecoration(
-                color: enabled
-                    ? const Color(0xFFF5A623)
-                    : Colors.grey.withOpacity(0.3),
+                color: enabled ? const Color(0xFFF5A623) : Colors.grey.withOpacity(0.3),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: Colors.white, size: 32),
             ),
             const SizedBox(height: 8),
-            Text(label,
-                style: GoogleFonts.nunito(
-                    color: enabled ? Colors.white : Colors.white38,
-                    fontSize: 12, fontWeight: FontWeight.w800)),
+            Text(label, style: GoogleFonts.nunito(
+                color: enabled ? Colors.white : Colors.white38,
+                fontSize: 12, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
@@ -732,86 +607,57 @@ class _LinePainter extends CustomPainter {
   final RenderBox? gameBox;
   final Map<String, double> lineProgress;
 
-  _LinePainter({
-    required this.lines, required this.wordKeys,
-    required this.defKeys, required this.gameBox,
-    required this.lineProgress,
-  });
+  _LinePainter({required this.lines, required this.wordKeys,
+      required this.defKeys, required this.gameBox, required this.lineProgress});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (gameBox == null) return;
-
     for (final line in lines) {
       final wordCtx = wordKeys[line.word]?.currentContext;
       final defCtx = defKeys[line.def]?.currentContext;
       if (wordCtx == null || defCtx == null) continue;
-
       final wordBox = wordCtx.findRenderObject() as RenderBox?;
       final defBox = defCtx.findRenderObject() as RenderBox?;
       if (wordBox == null || defBox == null) continue;
-
       final wordPos = wordBox.localToGlobal(Offset.zero);
       final defPos = defBox.localToGlobal(Offset.zero);
       final gamePos = gameBox!.localToGlobal(Offset.zero);
-
-      final start = Offset(
-        wordPos.dx + wordBox.size.width - gamePos.dx,
-        wordPos.dy + wordBox.size.height / 2 - gamePos.dy,
-      );
-      final end = Offset(
-        defPos.dx - gamePos.dx,
-        defPos.dy + defBox.size.height / 2 - gamePos.dy,
-      );
-      final mid = Offset(
-        (start.dx + end.dx) / 2,
-        (start.dy + end.dy) / 2 + 80,
-      );
-
+      final start = Offset(wordPos.dx + wordBox.size.width - gamePos.dx,
+          wordPos.dy + wordBox.size.height / 2 - gamePos.dy);
+      final end = Offset(defPos.dx - gamePos.dx,
+          defPos.dy + defBox.size.height / 2 - gamePos.dy);
+      final mid = Offset((start.dx + end.dx) / 2, (start.dy + end.dy) / 2 + 80);
       final progress = lineProgress[line.word] ?? 1.0;
-
       final mainPaint = Paint()
         ..color = Colors.white.withOpacity(0.9)
         ..strokeWidth = 2.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round;
-
       final path = Path();
       path.moveTo(start.dx, start.dy);
-
       Offset tip = start;
       const segments = 30;
       for (int i = 1; i <= (segments * progress).round(); i++) {
         final t = i / segments;
-        final px = (1 - t) * (1 - t) * start.dx +
-            2 * (1 - t) * t * mid.dx + t * t * end.dx;
-        final py = (1 - t) * (1 - t) * start.dy +
-            2 * (1 - t) * t * mid.dy + t * t * end.dy;
+        final px = (1-t)*(1-t)*start.dx + 2*(1-t)*t*mid.dx + t*t*end.dx;
+        final py = (1-t)*(1-t)*start.dy + 2*(1-t)*t*mid.dy + t*t*end.dy;
         path.lineTo(px, py);
         tip = Offset(px, py);
       }
       canvas.drawPath(path, mainPaint);
-
       if (progress < 1.0) {
-        canvas.drawCircle(tip, 6,
-            Paint()..color = Colors.white.withOpacity(0.9));
+        canvas.drawCircle(tip, 6, Paint()..color = Colors.white.withOpacity(0.9));
       }
-
       if (progress >= 1.0) {
         final webPaint = Paint()
           ..color = Colors.white.withOpacity(0.45)
-          ..strokeWidth = 1.2
-          ..style = PaintingStyle.stroke;
-
+          ..strokeWidth = 1.2 ..style = PaintingStyle.stroke;
         for (double t = 0.15; t < 1.0; t += 0.18) {
-          final px = (1 - t) * (1 - t) * start.dx +
-              2 * (1 - t) * t * mid.dx + t * t * end.dx;
-          final py = (1 - t) * (1 - t) * start.dy +
-              2 * (1 - t) * t * mid.dy + t * t * end.dy;
-          canvas.drawLine(
-              Offset(px - 7, py - 7), Offset(px + 7, py + 7), webPaint);
-          canvas.drawLine(
-              Offset(px + 7, py - 7), Offset(px - 7, py + 7), webPaint);
+          final px = (1-t)*(1-t)*start.dx + 2*(1-t)*t*mid.dx + t*t*end.dx;
+          final py = (1-t)*(1-t)*start.dy + 2*(1-t)*t*mid.dy + t*t*end.dy;
+          canvas.drawLine(Offset(px-7,py-7), Offset(px+7,py+7), webPaint);
+          canvas.drawLine(Offset(px+7,py-7), Offset(px-7,py+7), webPaint);
         }
       }
     }
@@ -821,7 +667,6 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(_LinePainter old) => true;
 }
 
-// ── DATA CLASSES ──
 class _Pair {
   final String word;
   final String definition;

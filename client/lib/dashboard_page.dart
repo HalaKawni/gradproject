@@ -1326,7 +1326,10 @@ Widget? _getGamePage(String title) {
                   Navigator.of(context).pop();
   final page = _getGamePage(widget.course.title);
   if (page != null) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    Navigator.push(context, MaterialPageRoute(
+      settings: const RouteSettings(name: 'digital_literacy_hub'),
+      builder: (_) => page,
+    ));
   }
   },
                 style: ElevatedButton.styleFrom(

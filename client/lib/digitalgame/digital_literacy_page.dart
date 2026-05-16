@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'digital_lesson_page.dart';
 import '../services/api_service.dart';
 
@@ -47,21 +48,93 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
     try {
       final data = await ApiService.getProgress(_gameId);
       if (!mounted) return;
-      final List<dynamic> completedLevels = data['completedLevels'] ?? [];
+      final List<dynamic> results = data['levelResults'] ?? [];
+
       setState(() {
         for (int i = 0; i < _lessons.length; i++) {
           final lessonNum = _lessons[i].number;
-          if (completedLevels.contains(lessonNum) ||
-              completedLevels.contains(lessonNum.toString())) {
-            _lessons[i] = _lessons[i].copyWith(completed: true);
+
+          Map<String, dynamic>? lessonResult;
+          Map<String, dynamic>? quizResult;
+          for (final r in results) {
+            final rMap = r as Map<String, dynamic>;
+            final lvl = rMap['level'];
+            if (lvl == lessonNum || lvl.toString() == lessonNum.toString()) {
+              lessonResult = rMap;
+            }
+            if (lvl == (100 + lessonNum) || lvl.toString() == (100 + lessonNum).toString()) {
+              quizResult = rMap;
+            }
           }
+
+          final baseStars = (lessonResult?['stars'] as num? ?? 0).toInt();
+          final quizStars = (quizResult?['stars'] as num? ?? 0).toInt();
+          final effectiveStars = quizStars >= 3 ? 3 : baseStars;
+
+          _lessons[i] = _LessonData(
+            number: _lessons[i].number,
+            title: _lessons[i].title,
+            imagePath: _lessons[i].imagePath,
+            isUnlocked: true,
+            completed: effectiveStars >= 3,
+            inProgress: effectiveStars >= 1 && effectiveStars < 3,
+          );
         }
-        _completedLessons = _lessons.where((l) => l.completed).length;
+        _completedLessons =
+            _lessons.where((l) => l.completed == true).length;
         _isLoading = false;
       });
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  // Returns the lesson the user should continue or start next
+  _LessonData get _nextLesson {
+    final inProgressIdx = _lessons.indexWhere((l) => l.inProgress == true);
+    if (inProgressIdx >= 0) return _lessons[inProgressIdx];
+    final incompleteIdx = _lessons.indexWhere((l) => l.completed != true);
+    if (incompleteIdx >= 0) return _lessons[incompleteIdx];
+    return _lessons.last;
+  }
+
+  String get _actionButtonText {
+    final l = _nextLesson;
+    if (l.inProgress == true) return 'CONTINUE LESSON #${l.number}';
+    if (_completedLessons == _lessons.length) return 'REVIEW LESSON #${l.number}';
+    return 'START LESSON #${l.number}';
+  }
+
+  void _openLesson(_LessonData lesson) async {
+    ApiService.saveLevelResult(
+      gameId: _gameId,
+      level: lesson.number,
+      completed: false,
+      score: 0,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    final savedSlide = prefs.getInt('lesson_slide_${lesson.number}');
+    if (!mounted) return;
+
+    Widget destination;
+    if (savedSlide != null && savedSlide >= 0) {
+      // Resume mid-slides at the exact slide they left off on
+      destination = DigitalLessonPage(lesson: lesson.toMap(), initialSlide: savedSlide);
+    } else if (savedSlide == -1 || lesson.inProgress == true) {
+      // Slides done — push lesson page with skipToPlay so the play page
+      // is pushed on top immediately, keeping lesson in the stack for PREVIOUS
+      destination = DigitalLessonPage(lesson: lesson.toMap(), skipToPlay: true);
+    } else {
+      destination = DigitalLessonPage(lesson: lesson.toMap());
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => destination),
+    ).then((_) async {
+      await _loadProgress();
+    });
   }
 
   @override
@@ -178,11 +251,7 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                final nextIdx = _completedLessons < _lessons.length
-                    ? _completedLessons : _lessons.length - 1;
-                _openLesson(_lessons[nextIdx]);
-              },
+              onPressed: () => _openLesson(_nextLesson),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color.fromARGB(255, 255, 230, 154),
                 foregroundColor: const Color.fromARGB(255, 0, 0, 0),
@@ -191,7 +260,7 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
                 elevation: 3,
               ),
               label: Text(
-                'START LESSON #${_completedLessons < _lessons.length ? _completedLessons + 1 : _lessons.length}',
+                _actionButtonText,
                 style: const TextStyle(fontFamily: 'Chennai', fontSize: 15,
                     fontWeight: FontWeight.w900, letterSpacing: 1),
               ),
@@ -201,26 +270,6 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
         ],
       ),
     );
-  }
-
-  void _openLesson(_LessonData lesson) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => DigitalLessonPage(lesson: lesson.toMap())),
-    ).then((_) async {
-      // Save lesson completion when user returns from lesson flow
-      try {
-        await ApiService.saveLevelResult(
-          gameId: _gameId,
-          level: lesson.number,
-          completed: true,
-          score: 100,
-        );
-      } catch (_) {}
-
-      // Refresh progress from backend
-      await _loadProgress();
-    });
   }
 }
 
@@ -260,16 +309,18 @@ class _LessonData {
   final String imagePath;
   final bool isUnlocked;
   final bool completed;
+  final bool inProgress;
 
   const _LessonData({
     required this.number, required this.title, required this.imagePath,
-    this.isUnlocked = false, this.completed = false,
+    this.isUnlocked = false, this.completed = false, this.inProgress = false,
   });
 
-  _LessonData copyWith({bool? isUnlocked, bool? completed}) => _LessonData(
+  _LessonData copyWith({bool? isUnlocked, bool? completed, bool? inProgress}) => _LessonData(
     number: number, title: title, imagePath: imagePath,
     isUnlocked: isUnlocked ?? this.isUnlocked,
     completed: completed ?? this.completed,
+    inProgress: inProgress ?? this.inProgress,
   );
 
   Map<String, dynamic> toMap() => {'number': number, 'title': title, 'imagePath': imagePath};
@@ -300,6 +351,7 @@ class _LessonCardState extends State<_LessonCard> with SingleTickerProviderState
 
   @override
   Widget build(BuildContext context) {
+    final lesson = widget.lesson;
     return MouseRegion(
       onEnter: (_) => _controller.forward(),
       onExit: (_) => _controller.reverse(),
@@ -316,6 +368,9 @@ class _LessonCardState extends State<_LessonCard> with SingleTickerProviderState
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
+                  border: lesson.inProgress == true
+                      ? Border.all(color: const Color(0xFFFFC83D), width: 2)
+                      : null,
                   boxShadow: isHovered
                       ? [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 8))]
                       : [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, 3))],
@@ -332,23 +387,50 @@ class _LessonCardState extends State<_LessonCard> with SingleTickerProviderState
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('#${widget.lesson.number}',
+                      Text('#${lesson.number}',
                           style: const TextStyle(fontFamily: 'Chennai', fontSize: 18,
                               fontWeight: FontWeight.w400, color: Color(0xFF333333))),
-                      Icon(widget.lesson.completed ? Icons.star : Icons.star_border,
-                          color: widget.lesson.completed
-                              ? const Color.fromARGB(255, 255, 230, 154) : const Color(0xFFBBBBBB),
-                          size: 22),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (lesson.inProgress == true)
+                            Container(
+                              margin: const EdgeInsets.only(right: 6),
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFC83D),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text('IN PROGRESS',
+                                  style: TextStyle(
+                                      fontSize: 8, fontWeight: FontWeight.w800,
+                                      color: Colors.white, letterSpacing: 0.5)),
+                            ),
+                          Icon(
+                            lesson.completed == true
+                                ? Icons.star
+                                : lesson.inProgress == true
+                                    ? Icons.star_half
+                                    : Icons.star_border,
+                            color: lesson.completed == true
+                                ? const Color.fromARGB(255, 255, 230, 154)
+                                : lesson.inProgress == true
+                                    ? const Color(0xFFFFC83D)
+                                    : const Color(0xFFBBBBBB),
+                            size: 22,
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
-                Image.asset(widget.lesson.imagePath, width: 400, height: 220, fit: BoxFit.cover,
+                Image.asset(lesson.imagePath, width: 400, height: 220, fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(width: 470, height: 260,
                         color: const Color(0xFFE0F7FA),
                         child: const Icon(Icons.computer, size: 60, color: Color(0xFF4DD0C4)))),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
-                  child: Center(child: Text(widget.lesson.title, textAlign: TextAlign.center,
+                  child: Center(child: Text(lesson.title, textAlign: TextAlign.center,
                       style: const TextStyle(fontFamily: 'Chennai', fontSize: 18,
                           fontWeight: FontWeight.w500, color: Color(0xFF222222)))),
                 ),

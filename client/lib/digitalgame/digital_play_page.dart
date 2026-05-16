@@ -319,7 +319,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
             child: Container(
               width: 52,
               height: 52,

@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'digital_play_page.dart';
 import 'digitalplaypagelesson2.dart';
+import 'digital_play_page_lesson3.dart';
 
 class DigitalLessonPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalLessonPage({super.key, required this.lesson});
+  final int initialSlide;
+  final bool skipToPlay;
+  const DigitalLessonPage({super.key, required this.lesson, this.initialSlide = 0, this.skipToPlay = false});
 
   @override
   State<DigitalLessonPage> createState() => _DigitalLessonPageState();
 }
 
 class _DigitalLessonPageState extends State<DigitalLessonPage> {
-  int _currentSlide = 0;
+  late int _currentSlide;
   bool _listenMode = false;
   int _playScore = 0;
   int _reviewScore = 0;
@@ -29,6 +33,38 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
   // Open question state
   final TextEditingController _openAnswerController = TextEditingController();
   bool _openAnswerSubmitted = false;
+
+  String get _slideKey => 'lesson_slide_${widget.lesson['number']}';
+
+  @override
+  void initState() {
+    super.initState();
+    _currentSlide = widget.initialSlide;
+    if (widget.skipToPlay) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToPlay());
+    }
+  }
+
+  Future<void> _saveSlide() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_slideKey, _currentSlide);
+  }
+
+  Future<void> _clearSlide() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_slideKey, -1); // -1 = slides done, play page is next
+  }
+
+  void _navigateToPlay() {
+    final lessonNumber = widget.lesson['number'] as int;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => lessonNumber == 2
+          ? DigitalPlayPageLesson2(lesson: widget.lesson)
+          : lessonNumber == 3
+              ? DigitalPlayPageLesson3(lesson: widget.lesson)
+              : DigitalPlayPage(lesson: widget.lesson),
+    ));
+  }
 
   @override
   void dispose() {
@@ -131,24 +167,32 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
           _SlideData.image(title: 'Passwords',                         imagePath: 'assets/images/lesson217.jpeg'),
         ];
 
-      case 3:
-        return [
-          _SlideData.image(title: 'Digital Collaboration',          imagePath: 'assets/images/1.jpeg'),
-          _SlideData.image(title: 'What is Digital Collaboration?', imagePath: 'assets/images/2.jpeg'),
-          _SlideData.image(title: 'Collaboration Tools',            imagePath: 'assets/images/3.jpeg'),
-          _SlideData.image(title: 'Effective Communication',        imagePath: 'assets/images/5.jpeg'),
-          _SlideData.image(title: 'Sharing Documents',              imagePath: 'assets/images/6.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/7.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/8.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/10.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/12.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/13.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/14.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/15.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/16.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/17.jpeg'),
-          _SlideData.image(title: 'Lesson Summary',                 imagePath: 'assets/images/18.jpeg'),
-        ];
+     case 3:
+  return [
+    _SlideData.image(title: 'Digital Collaboration',              imagePath: 'assets/images/lesson31.png'),
+    _SlideData.image(title: 'What is Collaboration?',             imagePath: 'assets/images/lesson33.jpeg'),
+    _SlideData.image(title: 'What is Digital Collaboration?',     imagePath: 'assets/images/lesson312.png'),
+    _SlideData.survey(
+      title: 'Survey Question',
+      question: 'Do you know what "collaboration" means?',
+      answers: [
+        'I\'m not sure; it\'s a pretty big word.',
+        'It\'s when a group of people share ideas and input on a project.',
+        'It\'s when you work on a project by yourself.',
+        'I have heard the word, but I am not 100% sure of its meaning.',
+      ],
+      percentages: [20, 60, 4, 16],
+    ),
+    _SlideData.image(title: 'How?',                               imagePath: 'assets/images/lesson34.jpeg'),
+    _SlideData.image(title: 'Applications\' Collaboration Feature', imagePath: 'assets/images/lesson310.png'),
+    _SlideData.image(title: 'Video Conferencing Technology',      imagePath: 'assets/images/lesson37.jpeg'),
+    _SlideData.image(title: 'Global Trends Influence Technology', imagePath: 'assets/images/lesson38.jpeg'),
+    _SlideData.image(title: 'What is a Trend?',                   imagePath: 'assets/images/lesson310.png'),
+    _SlideData.image(title: 'Why do Global Trends Influence Technology', imagePath: 'assets/images/lesson36.jpeg'),
+    _SlideData.image(title: 'Is Virtual Reality a Trend?',        imagePath: 'assets/images/lesson312.png'),
+    _SlideData.image(title: 'Digital Collaboration Etiquette',    imagePath: 'assets/images/lesson39.jpeg'),
+    _SlideData.image(title: 'Digital Collaboration Etiquette 2',  imagePath: 'assets/images/lesson311.jpeg'),
+  ];
 
       default:
         return [_SlideData.image(title: 'Lesson', imagePath: 'assets/images/1.jpeg')];
@@ -180,15 +224,10 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
         _openAnswerSubmitted = false;
         _openAnswerController.clear();
       });
+      _saveSlide();
     } else {
-  final lessonNumber = widget.lesson['number'] as int;
-  Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => lessonNumber == 2
-          ? DigitalPlayPageLesson2(lesson: widget.lesson)
-          : DigitalPlayPage(lesson: widget.lesson),
-    ),
-  );
+      _clearSlide();
+      _navigateToPlay();
     }
   }
 
@@ -201,6 +240,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
         _openAnswerSubmitted = false;
         _openAnswerController.clear();
       });
+      _saveSlide();
     }
   }
 
@@ -248,7 +288,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
             child: Container(
               width: 52, height: 52,
               padding: const EdgeInsets.all(6),
@@ -311,7 +351,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                     onEnter: (_) => setState(() => _hoveredDot = i),
                     onExit: (_) => setState(() => _hoveredDot = null),
                     child: GestureDetector(
-                      onTap: isCompleted ? () => setState(() => _currentSlide = i) : null,
+                      onTap: isCompleted ? () { setState(() => _currentSlide = i); _saveSlide(); } : null,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         margin: const EdgeInsets.only(right: 3),

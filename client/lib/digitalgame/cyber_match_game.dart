@@ -3,7 +3,8 @@ import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'digital_review_page.dart';
+import 'digital_quiz_page_lesson2.dart';
+import '../services/api_service.dart';
 
 // ── COLORS ───────────────────────────────────────────────────────────────────
 class _K {
@@ -137,6 +138,19 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
     _timer = null;
   }
 
+  Future<void> _saveScore() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    final score = (_moves <= _pairs.length)
+        ? 100
+        : (100 - (_moves - _pairs.length) * 5).clamp(50, 100);
+    await ApiService.saveLevelResult(
+      gameId: 'digital-literacy',
+      level: 500 + lessonNumber,
+      completed: true,
+      score: score,
+    );
+  }
+
   String get _timeStr {
     final m = (_secs ~/ 60).toString().padLeft(2, '0');
     final s = (_secs % 60).toString().padLeft(2, '0');
@@ -178,6 +192,7 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
         if (_matched == _pairs.length) {
           _stopTimer();
           setState(() => _won = true);
+          _saveScore();
         }
       });
     } else {
@@ -345,7 +360,7 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
           GestureDetector(
             onTap: _won
                 ? () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => DigitalReviewPage(lesson: widget.lesson),
+                      builder: (_) => DigitalQuizPageLesson2(lesson: widget.lesson),
                     ))
                 : null,
             child: Container(
@@ -541,7 +556,7 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
               time: _timeStr,
               onPlayAgain: _reset,
               onNext: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => DigitalReviewPage(lesson: widget.lesson),
+                builder: (_) => DigitalQuizPageLesson2(lesson: widget.lesson),
               )),
             ),
           ),

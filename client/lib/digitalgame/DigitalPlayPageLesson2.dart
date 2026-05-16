@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'digitalplaypagelesson2wordmatch.dart';
+import '../services/api_service.dart';
 
 // ── COLORS ──────────────────────────────────────────────────────────────────
 class _C {
@@ -557,6 +558,17 @@ class _DigitalPlayPageLesson2State extends State<DigitalPlayPageLesson2>
 
   void _endGame() {
     setState(() { _running = false; _showEnd = true; });
+    _saveScore();
+  }
+
+  Future<void> _saveScore() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    await ApiService.saveLevelResult(
+      gameId: 'digital-literacy',
+      level: 600 + lessonNumber,
+      completed: _correct == _concepts.length,
+      score: (_correct / _concepts.length * 100).round(),
+    );
   }
 
   String _rank() {
@@ -650,7 +662,7 @@ class _DigitalPlayPageLesson2State extends State<DigitalPlayPageLesson2>
           const SizedBox(height: 16),
           // Back button
           GestureDetector(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
             child: Container(
               width: 72, height: 56,
               padding: const EdgeInsets.all(6),

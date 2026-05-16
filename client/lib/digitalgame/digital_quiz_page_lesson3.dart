@@ -15,65 +15,72 @@ class _Question {
     required this.correctIndex,
   });
 }
+
 const List<_Question> _kQuestions = [
   _Question(
-    question: 'What are the building blocks that make up the internet?',
+    question: 'What does digital collaboration mean?',
     options: [
-      'Lasers and satellites.',
-      'Many, many software applications.',
-      'Computers connected by cables and other hardware.',
-      'Radio waves and the clouds.',
+      'It\'s when people share ideas on projects using their computers even when they are not physically in the same location.',
+      'It\'s when people work on the computers when they are at home.',
+      'It\'s when someone creates artwork on the computer and then sends it to others.',
+      'It\'s when multiple people can log onto a computer application.',
+    ],
+    correctIndex: 0,
+  ),
+  _Question(
+    question: 'How do you invite a friend to digitally collaborate with you on a document or slide presentation?',
+    options: [
+      'You politely ask them to help you with the project.',
+      'You tell them where the document is located.',
+      'You enter the friend\'s email address in the share feature of the application.',
+      'You send a picture of the document to the friend using email.',
     ],
     correctIndex: 2,
   ),
   _Question(
-    question: 'What is an example of software?',
+    question: 'Who is the host of a video conferencing session?',
     options: [
-      'A mouse.',
-      'A browser application.',
-      'A desk chair cushion.',
-      'A keyboard.',
+      'The person who talks the most during the session.',
+      'The person who schedules, starts, and manages the session.',
+      'The oldest person, who is in charge of the other attendees.',
+      'The person who is unmuted and makes the most noise.',
     ],
     correctIndex: 1,
   ),
   _Question(
-    question: 'Websites are located by a user-friendly address like app.codemonkey.com. What is this address called?',
-    options: ['URL', 'PAM', 'ABC', 'MAT'],
-    correctIndex: 0,
+    question: 'What does a "global trend" mean?',
+    options: [
+      'When your friends begin doing something new.',
+      'When a new movie comes out, and many people go to see it.',
+      'When you notice that many people are wearing the same color.',
+      'When much of the world begins doing the same thing.',
+    ],
+    correctIndex: 3,
   ),
   _Question(
-    question: 'If you want to send an email to a lot of recipients, and you don\'t want them to see each others\' email addresses, where should you put the email addresses?',
+    question: 'Why do trends influence technology?',
     options: [
-      'In the To:.',
-      'In the Cc:.',
-      'In the Bcc:.',
-      'This isn\'t possible.',
+      'Because the technology begins the trend.',
+      'Because companies try to respond to the consumers\' needs with new technology.',
+      'Because companies get bored building old technology.',
+      'Because trends make companies a lot of money.',
     ],
-    correctIndex: 2,
-  ),
-  _Question(
-    question: 'What is the internet?',
-    options: [
-      'A huge network of connected computers.',
-      'A type of software program.',
-      'A device for storing files.',
-      'A social media platform.',
-    ],
-    correctIndex: 0,
+    correctIndex: 1,
   ),
 ];
+
 // ===========================================================================
 //  PAGE
 // ===========================================================================
-class DigitalQuizPage extends StatefulWidget {
+class DigitalQuizPageLesson3 extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalQuizPage({super.key, required this.lesson});
+  const DigitalQuizPageLesson3({super.key, required this.lesson});
 
   @override
-  State<DigitalQuizPage> createState() => _DigitalQuizPageState();
+  State<DigitalQuizPageLesson3> createState() => _DigitalQuizPageLesson3State();
 }
 
-class _DigitalQuizPageState extends State<DigitalQuizPage> {
+class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
   int _currentQ = 0;
   int? _selectedIdx;
   int? _hoveredIdx;
@@ -122,6 +129,7 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
       _submitted = false;
     });
   }
+
   void _showCompletedDialog() async {
     final lessonNumber = widget.lesson['number'] as int;
     await ApiService.saveQuizScore(
@@ -150,13 +158,14 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final lessonNumber = widget.lesson['number'] as int;
     final lessonTitle = widget.lesson['title'] as String;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1FB5C9),
+      backgroundColor: const Color.fromARGB(255,25, 153, 176),
       body: Column(
         children: [
           _buildNavBar(lessonNumber, lessonTitle),
@@ -169,7 +178,6 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                   label: 'PREVIOUS',
                   onTap: _currentQ > 0 ? _prev : null,
                 ),
-                // ── narrow white box ──
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 60),
@@ -181,7 +189,7 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                 ),
                 _buildSideButton(
                   icon: Icons.arrow_forward_ios,
-                  label: 'NEXT',
+                  label: _isLast && _submitted ? 'FINISH' : 'NEXT',
                   onTap: _canNext ? _next : null,
                 ),
               ],
@@ -209,7 +217,7 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
               child: const Icon(Icons.pets, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 10),
-            Text('nameof web',
+            Text('name of web',
                 style: GoogleFonts.montserrat(
                     color: const Color(0xFFF5A623),
                     fontSize: 18, fontWeight: FontWeight.w900)),
@@ -276,11 +284,11 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                   fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
           _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
-              label: 'LEARN', value: '18/18',
+              label: 'LEARN', value: '12/12',
               bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
           const SizedBox(width: 8),
           _buildTopBox(icon: Icons.sports_esports, iconColor: const Color(0xFF4CAF50),
-              label: 'PLAY', value: '3/3',
+              label: 'PLAY', value: '2/2',
               bgColor: const Color(0xFF4CAF50).withOpacity(0.15)),
           const SizedBox(width: 8),
           _buildReviewBox(),
@@ -378,7 +386,6 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── QUESTION CARD ──
         Padding(
           padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
           child: Container(
@@ -386,12 +393,11 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
             padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
             decoration: BoxDecoration(
               color: const Color(0xFFD6F1F8),
-              borderRadius: BorderRadius.circular(28), // more rounded
+              borderRadius: BorderRadius.circular(28),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── BADGE in Chennai font ──
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                   decoration: BoxDecoration(
@@ -399,36 +405,25 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFE8D080)),
                   ),
-                  child: Text(
-                    'REVIEW QUESTION #${_currentQ + 1}',
-                    style: const TextStyle(
-                      fontFamily: 'Chennai', // ← Chennai font
-                      fontSize: 13,
-                      color: Color(0xFF888844),
-                      letterSpacing: 1,
-                    ),
-                  ),
+                  child: Text('REVIEW QUESTION #${_currentQ + 1}',
+                      style: const TextStyle(
+                          fontFamily: 'Chennai', fontSize: 13,
+                          color: Color(0xFF888844), letterSpacing: 1)),
                 ),
                 const SizedBox(height: 14),
-                Text(
-                  _q.question,
-                  style: GoogleFonts.nunito(
-                      fontSize: 22, fontWeight: FontWeight.w700,
-                      color: const Color(0xFF1A237E), height: 1.4),
-                ),
+                Text(_q.question,
+                    style: GoogleFonts.nunito(
+                        fontSize: 22, fontWeight: FontWeight.w700,
+                        color: const Color(0xFF1A237E), height: 1.4)),
               ],
             ),
           ),
         ),
-
         const SizedBox(height: 24),
-
-        // ── ANSWER OPTIONS + SUBMIT ──
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // answers
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(32, 0, 16, 24),
@@ -439,7 +434,6 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                   ),
                 ),
               ),
-              // submit button
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 0, 32, 24),
                 child: Center(child: _buildSubmitButton()),
@@ -451,128 +445,103 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
     );
   }
 
-  // ── ANSWER OPTION ──
   Widget _buildAnswerOption(int idx) {
-  final label = _labels[idx];
-  final text = _q.options[idx];
-  final isSelected = _selectedIdx == idx;
-  final isHovered = _hoveredIdx == idx && !_submitted;
-  final isCorrect = _submitted && idx == _q.correctIndex;
-  final isWrong = _submitted && isSelected && idx != _q.correctIndex;
-  final isHighlighted = isSelected || isHovered;
+    final label = _labels[idx];
+    final text = _q.options[idx];
+    final isSelected = _selectedIdx == idx;
+    final isHovered = _hoveredIdx == idx && !_submitted;
+    final isCorrect = _submitted && idx == _q.correctIndex;
+    final isWrong = _submitted && isSelected && idx != _q.correctIndex;
 
-  // ── CIRCLE colors ──
- // ── CIRCLE colors ──
-Color circleBg;
-Color circleBorder;
-Color circleText;
-Widget? circleChild;
+    Color circleBg, circleBorder, circleText;
+    Widget? circleChild;
 
-if (isCorrect) {
-  circleBg = const Color(0xFF4CAF50);
-  circleBorder = const Color(0xFF388E3C);
-  circleText = Colors.white;
-  circleChild = const Icon(Icons.check, color: Colors.white, size: 22);
-} else if (isWrong) {
-  circleBg = const Color(0xFFE57373);
-  circleBorder = const Color(0xFFE53935);
-  circleText = Colors.white;
-  circleChild = const Icon(Icons.close, color: Colors.white, size: 22);
-} else if (isSelected) {
-  // ← only on CLICK, not hover
-  circleBg = const Color(0xFFFFC83D);
-  circleBorder = const Color(0xFFE0A300);
-  circleText = const Color(0xFF28204A);
-  circleChild = null;
-} else {
-  // hover OR unselected — same cream style
-  circleBg = const Color(0xFFFFF0C0);
-  circleBorder = const Color(0xFFE8D080);
-  circleText = const Color(0xFF28204A);
-  circleChild = null;
-}
+    if (isCorrect) {
+      circleBg = const Color(0xFF4CAF50);
+      circleBorder = const Color(0xFF388E3C);
+      circleText = Colors.white;
+      circleChild = const Icon(Icons.check, color: Colors.white, size: 22);
+    } else if (isWrong) {
+      circleBg = const Color(0xFFE57373);
+      circleBorder = const Color(0xFFE53935);
+      circleText = Colors.white;
+      circleChild = const Icon(Icons.close, color: Colors.white, size: 22);
+    } else if (isSelected) {
+      circleBg = const Color(0xFFFFC83D);
+      circleBorder = const Color(0xFFE0A300);
+      circleText = const Color(0xFF28204A);
+      circleChild = null;
+    } else {
+      circleBg = const Color(0xFFFFF0C0);
+      circleBorder = const Color(0xFFE8D080);
+      circleText = const Color(0xFF28204A);
+      circleChild = null;
+    }
 
- Widget textWidget;
-if (isWrong) {
-  textWidget = Container(
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0xFFE57373),
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Text(text, style: GoogleFonts.nunito(
-        fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-  );
-} else if (isCorrect) {
-  textWidget = Container(
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-    decoration: BoxDecoration(
-      color: const Color(0xFF4CAF50),
-      borderRadius: BorderRadius.circular(24),
-    ),
-    child: Text(text, style: GoogleFonts.nunito(
-        fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
-  );
-} else if (isSelected && !_submitted) {
-  // CLICK — yellow border pill
-  textWidget = Container(
-    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-    decoration: BoxDecoration(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xFFFFC83D), width: 2),
-    ),
-    child: Text(text, style: GoogleFonts.nunito(
-        fontSize: 18, fontWeight: FontWeight.w600,
-        color: const Color(0xFF28204A))),
-  );
-} else if (isHovered) {
-  // HOVER — yellow pill no border (same as before)
-  textWidget = Row(
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+    Widget textWidget;
+    if (isWrong) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(color: const Color(0xFFE57373),
+            borderRadius: BorderRadius.circular(24)),
+        child: Text(text, style: GoogleFonts.nunito(
+            fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      );
+    } else if (isCorrect) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(color: const Color(0xFF4CAF50),
+            borderRadius: BorderRadius.circular(24)),
+        child: Text(text, style: GoogleFonts.nunito(
+            fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      );
+    } else if (isSelected && !_submitted) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFC83D).withOpacity(0.35),
-          borderRadius: BorderRadius.circular(20),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFFFC83D), width: 2),
         ),
         child: Text(text, style: GoogleFonts.nunito(
             fontSize: 18, fontWeight: FontWeight.w600,
             color: const Color(0xFF28204A))),
-      ),
-    ],
+      );
+    } else if (isHovered) {
+  textWidget = Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFC83D).withOpacity(0.35),
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text(text, softWrap: true, style: GoogleFonts.nunito(
+        fontSize: 18, fontWeight: FontWeight.w600,
+        color: const Color(0xFF28204A))),
   );
-} else {
-  // plain
-  textWidget = Text(text, style: GoogleFonts.nunito(
-      fontSize: 18, fontWeight: FontWeight.w600,
-      color: const Color.fromARGB(255,40, 32, 74)));
-}
+    } else {
+      textWidget = Text(text, style: GoogleFonts.nunito(
+          fontSize: 18, fontWeight: FontWeight.w600,
+          color: const Color(0xFF28204A)));
+    }
 
-  return MouseRegion(
-    cursor: SystemMouseCursors.click,
-    onEnter: (_) => setState(() => _hoveredIdx = idx),
-    onExit: (_) => setState(() => _hoveredIdx = null),
-    child: GestureDetector(
-      onTap: () => _selectAnswer(idx),
-      child: Container(
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hoveredIdx = idx),
+      onExit: (_) => setState(() => _hoveredIdx = null),
+      child: GestureDetector(
+        onTap: () => _selectAnswer(idx),
+        child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            // circle
+padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Container(
               width: 44, height: 44,
               decoration: BoxDecoration(
-                color: circleBg,
-                shape: BoxShape.circle,
+                color: circleBg, shape: BoxShape.circle,
                 border: Border.all(color: circleBorder, width: 2),
-                boxShadow: [
-                  BoxShadow(
+                boxShadow: [BoxShadow(
                     color: circleBorder.withOpacity(0.3),
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+                    offset: const Offset(0, 3))],
               ),
               child: Center(
                 child: circleChild ?? Text(label,
@@ -582,95 +551,80 @@ if (isWrong) {
               ),
             ),
             const SizedBox(width: 16),
-            // text pill
-            textWidget,
-          ],
+            Expanded(child: textWidget),
+          ]),
         ),
       ),
-    ),
-  );
-}
-  // ── SUBMIT BUTTON ──
-  Widget _buildSubmitButton() {
-  final canSubmit = _selectedIdx != null && !_submitted;
+    );
+  }
 
-  return GestureDetector(
-    onTap: canSubmit ? _submit : null,
-    child: AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      width: 160, height: 160,
-      decoration: BoxDecoration(
-        color: canSubmit
-            ? const Color(0xFFFFE48A)
-            : const Color(0xFFE8E8E8),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: canSubmit
-              ? const Color(0xFFE0A300)
-              : const Color(0xFFCCCCCC),
-          width: 2.5,
+  Widget _buildSubmitButton() {
+    final canSubmit = _selectedIdx != null && !_submitted;
+    return GestureDetector(
+      onTap: canSubmit ? _submit : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 160, height: 160,
+        decoration: BoxDecoration(
+          color: canSubmit ? const Color(0xFFFFE48A) : const Color(0xFFE8E8E8),
+          shape: BoxShape.circle,
+          border: Border.all(
+              color: canSubmit ? const Color(0xFFE0A300) : const Color(0xFFCCCCCC),
+              width: 2.5),
+          boxShadow: canSubmit
+              ? [BoxShadow(color: const Color(0xFFE0A300).withOpacity(0.3),
+                  blurRadius: 12, offset: const Offset(0, 4))]
+              : [],
         ),
-        boxShadow: canSubmit
-            ? [BoxShadow(
-                color: const Color(0xFFE0A300).withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4))]
-            : [],
-      ),
-      child: Center(
-        child: Text(
-          _submitted ? 'SUBMITTED' : 'SUBMIT YOUR\nANSWER',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontFamily: 'Chennai',
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF28204A),
-            height: 1.4,
+        child: Center(
+          child: Text(
+            _submitted ? 'SUBMITTED' : 'SUBMIT YOUR\nANSWER',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontFamily: 'Chennai', fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF28204A), height: 1.4),
           ),
         ),
       ),
-    ),
-  );
-}
-  // ── SIDE BUTTON ──
+    );
+  }
+
   Widget _buildSideButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback? onTap,
+    required IconData icon, required String label, required VoidCallback? onTap,
   }) {
     final bool enabled = onTap != null;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100,
-        height: double.infinity,
-        color: const Color(0xFF1999B0),
+        width: 100, height: double.infinity,
+        color: const Color.fromARGB(255,25, 153, 176),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
               width: 70, height: 70,
               decoration: BoxDecoration(
-                color: enabled
-                    ? const Color(0xFFF5A623)
-                    : Colors.white.withOpacity(0.2),
+                color: enabled ? const Color(0xFFF5A623) : Colors.white.withOpacity(0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon,
                   color: enabled ? Colors.white : Colors.white38, size: 32),
             ),
             const SizedBox(height: 8),
-            Text(label,
-                style: GoogleFonts.nunito(
-                    color: enabled ? Colors.white : Colors.white38,
-                    fontSize: 12, fontWeight: FontWeight.w800)),
+            Text(label, style: GoogleFonts.nunito(
+                color: enabled ? Colors.white : Colors.white38,
+                fontSize: 12, fontWeight: FontWeight.w800)),
           ],
         ),
       ),
     );
   }
 }
+
+// ===========================================================================
+//  COMPLETION SCREEN
+// ===========================================================================
 class _CompletionScreen extends StatelessWidget {
   final String lessonTitle;
   final int lessonNumber;
@@ -680,21 +634,17 @@ class _CompletionScreen extends StatelessWidget {
   final VoidCallback onNext;
 
   const _CompletionScreen({
-    required this.lessonTitle,
-    required this.lessonNumber,
-    required this.score,
-    required this.total,
-    required this.onBack,
-    required this.onNext,
+    required this.lessonTitle, required this.lessonNumber,
+    required this.score, required this.total,
+    required this.onBack, required this.onNext,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF4ABFB8),
+      backgroundColor: const Color.fromARGB(255,25, 153, 176),
       body: Column(
         children: [
-          // ── NAVBAR ──
           Container(
             color: const Color(0xFF2C1F14),
             height: 52,
@@ -710,7 +660,7 @@ class _CompletionScreen extends StatelessWidget {
                     child: const Icon(Icons.pets, color: Colors.white, size: 20),
                   ),
                   const SizedBox(width: 10),
-                  Text('CODEMONKEY',
+                  Text('name of web',
                       style: GoogleFonts.montserrat(
                           color: const Color(0xFFF5A623),
                           fontSize: 18, fontWeight: FontWeight.w900)),
@@ -736,8 +686,6 @@ class _CompletionScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // ── TOP BAR ──
           Container(
             color: const Color(0xFFADE8F4),
             height: 70,
@@ -774,17 +722,14 @@ class _CompletionScreen extends StatelessWidget {
                     style: const TextStyle(
                         fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
                 const Spacer(),
-                // LEARN
                 _topBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
-                    label: 'LEARN', value: '18/18',
+                    label: 'LEARN', value: '12/12',
                     bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
                 const SizedBox(width: 8),
-                // PLAY
                 _topBox(icon: Icons.sports_esports, iconColor: const Color(0xFF4CAF50),
-                    label: 'PLAY', value: '3/3',
+                    label: 'PLAY', value: '2/2',
                     bgColor: const Color(0xFF4CAF50).withOpacity(0.15)),
                 const SizedBox(width: 8),
-                // REVIEW — all dots green
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                   decoration: BoxDecoration(
@@ -821,31 +766,22 @@ class _CompletionScreen extends StatelessWidget {
               ],
             ),
           ),
-
-          // ── MAIN CONTENT ──
           Expanded(
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // ── WHITE CARD ──
                   Container(
-                    width: 780,
-                    height: 260,
+                    width: 780, height: 260,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
+                      boxShadow: [BoxShadow(
                           color: Colors.black.withOpacity(0.1),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
+                          blurRadius: 20, offset: const Offset(0, 8))],
                     ),
                     child: Row(
                       children: [
-                        // ── LEFT TEXT ──
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(48, 0, 24, 0),
@@ -855,29 +791,23 @@ class _CompletionScreen extends StatelessWidget {
                               children: [
                                 Text('GREAT JOB!',
                                     style: GoogleFonts.nunito(
-                                        fontSize: 48,
-                                        fontWeight: FontWeight.w900,
-                                        color: const Color(0xFF3D2B8F),
-                                        letterSpacing: 1)),
+                                        fontSize: 48, fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF3D2B8F), letterSpacing: 1)),
                                 const SizedBox(height: 12),
                                 Text('You\'ve completed "$lessonTitle"',
                                     style: GoogleFonts.nunito(
-                                        fontSize: 18,
-                                        color: const Color(0xFF444444))),
+                                        fontSize: 18, color: const Color(0xFF444444))),
                                 const SizedBox(height: 8),
                                 RichText(
                                   text: TextSpan(
                                     style: GoogleFonts.nunito(
-                                        fontSize: 16,
-                                        color: const Color(0xFF555555)),
+                                        fontSize: 16, color: const Color(0xFF555555)),
                                     children: [
                                       const TextSpan(text: 'Review score '),
-                                      TextSpan(
-                                        text: '$score/$total',
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.w900,
-                                            color: Color(0xFF333333)),
-                                      ),
+                                      TextSpan(text: '$score/$total',
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              color: Color(0xFF333333))),
                                       const TextSpan(text: ' correct answers'),
                                     ],
                                   ),
@@ -886,43 +816,30 @@ class _CompletionScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // ── RIGHT IMAGE ──
                         ClipRRect(
                           borderRadius: const BorderRadius.only(
-                            topRight: Radius.circular(20),
-                            bottomRight: Radius.circular(20),
-                          ),
-                          child: Image.asset(
-                            'assets/images/great.png',
-                            width: 300,
-                            height: 260,
-                            fit: BoxFit.cover,
-                          ),
+                              topRight: Radius.circular(20),
+                              bottomRight: Radius.circular(20)),
+                          child: Image.asset('assets/images/great.png',
+                              width: 300, height: 260, fit: BoxFit.cover),
                         ),
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 48),
-
-                  // ── BUTTONS ──
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFE48A),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: const Color(0xFFE0A300), width: 2),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0xFFE0A300),
-                                  offset: Offset(0, 4)),
-                            ],
+                            border: Border.all(color: const Color(0xFFE0A300), width: 2),
+                            boxShadow: const [BoxShadow(
+                                color: Color(0xFFE0A300), offset: Offset(0, 4))],
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                             const Icon(Icons.arrow_back_ios,
@@ -940,17 +857,13 @@ class _CompletionScreen extends StatelessWidget {
                       GestureDetector(
                         onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFE48A),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: const Color(0xFFE0A300), width: 2),
-                            boxShadow: const [
-                              BoxShadow(color: Color(0xFFE0A300),
-                                  offset: Offset(0, 4)),
-                            ],
+                            border: Border.all(color: const Color(0xFFE0A300), width: 2),
+                            boxShadow: const [BoxShadow(
+                                color: Color(0xFFE0A300), offset: Offset(0, 4))],
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
                             Text('Next lesson',
