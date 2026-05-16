@@ -238,10 +238,29 @@ flutter:
     - assets/images/digitalbackground.png
     - assets/images/spider.png
     - assets/images/spider2.png
+    - assets/images/review.png
+    - assets/images/great.png
+    - assets/images/lesson21.jpeg
+    - assets/images/lesson22.jpeg
+    - assets/images/lesson23.jpeg
+    - assets/images/lesson24.jpeg
+    - assets/images/lesson26.jpeg
+    - assets/images/lesson27.jpeg
+    - assets/images/lesson28.jpeg
+    - assets/images/lesson210.jpeg
+    - assets/images/lesson211.jpeg
+    - assets/images/lesson212.jpeg
+    - assets/images/lesson213.jpeg
+    - assets/images/lesson215.jpeg
+    - assets/images/lesson216.jpeg
+    - assets/images/lesson217.jpeg
+
 
 
 
   fonts:
+    - family: VT323
+    - family: Press Start 2P
     - family: Xolonium
       fonts:
         - asset: assets/fonts/xolonium-regular.ttf
