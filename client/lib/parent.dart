@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'parent/parent_signup_page.dart';
 
 class parentAccountPage extends StatefulWidget {
   const parentAccountPage({super.key});
@@ -56,6 +57,19 @@ class _parentAccountPageState extends State<parentAccountPage>
           !_showRePasswordError &&
           _passwordController.text != _rePasswordController.text;
     });
+
+    final hasError = _emailController.text.isEmpty ||
+        _displayNameController.text.isEmpty ||
+        _passwordController.text.isEmpty ||
+        _rePasswordController.text.isEmpty ||
+        _passwordController.text != _rePasswordController.text;
+
+    if (!hasError) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ParentSignupPage()),
+      );
+    }
   }
 
   @override

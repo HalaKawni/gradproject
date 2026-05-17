@@ -11,7 +11,8 @@
       "Bash(python -)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\" -Force)",
       "Bash(Select-Object Name, PSIsContainer)",
-      "Bash(awk -F/ ' *)"
+      "Bash(awk -F/ ' *)",
+      "Bash(dart analyze *)"
     ]
   }
 }
