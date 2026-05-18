@@ -1,32 +1,156 @@
+# name: client
+# description: "A new Flutter project."
+# # The following line prevents the package from being accidentally published to
+# # pub.dev using `flutter pub publish`. This is preferred for private packages.
+# publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# # The following defines the version and build number for your application.
+# # A version number is three numbers separated by dots, like 1.2.43
+# # followed by an optional build number separated by a +.
+# # Both the version and the builder number may be overridden in flutter
+# # build by specifying --build-name and --build-number, respectively.
+# # In Android, build-name is used as versionName while build-number used as versionCode.
+# # Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# # In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# # Read more about iOS versioning at
+# # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# # In Windows, build-name is used as the major, minor, and patch parts
+# # of the product and file versions while build-number is used as the build suffix.
+# version: 1.0.0+1
+
+# environment:
+#   sdk: ^3.11.4
+
+# # Dependencies specify other packages that your package needs in order to work.
+# # To automatically upgrade your package dependencies to the latest versions
+# # consider running `flutter pub upgrade --major-versions`. Alternatively,
+# # dependencies can be manually updated by changing the version numbers below to
+# # the latest version available on pub.dev. To see which dependencies have newer
+# # versions available, run `flutter pub outdated`.
+# dependencies:
+#   flutter:
+#     sdk: flutter
+#   webview_flutter: ^4.4.0
+#   path_provider: ^2.1.2
+#   flame: ^1.18.0
+#   http: ^1.2.0
+#   shared_preferences: ^2.2.2
+#   # The following adds the Cupertino Icons font to your application.
+#   # Use with the CupertinoIcons class for iOS style icons.
+#   cupertino_icons: ^1.0.8
+#   google_fonts: ^8.0.2
+
+# dev_dependencies:
+#   flutter_test:
+#     sdk: flutter
+
+#   # The "flutter_lints" package below contains a set of recommended lints to
+#   # encourage good coding practices. The lint set provided by the package is
+#   # activated in the `analysis_options.yaml` file located at the root of your
+#   # package. See that file for information about deactivating specific lint
+#   # rules and activating additional ones.
+#   flutter_lints: ^6.0.0
+
+# # For information on the generic Dart part of this file, see the
+# # following page: https://dart.dev/tools/pub/pubspec
+
+# # The following section is specific to Flutter packages.
+# flutter:
+
+#   uses-material-design: true
+
+#   assets:
+#     - assets/game.html
+#     - assets/phaser.min.js
+#     - assets/images/background1.jpg
+#     - assets/images/monkey.png
+#     - assets/images/monkey1.png
+#     - assets/images/background_blue.png
+#     - assets/images/giraff.png
+#     - assets/images/elephant2.png
+#     - assets/images/login_bg.jpg
+#     - assets/images/clouds.png
+#     - assets/images/signup_bg.jpg
+#     - assets/images/student.jpg
+#     - assets/images/parent.jpg
+#     - assets/images/Jr1.png
+#     - assets/images/monkey_yes.png
+#     - assets/images/monkey_no.png
+#     - assets/images/background3.jpg
+#     - assets/images/elephant_no.jpg
+#     - assets/images/elephant_yes.jpg
+#     - assets/images/classroom2.jpg
+#     - assets/images/home.png
+#     - assets/images/age.png
+#     - assets/images/sign.png
+#     - assets/images/grasshopper.png
+#     - assets/images/course1.jpg
+#     - assets/images/course2.jpg
+#     - assets/images/dashboard.jpg
+#     - assets/images/hot_air_baloon.png
+#     - assets/images/tiny_swords/Terrain/Ground/
+#     - assets/images/tiny_swords/Terrain/Water/
+#     - assets/images/tiny_swords/Terrain/Water/Rocks/
+#     - assets/images/tiny_swords/Factions/Knights/Buildings/Castle/
+#     - assets/images/tiny_swords/Factions/Knights/Buildings/House/
+#     - assets/images/tiny_swords/Factions/Knights/Buildings/Tower/
+#     - assets/images/tiny_swords/Factions/Knights/Troops/Warrior/Blue/
+#     - assets/images/tiny_swords/Factions/Knights/Troops/Pawn/Blue/
+#     - assets/images/tiny_swords/Factions/Knights/Troops/Archer/Blue/
+#     - assets/images/tiny_swords/Factions/Knights/Troops/Dead/
+#     - assets/images/tiny_swords/Resources/Trees/
+#     - assets/images/tiny_swords/Resources/Sheep/
+#     - assets/images/tiny_swords/UI/Buttons/
+#     - assets/images/tiny_swords/Deco/
+#     - assets/images/tiny_swords/Terrain/Water/Foam/
+#     - assets/images/tiny_swords/UI/Banners/
+#     - assets/images/digital1.jpg
+#     - assets/images/digital2.jpg
+#     - assets/images/digital3.jpg
+   
+    
+
+#   # To add assets to your application, add an assets section, like this:
+#   # assets:
+#   #   - images/a_dot_burr.jpeg
+#   #   - images/a_dot_ham.jpeg
+
+#   # An image asset can refer to one or more resolution-specific "variants", see
+#   # https://flutter.dev/to/resolution-aware-images
+
+#   # For details regarding adding assets from package dependencies, see
+#   # https://flutter.dev/to/asset-from-package
+
+#   # To add custom fonts to your application, add a fonts section here,
+#   # in this "flutter" section. Each entry in this list should have a
+#   # "family" key with the font family name, and a "fonts" key with a
+#   # list giving the asset and other descriptors for the font. For
+#   # example:
+#   # fonts:
+#   #   - family: Schyler
+#   #     fonts:
+#   #       - asset: fonts/Schyler-Regular.ttf
+#   #       - asset: fonts/Schyler-Italic.ttf
+#   #         style: italic
+#   #   - family: Trajan Pro
+#   #     fonts:
+#   #       - asset: fonts/TrajanPro.ttf
+#   #       - asset: fonts/TrajanPro_Bold.ttf
+#   #         weight: 700
+#   #
+#   # For details regarding fonts from package dependencies,
+#   # see https://flutter.dev/to/font-from-package
+  
+  
 name: client
 description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: 'none'
 
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
-# Both the version and the builder number may be overridden in flutter
-# build by specifying --build-name and --build-number, respectively.
-# In Android, build-name is used as versionName while build-number used as versionCode.
-# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
-# Read more about iOS versioning at
-# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-# In Windows, build-name is used as the major, minor, and patch parts
-# of the product and file versions while build-number is used as the build suffix.
 version: 1.0.0+1
 
 environment:
   sdk: ^3.11.4
 
-# Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
 dependencies:
   flutter:
     sdk: flutter
@@ -35,8 +159,6 @@ dependencies:
   webview_flutter: ^4.4.0
   path_provider: ^2.1.2
   shared_preferences: ^2.2.2
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
   google_fonts: ^8.0.2
   http: ^1.6.0
@@ -45,22 +167,14 @@ dependencies:
   flutter_quill_extensions: ^11.0.0
   google_sign_in: ^7.2.0
   google_sign_in_web: ^1.1.3
+  flutter_tts: ^4.0.2
+  easy_localization: ^3.0.7
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
-# For information on the generic Dart part of this file, see the
-# following page: https://dart.dev/tools/pub/pubspec
-
-# The following section is specific to Flutter packages.
 flutter:
 
   uses-material-design: true
@@ -95,35 +209,120 @@ flutter:
     - assets/images/dashboard.jpg
     - assets/game_builder/
     - assets/i18n/
+    - assets/images/hot_air_baloon.png
+    - assets/images/tiny_swords/Terrain/Ground/
+    - assets/images/tiny_swords/Terrain/Water/
+    - assets/images/tiny_swords/Terrain/Water/Rocks/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/Castle/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/House/
+    - assets/images/tiny_swords/Factions/Knights/Buildings/Tower/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Warrior/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Pawn/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Archer/Blue/
+    - assets/images/tiny_swords/Factions/Knights/Troops/Dead/
+    - assets/images/tiny_swords/Resources/Trees/
+    - assets/images/tiny_swords/Resources/Sheep/
+    - assets/images/tiny_swords/UI/Buttons/
+    - assets/images/tiny_swords/Deco/
+    - assets/images/tiny_swords/Terrain/Water/Foam/
+    - assets/images/tiny_swords/UI/Banners/
+    - assets/images/digital1.jpg
+    - assets/images/digital2.jpg
+    - assets/images/digital3.jpg
+    - assets/images/1.jpeg
+    - assets/images/2.jpeg
+    - assets/images/3.jpeg
+    - assets/images/5.jpeg
+    - assets/images/6.jpeg
+    - assets/images/7.jpeg
+    - assets/images/8.jpeg
+    - assets/images/10.jpeg
+    - assets/images/12.jpeg
+    - assets/images/13.jpeg
+    - assets/images/14.jpeg
+    - assets/images/15.jpeg
+    - assets/images/16.jpeg
+    - assets/images/17.jpeg
+    - assets/images/18.jpeg
+    - assets/images/digitalbackground.jpg
+    - assets/images/digitalbackground.png
+    - assets/images/spider.png
+    - assets/images/spider2.png
+    - assets/images/review.png
+    - assets/images/great.png
+    - assets/images/lesson21.jpeg
+    - assets/images/lesson22.jpeg
+    - assets/images/lesson23.jpeg
+    - assets/images/lesson24.jpeg
+    - assets/images/lesson26.jpeg
+    - assets/images/lesson27.jpeg
+    - assets/images/lesson28.jpeg
+    - assets/images/lesson210.jpeg
+    - assets/images/lesson211.jpeg
+    - assets/images/lesson212.jpeg
+    - assets/images/lesson213.jpeg
+    - assets/images/lesson215.jpeg
+    - assets/images/lesson216.jpeg
+    - assets/images/lesson217.jpeg
+    - assets/images/lesson31.png
+    - assets/images/lesson33.jpeg
+    - assets/images/lesson34.jpeg
+    - assets/images/lesson35.jpeg
+    - assets/images/lesson36.jpeg
+    - assets/images/lesson37.jpeg
+    - assets/images/lesson38.jpeg
+    - assets/images/lesson39.jpeg
+    - assets/images/lesson310.png
+    - assets/images/lesson311.jpeg
+    - assets/images/lesson312.png
+    - assets/images/avatar.png
+    - assets/images/avatar2.png
+    - assets/images/digitalcourse.png
+    - assets/images/datacourse.png
+    - assets/images/data1.png
+    - assets/images/data2.png
+    - assets/images/course21.jpeg
+    - assets/images/course23.jpeg
+    - assets/images/course24.jpeg
+    - assets/images/course25.jpeg
+    - assets/images/course26.jpeg
+    - assets/images/course27.jpeg
+    - assets/images/course28.jpeg
+    - assets/images/course212.jpeg
+    - assets/images/course213.jpeg
+    - assets/images/course214.jpeg
+    - assets/images/course216.jpeg
+    - assets/images/course215.jpeg
+    - assets/images/course218.jpeg
+    - assets/images/right.svg
+    - assets/images/wrong.svg
+    - assets/images/star.svg
+    - assets/translations/
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
 
-  # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/to/resolution-aware-images
+  
 
-  # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/to/asset-from-package
 
-  # To add custom fonts to your application, add a fonts section here,
-  # in this "flutter" section. Each entry in this list should have a
-  # "family" key with the font family name, and a "fonts" key with a
-  # list giving the asset and other descriptors for the font. For
-  # example:
-  # fonts:
-  #   - family: Schyler
-  #     fonts:
-  #       - asset: fonts/Schyler-Regular.ttf
-  #       - asset: fonts/Schyler-Italic.ttf
-  #         style: italic
-  #   - family: Trajan Pro
-  #     fonts:
-  #       - asset: fonts/TrajanPro.ttf
-  #       - asset: fonts/TrajanPro_Bold.ttf
-  #         weight: 700
-  #
-  # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
 
+
+
+
+
+
+
+
+  fonts:
+    - family: VT323
+    - family: Press Start 2P
+    - family: Xolonium
+      fonts:
+        - asset: assets/fonts/xolonium-regular.ttf
+    - family: Rabtus
+      fonts:
+        - asset: assets/fonts/rabtus-regular.ttf
+    - family: Chennai
+      fonts:
+        - asset: assets/fonts/Chennai.otf
+    - family: kamber
+      fonts:
+        - asset: assets/fonts/kamber.ttf

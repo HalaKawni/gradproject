@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class UnlockDialog extends StatefulWidget {
   const UnlockDialog({super.key});
@@ -74,7 +75,7 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Ask your parent for access',
+                      'unlock.title'.tr(),
                       style: GoogleFonts.nunito(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -96,7 +97,7 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                                 color: const Color(0xFF333333),
                               ),
                               decoration: InputDecoration(
-                                hintText: "Enter parent's email",
+                                hintText: 'unlock.email_hint'.tr(),
                                 hintStyle: GoogleFonts.nunito(
                                   fontSize: 14,
                                   color: const Color(0xFF999999),
@@ -137,7 +138,7 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                                   ),
                                 ),
                                 child: Text(
-                                  'REQUEST',
+                                  'unlock.request_btn'.tr(),
                                   style: GoogleFonts.montserrat(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w800,
@@ -166,7 +167,7 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                                 color: Color(0xFF7ED957), size: 22),
                             const SizedBox(width: 10),
                             Text(
-                              'Request sent to ${_emailController.text}!',
+                              'unlock.request_sent'.tr(namedArgs: {'email': _emailController.text}),
                               style: GoogleFonts.nunito(
                                 color: const Color(0xFF7ED957),
                                 fontSize: 15,
@@ -187,9 +188,9 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _FeatureItem('Block-based Coding Courses'),
+                              _FeatureItem('unlock.feature_block'.tr()),
                               const SizedBox(height: 8),
-                              _FeatureItem('Text-based Coding Courses'),
+                              _FeatureItem('unlock.feature_text'.tr()),
                             ],
                           ),
                         ),
@@ -197,9 +198,9 @@ padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _FeatureItem('Game Creation Courses'),
+                              _FeatureItem('unlock.feature_game'.tr()),
                               const SizedBox(height: 8),
-                              _FeatureItem('Python Courses'),
+                              _FeatureItem('unlock.feature_python'.tr()),
                             ],
                           ),
                         ),

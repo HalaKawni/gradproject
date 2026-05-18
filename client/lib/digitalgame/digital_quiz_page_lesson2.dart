@@ -1,0 +1,982 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../services/api_service.dart';
+
+// ===========================================================================
+//  DATA
+// ===========================================================================
+class _Question {
+  final String question;
+  final List<String> options;
+  final int correctIndex;
+  const _Question({
+    required this.question,
+    required this.options,
+    required this.correctIndex,
+  });
+}
+
+const List<_Question> _kQuestions = [
+  _Question(
+    question: 'What does it mean to have digital balance in your life?',
+    options: [
+      'To keep the weight of all your digital devices under a certain level.',
+      'To be aware of doing activities away from the computer, and to set limits on your screen time.',
+      'To be able to walk with a balanced computer on your head.',
+      'To do a lot of activities on the computer with minimal time away from the computer.',
+    ],
+    correctIndex: 1,
+  ),
+  _Question(
+    question: 'While playing an online game, an unknown person enters. Soon they are asking you your name, age, and other private information. What should you do?',
+    options: [
+      'Leave the game, and never play again.',
+      'Respond, and tell them all this information.',
+      'Respond by telling them to go away.',
+      'Do not respond, and immediately tell an adult about it.',
+    ],
+    correctIndex: 3,
+  ),
+  _Question(
+    question: 'What is phishing?',
+    options: [
+      'A water activity that involves a pole and a hook.',
+      'When you meet a new friend online.',
+      'An email scam that tries to steal your private information.',
+      'A method for surprising people on the internet.',
+    ],
+    correctIndex: 2,
+  ),
+  _Question(
+    question: 'You come across a news article on the internet that really shocks and surprises you. What should you do?',
+    options: [
+      'Immediately forward the news article to all your friends and family.',
+      'Double-check whether the news is true by checking with a reliable source.',
+      'Close the article, and do not believe it.',
+      'Read it in amazement, and then bring it up with friends later.',
+    ],
+    correctIndex: 1,
+  ),
+  _Question(
+    question: 'What are some features of a strong password?',
+    options: [
+      'Passwords that include unusual words, numbers, and special characters.',
+      'Passwords that are easy to type and remember.',
+      'Passwords that include a few letters, so they can be typed very quickly.',
+      'Passwords that include private information.',
+    ],
+    correctIndex: 0,
+  ),
+];
+
+// ===========================================================================
+//  PAGE
+// ===========================================================================
+class DigitalQuizPageLesson2 extends StatefulWidget {
+  final Map<String, dynamic> lesson;
+  const DigitalQuizPageLesson2({super.key, required this.lesson});
+
+  @override
+  State<DigitalQuizPageLesson2> createState() => _DigitalQuizPageLesson2State();
+}
+
+class _DigitalQuizPageLesson2State extends State<DigitalQuizPageLesson2> {
+  int _currentQ = 0;
+  int? _selectedIdx;
+  int? _hoveredIdx;
+  bool _submitted = false;
+  int _score = 0;
+
+  static const _labels = ['A', 'B', 'C', 'D'];
+
+  _Question get _q => _kQuestions[_currentQ];
+  bool get _isLast => _currentQ == _kQuestions.length - 1;
+  bool get _canNext => _submitted;
+
+  void _selectAnswer(int idx) {
+    if (_submitted) return;
+    setState(() => _selectedIdx = idx);
+  }
+
+  void _submit() {
+    if (_selectedIdx == null || _submitted) return;
+    setState(() {
+      _submitted = true;
+      if (_selectedIdx == _q.correctIndex) _score++;
+    });
+  }
+
+  void _next() {
+    if (!_canNext) return;
+    if (_isLast) {
+      _showCompletedDialog();
+      return;
+    }
+    setState(() {
+      _currentQ++;
+      _selectedIdx = null;
+      _hoveredIdx = null;
+      _submitted = false;
+    });
+  }
+
+  void _prev() {
+    if (_currentQ == 0) return;
+    setState(() {
+      _currentQ--;
+      _selectedIdx = null;
+      _hoveredIdx = null;
+      _submitted = false;
+    });
+  }
+
+  void _showCompletedDialog() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    await ApiService.saveQuizScore(
+      gameId: 'digital-literacy',
+      lessonNumber: lessonNumber,
+      correctAnswers: _score,
+      totalQuestions: _kQuestions.length,
+    );
+    await ApiService.saveLevelResult(
+      gameId: 'digital-literacy',
+      level: lessonNumber,
+      completed: true,
+      score: ((_score / _kQuestions.length) * 100).round(),
+    );
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => _CompletionScreen(
+          lessonTitle: widget.lesson['title'] as String,
+          lessonNumber: lessonNumber,
+          score: _score,
+          total: _kQuestions.length,
+          onBack: () => Navigator.of(context).pop(),
+          onNext: () => Navigator.of(context).pop(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lessonNumber = widget.lesson['number'] as int;
+    final lessonTitle = widget.lesson['title'] as String;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF1FB5C9),
+      body: Column(
+        children: [
+          _buildNavBar(lessonNumber, lessonTitle),
+          _buildTopBar(lessonNumber, lessonTitle),
+          Expanded(
+            child: Row(
+              children: [
+                _buildSideButton(
+                  icon: Icons.arrow_back_ios,
+                  label: 'PREVIOUS',
+                  onTap: _currentQ > 0 ? _prev : null,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 60),
+                    child: Container(
+                      color: Colors.white,
+                      child: _buildContent(),
+                    ),
+                  ),
+                ),
+                _buildSideButton(
+                  icon: Icons.arrow_forward_ios,
+                  label: _isLast && _submitted ? 'FINISH' : 'NEXT',
+                  onTap: _canNext ? _next : null,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── NAV BAR ──
+  Widget _buildNavBar(int lessonNumber, String lessonTitle) {
+    return Container(
+      color: const Color.fromARGB(255, 252, 183, 199),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(children: [
+            Container(
+              width: 38, height: 38,
+              decoration: const BoxDecoration(
+                  color: Color(0xFF8B5E3C), shape: BoxShape.circle),
+              child: const Icon(Icons.pets, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Text('name of web',
+                style: GoogleFonts.montserrat(
+                    color: const Color(0xFFF5A623),
+                    fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(width: 24),
+            Text(
+              'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
+              style: GoogleFonts.montserrat(
+                  color: Colors.white70, fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+          ]),
+          Row(children: [
+            Container(
+              width: 36, height: 36,
+              decoration: BoxDecoration(
+                  color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white24, width: 2)),
+              child: const Icon(Icons.person, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 16),
+            const Icon(Icons.menu, color: Colors.white, size: 24),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ── TOP BAR ──
+  Widget _buildTopBar(int lessonNumber, String lessonTitle) {
+    return Container(
+      color: const Color(0xFFADE8F4),
+      height: 70,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
+            child: Container(
+              width: 52, height: 52,
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                  color: const Color(0xFF5B8FD4),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.arrow_back_ios, color: Colors.white, size: 14),
+                  Text('BACK TO\nCOURSE',
+                      style: GoogleFonts.nunito(
+                          color: Colors.white, fontSize: 7,
+                          fontWeight: FontWeight.w800, height: 1.1),
+                      textAlign: TextAlign.center),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text('#$lessonNumber',
+              style: const TextStyle(
+                  fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 22)),
+          const SizedBox(width: 8),
+          Text(lessonTitle,
+              style: const TextStyle(
+                  fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
+          const Spacer(),
+          _buildTopBox(
+            icon: Icons.menu_book,
+            iconColor: const Color(0xFF5B8FD4),
+            label: 'LEARN', value: '17/17',
+            bgColor: const Color(0xFF5B8FD4).withOpacity(0.15),
+          ),
+          const SizedBox(width: 8),
+          _buildTopBox(
+            icon: Icons.sports_esports,
+            iconColor: const Color(0xFF4CAF50),
+            label: 'PLAY', value: '3/3',
+            bgColor: const Color(0xFF4CAF50).withOpacity(0.15),
+          ),
+          const SizedBox(width: 8),
+          _buildReviewBox(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopBox({
+    required IconData icon, required Color iconColor,
+    required String label, required String value, required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor, borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.4)),
+      ),
+      child: Row(children: [
+        Icon(icon, color: iconColor, size: 18),
+        const SizedBox(width: 6),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: GoogleFonts.nunito(
+                fontSize: 9, fontWeight: FontWeight.w800,
+                color: const Color(0xFF555555))),
+            Text(value, style: GoogleFonts.nunito(
+                fontSize: 11, fontWeight: FontWeight.w800,
+                color: const Color(0xFF333333))),
+          ],
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildReviewBox() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.4)),
+      ),
+      child: Row(children: [
+        Container(
+          width: 32, height: 32,
+          decoration: BoxDecoration(
+              color: const Color(0xFF5B8FD4),
+              borderRadius: BorderRadius.circular(8)),
+          child: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 18),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('REVIEW', style: GoogleFonts.nunito(
+                fontSize: 9, fontWeight: FontWeight.w800,
+                color: const Color(0xFF555555))),
+            const SizedBox(height: 2),
+            Row(
+              children: List.generate(_kQuestions.length, (i) {
+                Color dotColor;
+                Widget? child;
+                if (i < _currentQ) {
+                  dotColor = const Color(0xFF4CAF50);
+                  child = const Icon(Icons.check, size: 8, color: Colors.white);
+                } else if (i == _currentQ) {
+                  dotColor = Colors.white;
+                  child = Text('${i + 1}',
+                      style: const TextStyle(
+                          fontSize: 7, fontWeight: FontWeight.bold,
+                          color: Color(0xFF333333)));
+                } else {
+                  dotColor = Colors.white.withOpacity(0.4);
+                }
+                return Container(
+                  margin: const EdgeInsets.only(right: 3),
+                  width: 16, height: 16,
+                  decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                  child: child != null ? Center(child: child) : null,
+                );
+              }),
+            ),
+          ],
+        ),
+      ]),
+    );
+  }
+
+  // ── CONTENT ──
+  Widget _buildContent() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Question card
+        Padding(
+          padding: const EdgeInsets.fromLTRB(32, 32, 32, 0),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD6F1F8),
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF0A0),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE8D080)),
+                  ),
+                  child: Text(
+                    'REVIEW QUESTION #${_currentQ + 1}',
+                    style: const TextStyle(
+                      fontFamily: 'Chennai',
+                      fontSize: 13, color: Color(0xFF888844), letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  _q.question,
+                  style: GoogleFonts.nunito(
+                      fontSize: 22, fontWeight: FontWeight.w700,
+                      color: const Color(0xFF1A237E), height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 0, 16, 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(
+                        _q.options.length, (i) => _buildAnswerOption(i)),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 32, 24),
+                child: Center(child: _buildSubmitButton()),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── ANSWER OPTION ──
+  Widget _buildAnswerOption(int idx) {
+    final label = _labels[idx];
+    final text = _q.options[idx];
+    final isSelected = _selectedIdx == idx;
+    final isHovered = _hoveredIdx == idx && !_submitted;
+    final isCorrect = _submitted && idx == _q.correctIndex;
+    final isWrong = _submitted && isSelected && idx != _q.correctIndex;
+
+    Color circleBg;
+    Color circleBorder;
+    Color circleText;
+    Widget? circleChild;
+
+    if (isCorrect) {
+      circleBg = const Color(0xFF4CAF50);
+      circleBorder = const Color(0xFF388E3C);
+      circleText = Colors.white;
+      circleChild = const Icon(Icons.check, color: Colors.white, size: 22);
+    } else if (isWrong) {
+      circleBg = const Color(0xFFE57373);
+      circleBorder = const Color(0xFFE53935);
+      circleText = Colors.white;
+      circleChild = const Icon(Icons.close, color: Colors.white, size: 22);
+    } else if (isSelected) {
+      circleBg = const Color(0xFFFFC83D);
+      circleBorder = const Color(0xFFE0A300);
+      circleText = const Color(0xFF28204A);
+      circleChild = null;
+    } else {
+      circleBg = const Color(0xFFFFF0C0);
+      circleBorder = const Color(0xFFE8D080);
+      circleText = const Color(0xFF28204A);
+      circleChild = null;
+    }
+
+    Widget textWidget;
+    if (isWrong) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE57373),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Text(text, style: GoogleFonts.nunito(
+            fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      );
+    } else if (isCorrect) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF4CAF50),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Text(text, style: GoogleFonts.nunito(
+            fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white)),
+      );
+    } else if (isSelected && !_submitted) {
+      textWidget = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFFFC83D), width: 2),
+        ),
+        child: Text(text, style: GoogleFonts.nunito(
+            fontSize: 18, fontWeight: FontWeight.w600,
+            color: const Color(0xFF28204A))),
+      );
+    } else if (isHovered) {
+      textWidget = Row(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFC83D).withOpacity(0.35),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(text, style: GoogleFonts.nunito(
+              fontSize: 18, fontWeight: FontWeight.w600,
+              color: const Color(0xFF28204A))),
+        ),
+      ]);
+    } else {
+      textWidget = Text(text, style: GoogleFonts.nunito(
+          fontSize: 18, fontWeight: FontWeight.w600,
+          color: const Color(0xFF28204A)));
+    }
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hoveredIdx = idx),
+      onExit: (_) => setState(() => _hoveredIdx = null),
+      child: GestureDetector(
+        onTap: () => _selectAnswer(idx),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: circleBg,
+                shape: BoxShape.circle,
+                border: Border.all(color: circleBorder, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: circleBorder.withOpacity(0.3),
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: circleChild ?? Text(label,
+                    style: TextStyle(
+                        fontFamily: 'Chennai', fontSize: 20,
+                        fontWeight: FontWeight.w800, color: circleText)),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(child: textWidget),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ── SUBMIT BUTTON ──
+  Widget _buildSubmitButton() {
+    final canSubmit = _selectedIdx != null && !_submitted;
+    return GestureDetector(
+      onTap: canSubmit ? _submit : null,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 160, height: 160,
+        decoration: BoxDecoration(
+          color: canSubmit
+              ? const Color(0xFFFFE48A)
+              : const Color(0xFFE8E8E8),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: canSubmit
+                ? const Color(0xFFE0A300)
+                : const Color(0xFFCCCCCC),
+            width: 2.5,
+          ),
+          boxShadow: canSubmit
+              ? [BoxShadow(
+                  color: const Color(0xFFE0A300).withOpacity(0.3),
+                  blurRadius: 12, offset: const Offset(0, 4))]
+              : [],
+        ),
+        child: Center(
+          child: Text(
+            _submitted ? 'SUBMITTED' : 'SUBMIT YOUR\nANSWER',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontFamily: 'Chennai',
+              fontSize: 18, fontWeight: FontWeight.w700,
+              color: Color(0xFF28204A), height: 1.4,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── SIDE BUTTON ──
+  Widget _buildSideButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    final bool enabled = onTap != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 100, height: double.infinity,
+        color: const Color.fromARGB(255,31, 181, 201),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 70, height: 70,
+              decoration: BoxDecoration(
+                color: enabled
+                    ? const Color(0xFFF5A623)
+                    : Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon,
+                  color: enabled ? Colors.white : Colors.white38, size: 32),
+            ),
+            const SizedBox(height: 8),
+            Text(label,
+                style: GoogleFonts.nunito(
+                    color: enabled ? Colors.white : Colors.white38,
+                    fontSize: 12, fontWeight: FontWeight.w800)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+//  COMPLETION SCREEN
+// ===========================================================================
+class _CompletionScreen extends StatelessWidget {
+  final String lessonTitle;
+  final int lessonNumber;
+  final int score;
+  final int total;
+  final VoidCallback onBack;
+  final VoidCallback onNext;
+
+  const _CompletionScreen({
+    required this.lessonTitle,
+    required this.lessonNumber,
+    required this.score,
+    required this.total,
+    required this.onBack,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF4ABFB8),
+      body: Column(
+        children: [
+          // ── NAVBAR ──
+          Container(
+            color: const Color(0xFF2C1F14),
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 38, height: 38,
+                    decoration: const BoxDecoration(
+                        color: Color(0xFF8B5E3C), shape: BoxShape.circle),
+                    child: const Icon(Icons.pets, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Text('name of web',
+                      style: GoogleFonts.montserrat(
+                          color: const Color(0xFFF5A623),
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                  const SizedBox(width: 24),
+                  Text(
+                    'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
+                    style: GoogleFonts.montserrat(
+                        color: Colors.white70, fontSize: 13,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ]),
+                Row(children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white24, width: 2)),
+                    child: const Icon(Icons.person, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  const Icon(Icons.menu, color: Colors.white, size: 24),
+                ]),
+              ],
+            ),
+          ),
+
+          // ── TOP BAR ──
+          Container(
+            color: const Color(0xFFADE8F4),
+            height: 70,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
+                  child: Container(
+                    width: 52, height: 52,
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                        color: const Color(0xFF5B8FD4),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.arrow_back_ios, color: Colors.white, size: 14),
+                        Text('BACK TO\nCOURSE',
+                            style: GoogleFonts.nunito(
+                                color: Colors.white, fontSize: 7,
+                                fontWeight: FontWeight.w800, height: 1.1),
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('#$lessonNumber',
+                    style: const TextStyle(
+                        fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 22)),
+                const SizedBox(width: 8),
+                Text(lessonTitle,
+                    style: const TextStyle(
+                        fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
+                const Spacer(),
+                _topBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
+                    label: 'LEARN', value: '17/17',
+                    bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
+                const SizedBox(width: 8),
+                _topBox(icon: Icons.sports_esports, iconColor: const Color(0xFF4CAF50),
+                    label: 'PLAY', value: '3/3',
+                    bgColor: const Color(0xFF4CAF50).withOpacity(0.15)),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white.withOpacity(0.4)),
+                  ),
+                  child: Row(children: [
+                    Container(
+                      width: 32, height: 32,
+                      decoration: BoxDecoration(
+                          color: const Color(0xFF5B8FD4),
+                          borderRadius: BorderRadius.circular(8)),
+                      child: const Icon(Icons.chat_bubble_outline,
+                          color: Colors.white, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('REVIEW', style: GoogleFonts.nunito(
+                            fontSize: 9, fontWeight: FontWeight.w800,
+                            color: const Color(0xFF555555))),
+                        const SizedBox(height: 2),
+                        Text('$total/$total',
+                            style: GoogleFonts.nunito(
+                                fontSize: 11, fontWeight: FontWeight.w800,
+                                color: const Color(0xFF333333))),
+                      ],
+                    ),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+
+          // ── MAIN CONTENT ──
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 780, height: 260,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20, offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(48, 0, 24, 0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text('GREAT JOB!',
+                                    style: GoogleFonts.nunito(
+                                        fontSize: 48, fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF3D2B8F),
+                                        letterSpacing: 1)),
+                                const SizedBox(height: 12),
+                                Text('You\'ve completed "$lessonTitle"',
+                                    style: GoogleFonts.nunito(
+                                        fontSize: 18, color: const Color(0xFF444444))),
+                                const SizedBox(height: 8),
+                                RichText(
+                                  text: TextSpan(
+                                    style: GoogleFonts.nunito(
+                                        fontSize: 16, color: const Color(0xFF555555)),
+                                    children: [
+                                      const TextSpan(text: 'Review score '),
+                                      TextSpan(
+                                        text: '$score/$total',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                            color: Color(0xFF333333)),
+                                      ),
+                                      const TextSpan(text: ' correct answers'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        ClipRRect(
+                          borderRadius: const BorderRadius.only(
+                            topRight: Radius.circular(20),
+                            bottomRight: Radius.circular(20),
+                          ),
+                          child: Image.asset(
+                            'assets/images/great.png',
+                            width: 300, height: 260, fit: BoxFit.cover,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE48A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: const Color(0xFFE0A300), width: 2),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0xFFE0A300),
+                                  offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(Icons.arrow_back_ios,
+                                size: 16, color: Color(0xFF28204A)),
+                            const SizedBox(width: 8),
+                            Text('Back to\ncourse',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.nunito(
+                                    fontSize: 15, fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF28204A))),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).popUntil((route) => route.settings.name == 'digital_literacy_hub' || route.isFirst),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE48A),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: const Color(0xFFE0A300), width: 2),
+                            boxShadow: const [
+                              BoxShadow(color: Color(0xFFE0A300),
+                                  offset: Offset(0, 4)),
+                            ],
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text('Next lesson',
+                                style: GoogleFonts.nunito(
+                                    fontSize: 15, fontWeight: FontWeight.w800,
+                                    color: const Color(0xFF28204A))),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.arrow_forward_ios,
+                                size: 16, color: Color(0xFF28204A)),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _topBox({
+    required IconData icon, required Color iconColor,
+    required String label, required String value, required Color bgColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor, borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withOpacity(0.4)),
+      ),
+      child: Row(children: [
+        Icon(icon, color: iconColor, size: 18),
+        const SizedBox(width: 6),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: GoogleFonts.nunito(
+                fontSize: 9, fontWeight: FontWeight.w800,
+                color: const Color(0xFF555555))),
+            Text(value, style: GoogleFonts.nunito(
+                fontSize: 11, fontWeight: FontWeight.w800,
+                color: const Color(0xFF333333))),
+          ],
+        ),
+      ]),
+    );
+  }
+}

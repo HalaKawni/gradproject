@@ -11,6 +11,9 @@ import '../services/google_auth_service.dart';
 import '../widgets/google_sign_in_button_stub.dart'
     if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
     as google_button;
+import 'package:easy_localization/easy_localization.dart';
+import 'services/auth_service.dart';
+import 'dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -252,7 +255,7 @@ class _LoginPageState extends State<LoginPage>
 
                     // ── LOGIN TITLE ──
                     Text(
-                      'LOGIN',
+                      'login.title'.tr(),
                       style: GoogleFonts.amaticSc(
                         color: const Color.fromARGB(255, 255, 255, 255),
                         fontSize: 60,
@@ -299,7 +302,7 @@ class _LoginPageState extends State<LoginPage>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Account Details',
+                                    'login.account_details'.tr(),
                                     style: GoogleFonts.montserrat(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -315,7 +318,7 @@ class _LoginPageState extends State<LoginPage>
 
                                   // Email
                                   Text(
-                                    'Email / Username',
+                                    'login.email_label'.tr(),
                                     style: GoogleFonts.nunito(
                                       fontSize: 13,
                                       color: const Color(0xFF555555),
@@ -349,7 +352,7 @@ class _LoginPageState extends State<LoginPage>
 
                                   // Password
                                   Text(
-                                    'Password',
+                                    'login.password_label'.tr(),
                                     style: GoogleFonts.nunito(
                                       fontSize: 13,
                                       color: const Color(0xFF555555),
@@ -407,7 +410,7 @@ class _LoginPageState extends State<LoginPage>
                                         ),
                                       ),
                                       Text(
-                                        'Remember me',
+                                        'login.remember_me'.tr(),
                                         style: GoogleFonts.nunito(
                                           fontSize: 13,
                                           color: const Color(0xFF555555),
@@ -417,7 +420,7 @@ class _LoginPageState extends State<LoginPage>
                                       GestureDetector(
                                         onTap: () {},
                                         child: Text(
-                                          'Forgot password?',
+                                          'login.forgot_password'.tr(),
                                           style: GoogleFonts.nunito(
                                             fontSize: 13,
                                             color: const Color(0xFF1A73E8),
@@ -494,7 +497,7 @@ class _LoginPageState extends State<LoginPage>
                                             ),
                                           ),
                                           child: Text(
-                                            'LOG IN',
+                                            'login.btn'.tr(),
                                             style: GoogleFonts.montserrat(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
@@ -510,7 +513,7 @@ class _LoginPageState extends State<LoginPage>
                                   if (_showError) ...[
                                     const SizedBox(height: 12),
                                     Text(
-                                      'This field is required',
+                                      'error.required'.tr(),
                                       style: GoogleFonts.nunito(
                                         color: const Color(0xFFE53935),
                                         fontSize: 13,
@@ -539,7 +542,7 @@ class _LoginPageState extends State<LoginPage>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'or log in with:',
+                                    'login.or_login_with'.tr(),
                                     style: GoogleFonts.nunito(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
@@ -578,7 +581,7 @@ class _LoginPageState extends State<LoginPage>
                                     child: GestureDetector(
                                       onTap: () {},
                                       child: Text(
-                                        'More options',
+                                        'login.more_options'.tr(),
                                         style: GoogleFonts.nunito(
                                           color: const Color(0xFF1A73E8),
                                           fontSize: 13,
@@ -605,12 +608,12 @@ class _LoginPageState extends State<LoginPage>
                           color: const Color(0xFF333333),
                         ),
                         children: [
-                          const TextSpan(text: "Don't have an account? "),
+                          TextSpan(text: 'login.no_account'.tr()),
                           WidgetSpan(
                             child: GestureDetector(
                               onTap: () {},
                               child: Text(
-                                'Sign up now!',
+                                'login.signup_now'.tr(),
                                 style: GoogleFonts.nunito(
                                   fontSize: 14,
                                   color: const Color(0xFF1A73E8),
@@ -699,8 +702,12 @@ class _LoginPageState extends State<LoginPage>
           ),
           Row(
             children: [
-              _HoverNavButton(label: 'LOG IN', onPressed: () {}),
-              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
+              _HoverNavButton(label: 'nav.login'.tr(), onPressed: () {}),
+              _HoverNavButton(
+                label: 'nav.signup'.tr(),
+                onPressed: () {},
+                filled: true,
+              ),
             ],
           ),
         ],

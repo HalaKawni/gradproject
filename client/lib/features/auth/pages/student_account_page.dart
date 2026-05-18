@@ -14,6 +14,9 @@ import '../widgets/google_sign_in_button_stub.dart'
     if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
     as google_button;
 
+import 'package:easy_localization/easy_localization.dart';
+import 'services/auth_service.dart';
+import 'dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
   const StudentAccountPage({super.key});
 
@@ -291,7 +294,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                   size: 20,
                                 ),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -308,7 +311,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
 
                       // ── TITLE ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'student.signup_label'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -356,7 +359,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Enter account details',
+                                          'student.enter_details'.tr(),
                                           style: GoogleFonts.montserrat(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -366,7 +369,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                         const SizedBox(height: 20),
 
                                         // Email
-                                        _buildLabel('Email'),
+                                        _buildLabel('common.email'.tr()),
                                         _buildTextField(
                                           controller: _emailController,
                                           hasError: _showEmailError,
@@ -375,11 +378,11 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           ),
                                         ),
                                         if (_showEmailError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         const SizedBox(height: 14),
 
                                         // Display name
-                                        _buildLabel('Display name'),
+                                        _buildLabel('common.display_name'.tr()),
                                         _buildTextField(
                                           controller: _displayNameController,
                                           hasError: _showNameError,
@@ -388,13 +391,13 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           ),
                                         ),
                                         if (_showNameError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         Padding(
                                           padding: const EdgeInsets.only(
                                             top: 6,
                                           ),
                                           child: Text(
-                                            'To protect your privacy, do not use your full name',
+                                            'common.privacy_hint'.tr(),
                                             style: GoogleFonts.nunito(
                                               fontSize: 12,
                                               color: const Color(0xFF888888),
@@ -404,7 +407,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                         const SizedBox(height: 14),
 
                                         // Password
-                                        _buildLabel('Password'),
+                                        _buildLabel('common.password'.tr()),
                                         _buildTextField(
                                           controller: _passwordController,
                                           hasError: _showPasswordError,
@@ -428,11 +431,11 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           }),
                                         ),
                                         if (_showPasswordError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         const SizedBox(height: 14),
 
                                         // Re-enter password
-                                        _buildLabel('Re-enter password'),
+                                        _buildLabel('common.reenter_password'.tr()),
                                         _buildTextField(
                                           controller: _rePasswordController,
                                           hasError:
@@ -458,12 +461,12 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           }),
                                         ),
                                         if (_showRePasswordError)
-                                          _buildError('This field is required'),
-                                        if (_showPasswordMismatch)
-                                          _buildError('Passwords do not match'),
-                                        if (_apiError != null)
-                                          _buildError(_apiError!),
-                                        const SizedBox(height: 28),
+                                          _buildError('error.required'.tr()),
+                                       if (_showPasswordMismatch)
+  _buildError('error.passwords_mismatch'.tr()),
+if (_apiError != null)
+  _buildError(_apiError!),
+const SizedBox(height: 28),
 
                                         // SIGN UP button
                                         Container(
@@ -511,30 +514,23 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                                         ),
                                                   ),
                                                 ),
-                                                child: _loading
-                                                    ? const SizedBox(
-                                                        width: 20,
-                                                        height: 20,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              color: Color(
-                                                                0xFF3A2A00,
-                                                              ),
-                                                              strokeWidth: 2,
-                                                            ),
-                                                      )
-                                                    : Text(
-                                                        'SIGN UP',
-                                                        style:
-                                                            GoogleFonts.montserrat(
-                                                              fontSize: 15,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
-                                                              letterSpacing:
-                                                                  1.5,
-                                                            ),
-                                                      ),
+                                               child: _loading
+    ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(
+          color: Color(0xFF3A2A00),
+          strokeWidth: 2,
+        ),
+      )
+    : Text(
+        'nav.signup'.tr(),
+        style: GoogleFonts.montserrat(
+          fontSize: 15,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.5,
+        ),
+      ),
                                               ),
                                             ),
                                           ),
@@ -563,7 +559,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Or sign up with:',
+                                          'common.or_signup_with'.tr(),
                                           style: GoogleFonts.montserrat(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -572,7 +568,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'In the future, continue to log in using the same service',
+                                          'common.future_login_hint'.tr(),
                                           style: GoogleFonts.nunito(
                                             fontSize: 12,
                                             color: const Color(0xFF888888),
@@ -650,12 +646,12 @@ class _StudentAccountPageState extends State<StudentAccountPage>
                             color: Colors.white,
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -826,10 +822,14 @@ class _StudentAccountPageState extends State<StudentAccountPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
-              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
+              _HoverNavButton(
+                label: 'nav.signup'.tr(),
+                onPressed: () {},
+                filled: true,
+              ),
             ],
           ),
         ],

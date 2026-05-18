@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'No_page.dart';
 
 class StudentSignupPage extends StatefulWidget {
@@ -78,7 +79,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                                 const Icon(Icons.chevron_left,
                                     color: Colors.white, size: 20),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -95,7 +96,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
 
                       // ── STUDENT SIGNUP label ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'student.signup_label'.tr(),
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -108,7 +109,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
 
                       // ── TITLE ──
                       Text(
-                        'DO YOU HAVE A CLASSROOM CODE?',
+                        'student.classroom_code_title'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -129,7 +130,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
 
                       // ── Subtitle ──
                       Text(
-                        'A classroom code is a code given to you by your teacher for creating your user.',
+                        'student.classroom_code_desc'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.nunito(
                           color: Colors.white,
@@ -159,7 +160,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                                         color: const Color(0xFF333333),
                                       ),
                                       decoration: InputDecoration(
-                                        hintText: 'Enter classroom code',
+                                        hintText: 'student.enter_code_hint'.tr(),
                                         hintStyle: GoogleFonts.nunito(
                                           fontSize: 14,
                                           color: const Color(0xFF999999),
@@ -225,7 +226,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                                           ),
                                         ),
                                         child: Text(
-                                          'NEXT',
+                                          'common.next'.tr(),
                                           style: GoogleFonts.montserrat(
                                             fontSize: 14,
                                             fontWeight: FontWeight.w800,
@@ -243,7 +244,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                                 Padding(
                                   padding: const EdgeInsets.only(left:520),
                                   child: Text(
-                                    'This field is required',
+                                    'error.required'.tr(),
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFFE53935),
                                       fontSize: 13,
@@ -266,8 +267,8 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _ClassroomCard(
-                              answer: 'YES',
-                              subtitle: 'I have a code',
+                              answer: 'common.yes'.tr(),
+                              subtitle: 'student.has_code'.tr(),
                               imagePath: 'assets/images/elephant_yes.jpg',
                               isSelected: _selected == 'YES',
                               onTap: () {
@@ -280,8 +281,8 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                             ),
                             const SizedBox(width: 24),
                             _ClassroomCard(
-                              answer: 'NO',
-                              subtitle: "I didn't receive any code",
+                              answer: 'common.no'.tr(),
+                              subtitle: 'student.no_code'.tr(),
                               imagePath: 'assets/images/elephant_no.jpg',
                               isSelected: _selected == 'NO',
                              onTap: () {
@@ -307,12 +308,12 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                             color: Colors.white,
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -374,11 +375,11 @@ class _StudentSignupPageState extends State<StudentSignupPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),
