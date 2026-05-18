@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'home_page.dart';
 
 class WherePlayingPage extends StatefulWidget {
@@ -74,7 +75,7 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                                 const Icon(Icons.chevron_left,
                                     color: Colors.white, size: 20),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -91,7 +92,7 @@ class _WherePlayingPageState extends State<WherePlayingPage>
 
                       // ── STUDENT SIGNUP label ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'student.signup_label'.tr(),
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -104,7 +105,7 @@ class _WherePlayingPageState extends State<WherePlayingPage>
 
                       // ── TITLE ──
                       Text(
-                        'WHERE WILL YOU BE PLAYING?',
+                        'where.title'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -131,8 +132,8 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             _PlayingCard(
-                              answer: 'HOME',
-                              subtitle: "I'm playing on my own",
+                              answer: 'where.home'.tr(),
+                              subtitle: 'where.home_subtitle'.tr(),
                               imagePath: 'assets/images/home.png',
                               onTap: () {
   Navigator.push(
@@ -143,9 +144,8 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                             ),
                             const SizedBox(width: 24),
                             _PlayingCard(
-                              answer: 'CLASSROOM',
-                              subtitle:
-                                  'I belong to a CodeMonkey classroom with a teacher',
+                              answer: 'where.classroom'.tr(),
+                              subtitle: 'where.classroom_subtitle'.tr(),
                               imagePath: 'assets/images/classroom2.jpg',
                               onTap: () {Navigator.push(
       context,
@@ -166,12 +166,12 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                             color: Colors.white,
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -233,11 +233,11 @@ class _WherePlayingPageState extends State<WherePlayingPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),

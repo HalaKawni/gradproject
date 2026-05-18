@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'parent_dashboard_page.dart';
 
 class ParentSignupPage extends StatefulWidget {
@@ -29,11 +30,11 @@ class _ParentSignupPageState extends State<ParentSignupPage>
   bool _showRePasswordError = false;
   bool _showPasswordMismatch = false;
 
-  final List<String> _experienceOptions = [
-    'No experience',
-    'A little experience',
-    'Some experience',
-    'A lot of experience',
+  List<String> get _experienceOptions => [
+    'parent.exp_none'.tr(),
+    'parent.exp_little'.tr(),
+    'parent.exp_some'.tr(),
+    'parent.exp_lot'.tr(),
   ];
 
   @override
@@ -131,7 +132,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                 const Icon(Icons.chevron_left,
                                     color: Colors.white, size: 20),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -148,7 +149,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
 
                       // TITLE
                       Text(
-                        'PARENT SIGNUP',
+                        'parent.signup_label'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -166,7 +167,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
 
                       // SUBTITLE
                       Text(
-                        'Create a user for your child',
+                        'parent.create_child_user'.tr(),
                         style: GoogleFonts.nunito(
                           color: Colors.white,
                           fontSize: 14,
@@ -212,7 +213,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Child account details',
+                                        'parent.child_account_details'.tr(),
                                         style: GoogleFonts.montserrat(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w700,
@@ -221,7 +222,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                       ),
                                       const SizedBox(height: 20),
 
-                                      _buildLabel('Username (Must be unique)'),
+                                      _buildLabel('parent.username_label'.tr()),
                                       _buildTextField(
                                         controller: _usernameController,
                                         hasError: _showUsernameError,
@@ -229,12 +230,11 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                             _showUsernameError = false),
                                       ),
                                       if (_showUsernameError)
-                                        _buildError('This field is required'),
-                                      _buildHint(
-                                          'To protect your privacy, do not use your full name'),
+                                        _buildError('error.required'.tr()),
+                                      _buildHint('common.privacy_hint'.tr()),
                                       const SizedBox(height: 14),
 
-                                      _buildLabel('Display name'),
+                                      _buildLabel('common.display_name'.tr()),
                                       _buildTextField(
                                         controller: _displayNameController,
                                         hasError: _showNameError,
@@ -242,12 +242,11 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                             () => _showNameError = false),
                                       ),
                                       if (_showNameError)
-                                        _buildError('This field is required'),
-                                      _buildHint(
-                                          "To protect your child's privacy, please do not use any personal information, such as your child's full name"),
+                                        _buildError('error.required'.tr()),
+                                      _buildHint('parent.child_privacy_hint'.tr()),
                                       const SizedBox(height: 14),
 
-                                      _buildLabel('Password'),
+                                      _buildLabel('common.password'.tr()),
                                       _buildTextField(
                                         controller: _passwordController,
                                         hasError: _showPasswordError,
@@ -270,10 +269,10 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                         }),
                                       ),
                                       if (_showPasswordError)
-                                        _buildError('This field is required'),
+                                        _buildError('error.required'.tr()),
                                       const SizedBox(height: 14),
 
-                                      _buildLabel('Re-enter password'),
+                                      _buildLabel('common.reenter_password'.tr()),
                                       _buildTextField(
                                         controller: _rePasswordController,
                                         hasError: _showRePasswordError ||
@@ -297,19 +296,19 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                         }),
                                       ),
                                       if (_showRePasswordError)
-                                        _buildError('This field is required'),
+                                        _buildError('error.required'.tr()),
                                       if (_showPasswordMismatch)
-                                        _buildError('Passwords do not match'),
+                                        _buildError('error.passwords_mismatch'.tr()),
                                       const SizedBox(height: 14),
 
-                                      _buildLabel('Age (Optional)'),
+                                      _buildLabel('parent.age_optional'.tr()),
                                       _buildTextField(
                                         controller: _ageController,
                                         keyboardType: TextInputType.number,
                                       ),
                                       const SizedBox(height: 14),
 
-                                      _buildLabel('Experience (Optional)'),
+                                      _buildLabel('parent.experience_optional'.tr()),
                                       Container(
                                         decoration: BoxDecoration(
                                           border: Border.all(
@@ -373,7 +372,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                                 ),
                                               ),
                                               child: Text(
-                                                'DONE',
+                                                'common.done'.tr(),
                                                 style: GoogleFonts.montserrat(
                                                   fontSize: 15,
                                                   fontWeight: FontWeight.w800,
@@ -408,7 +407,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              'Important',
+                                              'parent.important'.tr(),
                                               style: GoogleFonts.montserrat(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.w700,
@@ -419,7 +418,7 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                                         ),
                                         const SizedBox(height: 12),
                                         Text(
-                                          "To protect your child's privacy, please do not use any personal information, such as your child's full name. Also, we keep this username private and never share it with others.",
+                                          'parent.important_desc'.tr(),
                                           style: GoogleFonts.nunito(
                                             fontSize: 13,
                                             color: Colors.white,
@@ -446,12 +445,12 @@ class _ParentSignupPageState extends State<ParentSignupPage>
                             color: Colors.white,
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -591,11 +590,11 @@ class _ParentSignupPageState extends State<ParentSignupPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),

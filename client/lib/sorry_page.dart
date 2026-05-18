@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class SorryPage extends StatefulWidget {
   const SorryPage({super.key});
@@ -64,7 +65,7 @@ class _SorryPageState extends State<SorryPage>
 
                       // ── Student Signup label ──
                       Text(
-                        'Student Signup',
+                        'student.signup_label'.tr(),
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -77,7 +78,7 @@ class _SorryPageState extends State<SorryPage>
 
                       // ── TITLE ──
                       Text(
-                        'SORRY, FELLOW GRASSHOPPER',
+                        'sorry.title'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -107,7 +108,7 @@ class _SorryPageState extends State<SorryPage>
 
                       // ── Message ──
                       Text(
-                        'Unfortunately you are not eligible to access this option.',
+                        'sorry.message'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.nunito(
                           color: Colors.white,
@@ -123,12 +124,12 @@ class _SorryPageState extends State<SorryPage>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _YellowButton(
-                            label: 'Belong to a classroom?',
+                            label: 'sorry.belong_classroom'.tr(),
                             onTap: () => Navigator.pop(context),
                           ),
                           const SizedBox(width: 16),
                           _YellowButton(
-                            label: 'Playing at home?',
+                            label: 'sorry.playing_home'.tr(),
                             onTap: () => Navigator.pop(context),
                           ),
                         ],
@@ -138,7 +139,7 @@ class _SorryPageState extends State<SorryPage>
 
                       // ── Maybe these links can help ──
                       Text(
-                        'Maybe these links can help?',
+                        'sorry.links_help'.tr(),
                         style: GoogleFonts.nunito(
                           color: Colors.white,
                           fontSize: 14,
@@ -148,15 +149,15 @@ class _SorryPageState extends State<SorryPage>
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _LinkText(label: 'Mini Courses', onTap: () {}),
+                          _LinkText(label: 'sorry.mini_courses'.tr(), onTap: () {}),
                           Text(' | ',
                               style: GoogleFonts.nunito(
                                   color: Colors.white, fontSize: 14)),
-                          _LinkText(label: 'Help Center', onTap: () {}),
+                          _LinkText(label: 'sorry.help_center'.tr(), onTap: () {}),
                           Text(' | ',
                               style: GoogleFonts.nunito(
                                   color: Colors.white, fontSize: 14)),
-                          _LinkText(label: 'Blog', onTap: () {}),
+                          _LinkText(label: 'sorry.blog'.tr(), onTap: () {}),
                         ],
                       ),
 
@@ -209,11 +210,11 @@ class _SorryPageState extends State<SorryPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),

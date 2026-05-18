@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'game_webview.dart';
 import 'monkey_game_page.dart';
 import 'world_map_page.dart';
@@ -21,7 +22,7 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _showLevelError = false;
   bool _showCategoryError = false;
   bool _showTopicError = false;
-  String _activeTab = 'Filter';
+  String _activeTab = 'Filter'; // internal key, not displayed directly
   @override
 void initState() {
   super.initState();
@@ -79,18 +80,18 @@ void initState() {
         children: [
           const SizedBox(height: 16),
           _SidebarItem(
-  label: 'COURSES',
+  label: 'dashboard.courses_section'.tr(),
   isActive: true,
   onTap: () => showDialog(
     context: context,
     builder: (_) => const UnlockDialog(),
   ),
 ),
-          _SidebarItem(label: 'MY CREATIONS', isActive: false, onTap: () {}),
-          _SidebarItem(label: 'DISCOVER', isActive: false, onTap: () {}),
+          _SidebarItem(label: 'dashboard.my_creations'.tr(), isActive: false, onTap: () {}),
+          _SidebarItem(label: 'dashboard.discover'.tr(), isActive: false, onTap: () {}),
           const Spacer(),
           _SidebarItem(
-            label: 'HELP CENTER',
+            label: 'dashboard.help_center'.tr(),
             isActive: false,
             icon: Icons.help_outline,
             onTap: () {},
@@ -191,7 +192,7 @@ Widget _buildHeroBanner() {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Welcome,',
+                        'dashboard.welcome'.tr(),
                         style: GoogleFonts.nunito(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
@@ -274,7 +275,7 @@ Widget _buildHeroBanner() {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Current Course:',
+                        'dashboard.current_course'.tr(),
                         style: GoogleFonts.nunito(
                           fontSize: 12,
                           color: Colors.white70,
@@ -282,7 +283,7 @@ Widget _buildHeroBanner() {
                         ),
                       ),
                       Text(
-                        'CodeMonkey Jr.',
+                        'dashboard.codemonkey_jr'.tr(),
                         style: GoogleFonts.nunito(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -290,7 +291,7 @@ Widget _buildHeroBanner() {
                         ),
                       ),
                       Text(
-                        'Sequencing & Loops',
+                        'dashboard.sequencing_loops'.tr(),
                         style: GoogleFonts.nunito(
                           fontSize: 14,
                           color: Colors.white70,
@@ -304,7 +305,7 @@ Widget _buildHeroBanner() {
                               color: Color(0xFFFFD700), size: 16),
                           const SizedBox(width: 4),
                           Text(
-                            '0/3 Achievements →',
+                            'dashboard.achievements'.tr(),
                             style: GoogleFonts.nunito(
                               fontSize: 12,
                               color: Colors.white,
@@ -335,7 +336,7 @@ Widget _buildHeroBanner() {
                   ),
                   icon: const Icon(Icons.play_circle_fill, size: 22),
                   label: Text(
-                    'CONTINUE CODING',
+                    'dashboard.continue_coding'.tr(),
                     style: GoogleFonts.montserrat(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
@@ -379,7 +380,7 @@ Widget _buildHeroBanner() {
                     _showFilterExpanded = !_showFilterExpanded;
                   }),
                   child: Text(
-                    'Filter',
+                    'dashboard.filter'.tr(),
                     style: GoogleFonts.nunito(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -398,7 +399,7 @@ Widget _buildHeroBanner() {
                 GestureDetector(
                   onTap: () => setState(() => _activeTab = 'Search'),
                   child: Text(
-                    'Search',
+                    'dashboard.search'.tr(),
                     style: GoogleFonts.nunito(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -417,34 +418,34 @@ Widget _buildHeroBanner() {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
             child: Row(
               children: [
-                _buildFilterGroup('LEVEL', [
+                _buildFilterGroup('dashboard.level'.tr(), [
                   _FilterPill(
-                    label: 'All',
+                    label: 'common.all'.tr(),
                     isSelected: true,
                     onTap: () => setState(
                         () => _showFilterExpanded = !_showFilterExpanded),
                   ),
                 ]),
                 const SizedBox(width: 24),
-                _buildFilterGroup('CATEGORY', [
+                _buildFilterGroup('dashboard.category'.tr(), [
                   _FilterPill(
-                    label: 'Main Courses',
+                    label: 'dashboard.main_courses'.tr(),
                     isSelected: _selectedCategories.contains('Main Courses'),
                     onTap: () => setState(
                         () => _showFilterExpanded = !_showFilterExpanded),
                   ),
                   const SizedBox(width: 8),
                   _FilterPill(
-                    label: 'Mini Courses',
+                    label: 'dashboard.mini_courses'.tr(),
                     isSelected: _selectedCategories.contains('Mini Courses'),
                     onTap: () => setState(
                         () => _showFilterExpanded = !_showFilterExpanded),
                   ),
                 ]),
                 const SizedBox(width: 24),
-                _buildFilterGroup('TOPIC', [
+                _buildFilterGroup('dashboard.topic'.tr(), [
                   _FilterPill(
-                    label: 'All',
+                    label: 'common.all'.tr(),
                     isSelected: true,
                     onTap: () => setState(
                         () => _showFilterExpanded = !_showFilterExpanded),
@@ -470,8 +471,14 @@ Widget _buildHeroBanner() {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildCheckboxColumn(
-                    title: 'LEVEL',
+                    title: 'dashboard.level'.tr(),
                     items: ['Novice', 'Beginner', 'Intermediate', 'Advanced'],
+                    displayLabels: [
+                      'dashboard.novice'.tr(),
+                      'dashboard.beginner'.tr(),
+                      'dashboard.intermediate'.tr(),
+                      'dashboard.advanced'.tr(),
+                    ],
                     selected: _selectedLevels,
                     showError: _showLevelError,
                     onToggle: (val) => setState(() {
@@ -484,11 +491,16 @@ Widget _buildHeroBanner() {
                   ),
                   const SizedBox(width: 60),
                   _buildCheckboxColumn(
-                    title: 'CATEGORY',
+                    title: 'dashboard.category'.tr(),
                     items: [
                       'Main Courses',
                       'Mini Courses',
                       'Seasonal Activities'
+                    ],
+                    displayLabels: [
+                      'dashboard.main_courses'.tr(),
+                      'dashboard.mini_courses'.tr(),
+                      'dashboard.seasonal'.tr(),
                     ],
                     selected: _selectedCategories,
                     showError: _showCategoryError,
@@ -502,8 +514,13 @@ Widget _buildHeroBanner() {
                   ),
                   const SizedBox(width: 60),
                   _buildCheckboxColumn(
-                    title: 'TOPIC',
+                    title: 'dashboard.topic'.tr(),
                     items: ['Coding', 'Digital Literacy', 'CS Topics'],
+                    displayLabels: [
+                      'dashboard.coding'.tr(),
+                      'dashboard.digital_literacy'.tr(),
+                      'dashboard.cs_topics'.tr(),
+                    ],
                     selected: _selectedTopics,
                     showError: _showTopicError,
                     onToggle: (val) => setState(() {
@@ -540,7 +557,7 @@ Widget _buildHeroBanner() {
                       ),
                     ),
                     child: Text(
-                      'APPLY',
+                      'common.apply'.tr(),
                       style: GoogleFonts.montserrat(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -579,6 +596,7 @@ Widget _buildHeroBanner() {
   Widget _buildCheckboxColumn({
     required String title,
     required List<String> items,
+    List<String>? displayLabels,
     required Set<String> selected,
     required ValueChanged<String> onToggle,
     bool showError = false,
@@ -623,7 +641,7 @@ Widget _buildHeroBanner() {
                         size: 12, color: Color(0xFFE53935)),
                     const SizedBox(width: 6),
                     Text(
-                      'A Selection Must Be\nMade To Proceed',
+                      'error.selection_required'.tr(),
                       style: GoogleFonts.nunito(
                         fontSize: 11,
                         color: const Color(0xFFE53935),
@@ -646,7 +664,7 @@ Widget _buildHeroBanner() {
             }
           }),
           child: Text(
-            allSelected ? 'Unselect all' : 'Select all',
+            allSelected ? 'common.unselect_all'.tr() : 'common.select_all'.tr(),
             style: GoogleFonts.nunito(
               fontSize: 13,
               color: const Color(0xFF1A73E8),
@@ -655,50 +673,57 @@ Widget _buildHeroBanner() {
           ),
         ),
         const SizedBox(height: 8),
-        ...items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: GestureDetector(
-                onTap: () {
-                  onToggle(item);
-                  setState(() {
-                    _showLevelError = false;
-                    _showCategoryError = false;
-                    _showTopicError = false;
-                  });
-                },
-                child: Row(
-                  children: [
-                    Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
+        ...items.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final item = entry.value;
+          final displayLabel = (displayLabels != null && idx < displayLabels.length)
+              ? displayLabels[idx]
+              : item;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: GestureDetector(
+              onTap: () {
+                onToggle(item);
+                setState(() {
+                  _showLevelError = false;
+                  _showCategoryError = false;
+                  _showTopicError = false;
+                });
+              },
+              child: Row(
+                children: [
+                  Container(
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: selected.contains(item)
+                          ? const Color.fromARGB(255, 68, 172, 255)
+                          : Colors.white,
+                      border: Border.all(
                         color: selected.contains(item)
                             ? const Color.fromARGB(255, 68, 172, 255)
-                            : Colors.white,
-                        border: Border.all(
-                          color: selected.contains(item)
-                              ? const Color.fromARGB(255, 68, 172, 255)
-                              : const Color(0xFFBBBBBB),
-                        ),
-                        borderRadius: BorderRadius.circular(3),
+                            : const Color(0xFFBBBBBB),
                       ),
-                      child: selected.contains(item)
-                          ? const Icon(Icons.check,
-                              size: 12, color: Colors.white)
-                          : null,
+                      borderRadius: BorderRadius.circular(3),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      item,
-                      style: GoogleFonts.nunito(
-                        fontSize: 13,
-                        color: const Color(0xFF333333),
-                      ),
+                    child: selected.contains(item)
+                        ? const Icon(Icons.check,
+                            size: 12, color: Colors.white)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    displayLabel,
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      color: const Color(0xFF333333),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            )),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -802,7 +827,7 @@ Widget _buildHeroBanner() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'COURSES',
+                  'dashboard.courses_section'.tr(),
                   style: GoogleFonts.montserrat(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -1294,7 +1319,7 @@ Widget? _getGamePage(String title) {
                               const Icon(Icons.star_border, color: Color(0xFFFFB300), size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                'Not started',
+                                'dashboard.not_started'.tr(),
                                 style: GoogleFonts.nunito(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -1350,7 +1375,7 @@ Widget? _getGamePage(String title) {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: Text(
-                  'START CODING',
+                  'dashboard.start_coding'.tr(),
                   style: GoogleFonts.montserrat(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,

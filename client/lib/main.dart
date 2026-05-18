@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'codejr.dart';
 
-void main() => runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await EasyLocalization.ensureInitialized();
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en'),
+      child: const MyApp(),
+    ),
+  );
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -13,7 +25,10 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'CodeMonkey',
       debugShowCheckedModeBanner: false,
-      home: const WelcomePage(),  
+      localizationsDelegates: context.localizationDelegates,
+      supportedLocales: context.supportedLocales,
+      locale: context.locale,
+      home: const WelcomePage(),
     );
   }
 }
@@ -42,8 +57,7 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── NAVBAR ──
- // ── NAVBAR ──
-Widget _buildNavbar(BuildContext context) {
+  Widget _buildNavbar(BuildContext context) {
   return Container(
     //color: const Color(0xFF3B2008),
     color: const Color.fromARGB(255,50, 136, 189),
@@ -69,7 +83,7 @@ Widget _buildNavbar(BuildContext context) {
           children: [
             const _CourseDropdown(),
             const SizedBox(width: 28),
-           Text('PLANS',
+           Text('nav.plans'.tr(),
            style: GoogleFonts.montserrat(
            color: const Color.fromARGB(255, 255, 255, 255),
            fontSize: 14,
@@ -78,7 +92,7 @@ Widget _buildNavbar(BuildContext context) {
 ),
             const SizedBox(width: 28),
             Text(
-              'RESOURCES',
+              'nav.resources'.tr(),
               style: GoogleFonts.montserrat(
                 color: Color.fromARGB(255, 255, 255, 255),
                 fontSize: 14,
@@ -91,9 +105,9 @@ Widget _buildNavbar(BuildContext context) {
         // Buttons
         Row(
           children: [
-    _HoverButton(label: 'KIDS SIGN UP', onPressed: () {}),
+    _HoverButton(label: 'nav.kids_signup'.tr(), onPressed: () {}),
    _HoverButton(
-  label: 'SIGN UP',
+  label: 'nav.signup'.tr(),
   onPressed: () {
     Navigator.push(
       context,
@@ -103,7 +117,7 @@ Widget _buildNavbar(BuildContext context) {
   filled: true,
 ),
     _HoverButton(
-  label: 'LOG IN',
+  label: 'nav.login'.tr(),
   onPressed: () {
     Navigator.push(
       context,
@@ -113,8 +127,8 @@ Widget _buildNavbar(BuildContext context) {
 ),
     _NavLanguageDropdown(),
   ],
-  
-                
+
+
               ),
 
           ],
@@ -133,15 +147,15 @@ Widget _buildHero() {
         clipBehavior: Clip.none,
         children: [
           // ── BACKGROUND IMAGE ──
-     
+
           Positioned.fill(
-           
+
             child: Image.asset(
               'assets/images/background1.jpg',
               fit: BoxFit.cover,
 
             ),
-            
+
           ),
        Positioned.fill(
       child: Container(
@@ -157,7 +171,7 @@ Widget _buildHero() {
             child: Column(
               children: [
                 Text(
-                  'CODING FOR KIDS',
+                  'home.title'.tr(),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.amaticSc(
                     //color: const Color.fromARGB(255, 153, 206, 138),
@@ -175,7 +189,7 @@ Widget _buildHero() {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'INTRODUCING PROGRAMMING GAMES FOR THE NEXT GENERATION',
+                  'home.subtitle'.tr(),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.nunito(
                     color: Colors.white70,
@@ -185,7 +199,7 @@ Widget _buildHero() {
                   ),
                 ),
                 const SizedBox(height: 28),
-                 
+
                  DecoratedBox(
   decoration: BoxDecoration(
     //color: const Color.fromARGB(255,219, 161, 157),
@@ -212,7 +226,7 @@ Widget _buildHero() {
         ),
       ),
       child: Text(
-        'START FOR FREE',
+        'home.start_for_free'.tr(),
         style: GoogleFonts.montserrat(
           fontSize: 16,
           fontWeight: FontWeight.w800,
@@ -250,24 +264,13 @@ Widget _buildHero() {
       child: Column(
         children: [
           Text(
-            'Catch Bananas.',
+            'home.catch_bananas'.tr(),
             style: GoogleFonts.pacifico(
               color: const Color(0xFFD4A017),
               fontSize: 32,
             ),
           ),
           const SizedBox(height: 16),
-          // Text(
-          //   'CodeMonkey is an award-winning online platform that teaches kids real '
-          //   'coding languages. Children and teenagers learn to code through fun, '
-          //   'engaging games and challenges — no experience needed!',
-          //   textAlign: TextAlign.center,
-          //   style: GoogleFonts.nunito(
-          //     color: const Color(0xFF555555),
-          //     fontSize: 15,
-          //     height: 1.7,
-          //   ),
-          // ),
         ],
       ),
     );
@@ -276,182 +279,170 @@ Widget _buildHero() {
   // ── FEATURE CARDS ──
   Widget _buildFeatureCards() {
     final features = [
-      (
-        '🎮',
-        'Game-Based Learning',
-        'Kids learn to code by solving fun challenges and building their own games.'
-      ),
-      (
-        '🏆',
-        'Real Coding Languages',
-        'Learn Python, CoffeeScript and more — real languages used by professionals.'
-      ),
-      (
-        '👩‍🏫',
-        'Teacher & Parent Tools',
-        'Track progress, assign challenges, and manage classrooms with ease.'
-      ),
+      ('🎮', 'home.feature1_title'.tr(), 'home.feature1_desc'.tr()),
+      ('🏆', 'home.feature2_title'.tr(), 'home.feature2_desc'.tr()),
+      ('👩‍🏫', 'home.feature3_title'.tr(), 'home.feature3_desc'.tr()),
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
-      child: Row(
-        children: features
-            .map(
-              (f) => Expanded(
-                child: Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE0DDD5)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(f.$1, style: const TextStyle(fontSize: 40)),
-                      const SizedBox(height: 12),
-                      Text(
-                        f.$2,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.pacifico(
-                          color: const Color(0xFF3B2008),
-                          fontSize: 15,
+        padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
+        child: Row(
+          children: features
+              .map(
+                (f) => Expanded(
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE0DDD5)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(f.$1, style: const TextStyle(fontSize: 40)),
+                        const SizedBox(height: 12),
+                        Text(
+                          f.$2,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.pacifico(
+                            color: const Color(0xFF3B2008),
+                            fontSize: 15,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        f.$3,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunito(
-                          color: const Color(0xFF777777),
-                          fontSize: 13,
-                          height: 1.6,
+                        const SizedBox(height: 8),
+                        Text(
+                          f.$3,
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.nunito(
+                            color: const Color(0xFF777777),
+                            fontSize: 13,
+                            height: 1.6,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            )
-            .toList(),
-      ),
-    );
+              )
+              .toList(),
+        ),
+      );
   }
 
   // ── STATS BAR ──
   Widget _buildStatsBar() {
     final stats = [
-      ('70M+', 'Games Played'),
-      ('5M+', 'Students'),
-      ('150+', 'Countries'),
-      ('500K+', 'Teachers'),
+      ('70M+', 'stats.games_played'.tr()),
+      ('5M+', 'stats.students'.tr()),
+      ('150+', 'stats.countries'.tr()),
+      ('500K+', 'stats.teachers'.tr()),
     ];
 
     return Container(
-      color: const Color(0xFF3B2008),
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: stats
-            .map(
-              (s) => Column(
-                children: [
-                  Text(
-                    s.$1,
-                    style: GoogleFonts.pacifico(
-                      color: const Color.fromARGB(255, 164, 219, 168),
-                      fontSize: 28,
+        color: const Color(0xFF3B2008),
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: stats
+              .map(
+                (s) => Column(
+                  children: [
+                    Text(
+                      s.$1,
+                      style: GoogleFonts.pacifico(
+                        color: const Color.fromARGB(255, 164, 219, 168),
+                        fontSize: 28,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s.$2,
-                    style: GoogleFonts.nunito(
-                      color: const Color(0xFFE8D8B0),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
+                    const SizedBox(height: 4),
+                    Text(
+                      s.$2,
+                      style: GoogleFonts.nunito(
+                        color: const Color(0xFFE8D8B0),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            )
-            .toList(),
-      ),
-    );
+                  ],
+                ),
+              )
+              .toList(),
+        ),
+      );
   }
 
   // ── CTA SECTION ──
   Widget _buildCTASection() {
     return Container(
-      color: const Color(0xFF6DB33F),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 52, horizontal: 32),
-      child: Column(
-        children: [
-          Text(
-            'Ready to Start Coding? 🚀',
-            textAlign: TextAlign.center,
-            style: GoogleFonts.pacifico(
-              color: Colors.white,
-              fontSize: 28,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            "Join millions of kids worldwide — it's completely free!",
-            style: GoogleFonts.nunito(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 28),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFF5C518),
-                  foregroundColor: const Color(0xFF3A2A00),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Kids Sign Up',
-                  style: GoogleFonts.pacifico(fontSize: 14),
-                ),
+        color: const Color(0xFF6DB33F),
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 52, horizontal: 32),
+        child: Column(
+          children: [
+            Text(
+              'home.cta_title'.tr(),
+              textAlign: TextAlign.center,
+              style: GoogleFonts.pacifico(
+                color: Colors.white,
+                fontSize: 28,
               ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.white, width: 2),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: Text(
-                  'Teacher Sign Up',
-                  style: GoogleFonts.pacifico(fontSize: 14),
-                ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'home.cta_subtitle'.tr(),
+              style: GoogleFonts.nunito(
+                color: Colors.white70,
+                fontSize: 14,
               ),
-            ],
-          ),
-        ],
-      ),
-    );
+            ),
+            const SizedBox(height: 28),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton(
+                  onPressed: () {},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF5C518),
+                    foregroundColor: const Color(0xFF3A2A00),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'home.kids_signup_btn'.tr(),
+                    style: GoogleFonts.pacifico(fontSize: 14),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton(
+                  onPressed: () {},
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.white, width: 2),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 14,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'home.teacher_signup_btn'.tr(),
+                    style: GoogleFonts.pacifico(fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
   }
 
   // ── FOOTER ──
@@ -470,7 +461,11 @@ Widget _buildHero() {
             ),
           ),
           Row(
-            children: ['Privacy Policy', 'Terms of Use', 'Contact Us']
+            children: [
+              'footer.privacy_policy'.tr(),
+              'footer.terms_of_use'.tr(),
+              'footer.contact_us'.tr(),
+            ]
                 .map(
                   (l) => Padding(
                     padding: const EdgeInsets.only(left: 20),
@@ -501,25 +496,27 @@ class _CourseDropdown extends StatefulWidget {
 
 class _CourseDropdownState extends State<_CourseDropdown> {
   bool _hovered = false;
-  final List<String> _courses = [
-    'ALL COURSES',
-    'CODE JR.',
-    'BEAVER ACHIEVER',
-    'DODO DOES MATH',
-    'CODING ADVENTURE',
-    'GAME BUILDER',
-    'BANANA TALES',
-    'CODING CHATBOTS',
-    'DIGITAL LITERACY COURSES',
-    'DATA SCIENCE COURSE',
-    'ARTIFICIAL INTELLIGENCE COURSE',
-    'HIGH SCHOOL CS COURSES',
-    'MONTHLY ACTIVITY – Limited Time ✨',
+
+  List<String> get _courses => [
+    'courses.all'.tr(),
+    'courses.code_jr'.tr(),
+    'courses.beaver'.tr(),
+    'courses.dodo'.tr(),
+    'courses.adventure'.tr(),
+    'courses.game_builder'.tr(),
+    'courses.banana'.tr(),
+    'courses.chatbots'.tr(),
+    'courses.digital'.tr(),
+    'courses.data'.tr(),
+    'courses.ai'.tr(),
+    'courses.highschool'.tr(),
+    'courses.monthly'.tr(),
   ];
 
   OverlayEntry? _overlayEntry;
 
   void _showDropdown(BuildContext context) {
+    final courses = _courses;
     final renderBox = context.findRenderObject() as RenderBox;
     final offset = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
@@ -557,18 +554,20 @@ class _CourseDropdownState extends State<_CourseDropdown> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
-                  children: _courses.map((course) {
-                    final isHighSchool = course == 'HIGH SCHOOL CS COURSES';
-                    final isLimited = course.contains('Limited Time');
+                  children: courses.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final course = entry.value;
+                    final isHighSchool = idx == 11;
+                    final isLimited = course.contains('✨');
                     return InkWell(
                       onTap: () {
                         _hideDropdown();
-                        if (course == 'CODE JR.') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const CodemonkeyJrPage()),
-      );
-    }
+                        if (idx == 1) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const CodemonkeyJrPage()),
+                          );
+                        }
                       },
                       hoverColor: const Color(0xFFF0F4FF),
                       child: Container(
@@ -579,7 +578,7 @@ class _CourseDropdownState extends State<_CourseDropdown> {
                           border: Border(
                             bottom: BorderSide(
                               color: const Color(0xFFEEEEEE),
-                              width: course == _courses.last ? 0 : 1,
+                              width: idx == courses.length - 1 ? 0 : 1,
                             ),
                           ),
                         ),
@@ -650,7 +649,7 @@ class _CourseDropdownState extends State<_CourseDropdown> {
           border: Border(
             bottom: BorderSide(
               color: _hovered
-                  ? const .fromARGB(255,195, 158, 222)
+                  ? const Color.fromARGB(255,195, 158, 222)
                   : Colors.transparent,
               width: 3,
             ),
@@ -660,11 +659,11 @@ class _CourseDropdownState extends State<_CourseDropdown> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'COURSES',
+              'nav.courses'.tr(),
               style: GoogleFonts.montserrat(
                 fontSize: 14,
                 color: _hovered
-                    ? const .fromARGB(255,195, 158, 222)
+                    ? const Color.fromARGB(255,195, 158, 222)
                     : Colors.white,
                 fontWeight: FontWeight.w500,
               ),
@@ -682,63 +681,6 @@ class _CourseDropdownState extends State<_CourseDropdown> {
     );
   }
 }
-////////////////////////////
-class _LanguageDropdown extends StatefulWidget {
-  const _LanguageDropdown();
-
-  @override
-  State<_LanguageDropdown> createState() => _LanguageDropdownState();
-}
-
-class _LanguageDropdownState extends State<_LanguageDropdown> {
-  String _selected = '🇺🇸 EN';
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      color: const Color(0xFF2A1505),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      offset: const Offset(0, 40),
-      onSelected: (value) => setState(() => _selected = value),
-      itemBuilder: (_) => [
-        PopupMenuItem(
-          value: '🇺🇸 EN',
-          child: Text('🇺🇸 English',
-              style: GoogleFonts.montserrat(
-                color: const Color(0xFFE8D8B0),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              )),
-        ),
-        PopupMenuItem(
-          value: '🇸🇦 AR',
-          child: Text('🇸🇦 العربية',
-              style: GoogleFonts.montserrat(
-                color: const Color(0xFFE8D8B0),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              )),
-        ),
-      ],
-      child: Row(
-        children: [
-          Text(
-            _selected,
-            style: GoogleFonts.montserrat(
-              color: const Color(0xFFE8D8B0),
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Icon(Icons.keyboard_arrow_down,
-              color: Color(0xFFE8D8B0), size: 16),
-        ],
-      ),
-    );
-  }
-}
-
-
 ////////////
 class _HoverButton extends StatefulWidget {
   final String label;
@@ -801,6 +743,12 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
   bool _hovered = false;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _selected = context.locale.languageCode == 'ar' ? '🇸🇦 AR' : '🇺🇸 EN';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -809,7 +757,14 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
         color: const Color(0xFF2A1505),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         offset: const Offset(0, 52),
-        onSelected: (value) => setState(() => _selected = value),
+        onSelected: (value) {
+          setState(() => _selected = value);
+          if (value == '🇸🇦 AR') {
+            context.setLocale(const Locale('ar'));
+          } else {
+            context.setLocale(const Locale('en'));
+          }
+        },
         itemBuilder: (_) => [
           PopupMenuItem(
             value: '🇺🇸 EN',

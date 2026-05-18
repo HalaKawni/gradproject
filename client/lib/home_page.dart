@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'student_account_page.dart';
 import 'sorry_page.dart';
 
@@ -86,7 +87,7 @@ double get _monkeyHeight {
                                 const Icon(Icons.chevron_left,
                                     color: Colors.white, size: 20),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -103,7 +104,7 @@ double get _monkeyHeight {
 
                       // ── STUDENT SIGNUP label ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'student.signup_label'.tr(),
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -116,7 +117,7 @@ double get _monkeyHeight {
 
                       // ── TITLE ──
                       Text(
-                        'HOW OLD ARE YOU?',
+                        'age.title'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -209,7 +210,7 @@ double get _monkeyHeight {
                                             color: const Color(0xFF333333),
                                           ),
                                           decoration: InputDecoration(
-                                            hintText: 'Your age',
+                                            hintText: 'age.hint'.tr(),
                                             hintStyle: GoogleFonts.nunito(
                                               fontSize: 14,
                                               color: const Color(0xFF999999),
@@ -294,7 +295,7 @@ double get _monkeyHeight {
                                 if (_showError) ...[
                                   const SizedBox(height: 6),
                                   Text(
-                                    'This field is required',
+                                    'error.required'.tr(),
                                     style: GoogleFonts.nunito(
                                       color: const Color(0xFFE53935),
                                       fontSize: 13,
@@ -344,7 +345,7 @@ double get _monkeyHeight {
                                         ),
                                       ),
                                       child: Text(
-                                        'NEXT',
+                                        'common.next'.tr(),
                                         style: GoogleFonts.montserrat(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w800,
@@ -409,11 +410,11 @@ double get _monkeyHeight {
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class MyAccountPage extends StatefulWidget {
   final String parentName;
@@ -71,7 +72,7 @@ class _MyAccountPageState extends State<MyAccountPage>
                       const SizedBox(height: 32),
                       // Title
                       Text(
-                        'MY ACCOUNT',
+                        'account.title'.tr(),
                         style: GoogleFonts.amaticSc(
                           fontSize: 52,
                           fontWeight: FontWeight.w700,
@@ -101,9 +102,9 @@ class _MyAccountPageState extends State<MyAccountPage>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildSection('User Details', _buildUserDetails()),
+                            _buildSection('account.user_details'.tr(), _buildUserDetails()),
                             const SizedBox(height: 32),
-                            _buildSection('Children Account Details', _buildChildDetails()),
+                            _buildSection('account.children_details'.tr(), _buildChildDetails()),
                             const SizedBox(height: 32),
                             _buildSubscriptionsSection(),
                             const SizedBox(height: 32),
@@ -164,14 +165,14 @@ class _MyAccountPageState extends State<MyAccountPage>
                           color: const Color(0xFF222222))),
                   const SizedBox(width: 8),
                   const Icon(Icons.edit, size: 14, color: Color(0xFF1A73E8)),
-                  Text(' Edit',
+                  Text(' ${'account.edit'.tr()}',
                       style: GoogleFonts.nunito(
                           fontSize: 13, color: const Color(0xFF1A73E8),
                           decoration: TextDecoration.underline,
                           decorationColor: const Color(0xFF1A73E8))),
                 ]),
                 const SizedBox(height: 4),
-                Text('Parent',
+                Text('account.parent_role'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 14, color: const Color(0xFF888888))),
               ],
@@ -185,7 +186,7 @@ class _MyAccountPageState extends State<MyAccountPage>
               width: 18, height: 18,
               errorBuilder: (_, e, s) =>
                   const Text('G', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16))),
-          label: Text('Signed Up With Google',
+          label: Text('account.signed_google'.tr(),
               style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF444444))),
           style: OutlinedButton.styleFrom(
             side: const BorderSide(color: Color(0xFFCCCCCC)),
@@ -216,14 +217,14 @@ class _MyAccountPageState extends State<MyAccountPage>
                           color: const Color(0xFF222222))),
                   const SizedBox(width: 8),
                   const Icon(Icons.edit, size: 14, color: Color(0xFF1A73E8)),
-                  Text(' Edit',
+                  Text(' ${'account.edit'.tr()}',
                       style: GoogleFonts.nunito(
                           fontSize: 13, color: const Color(0xFF1A73E8),
                           decoration: TextDecoration.underline,
                           decorationColor: const Color(0xFF1A73E8))),
                 ]),
                 const SizedBox(height: 4),
-                Text('Child',
+                Text('account.child_role'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 14, color: const Color(0xFF888888))),
               ],
@@ -231,7 +232,7 @@ class _MyAccountPageState extends State<MyAccountPage>
           ],
         ),
         const SizedBox(height: 16),
-        Text('Email / Username:',
+        Text('account.email_username'.tr(),
             style: GoogleFonts.nunito(
                 fontSize: 14, fontWeight: FontWeight.w800,
                 color: const Color(0xFF333333))),
@@ -239,7 +240,7 @@ class _MyAccountPageState extends State<MyAccountPage>
         Text(widget.childEmail,
             style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF444444))),
         const SizedBox(height: 8),
-        Text('Change Password',
+        Text('account.change_password'.tr(),
             style: GoogleFonts.nunito(
                 fontSize: 13, color: const Color(0xFF1A73E8),
                 decoration: TextDecoration.underline,
@@ -256,11 +257,11 @@ class _MyAccountPageState extends State<MyAccountPage>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Manage Subscriptions',
+            Text('account.manage_subscriptions'.tr(),
                 style: GoogleFonts.nunito(
                     fontSize: 18, fontWeight: FontWeight.w700,
                     color: const Color(0xFF3A5A7C))),
-            Text('Have a redemption code?',
+            Text('account.redemption_code'.tr(),
                 style: GoogleFonts.nunito(
                     fontSize: 13, color: const Color(0xFF1A73E8),
                     decoration: TextDecoration.underline,
@@ -296,10 +297,10 @@ class _MyAccountPageState extends State<MyAccountPage>
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                     child: Row(
                       children: [
-                        _subCol('SUBSCRIPTION TYPE', 'Home Trial'),
-                        _subCol('BILLING PLAN', 'Non Recurring'),
-                        _subCol('VALID FROM', 'April 3 2026'),
-                        _subCol('VALID UNTIL', 'April 17 2026'),
+                        _subCol('account.sub_type'.tr(), 'account.sub_home_trial'.tr()),
+                        _subCol('account.sub_billing'.tr(), 'account.sub_non_recurring'.tr()),
+                        _subCol('account.sub_valid_from'.tr(), 'April 3 2026'),
+                        _subCol('account.sub_valid_until'.tr(), 'April 17 2026'),
                         _subColStatus(),
                       ],
                     ),
@@ -324,9 +325,9 @@ class _MyAccountPageState extends State<MyAccountPage>
             text: TextSpan(
               style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555)),
               children: [
-                const TextSpan(text: 'Your trial is over. Please '),
+                TextSpan(text: 'account.trial_over'.tr()),
                 TextSpan(
-                  text: 'Review our pricing plans',
+                  text: 'account.review_pricing'.tr(),
                   style: GoogleFonts.nunito(
                       fontSize: 13, color: const Color(0xFF1A73E8),
                       decoration: TextDecoration.underline,
@@ -362,7 +363,7 @@ class _MyAccountPageState extends State<MyAccountPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('STATUS',
+        Text('account.sub_status'.tr(),
             style: GoogleFonts.nunito(
                 fontSize: 11, fontWeight: FontWeight.w800,
                 color: const Color(0xFF555555), letterSpacing: 0.5)),
@@ -370,7 +371,7 @@ class _MyAccountPageState extends State<MyAccountPage>
         Row(children: [
           const Icon(Icons.circle, color: Color(0xFFE53935), size: 10),
           const SizedBox(width: 4),
-          Text('Expired',
+          Text('account.sub_expired'.tr(),
               style: GoogleFonts.nunito(
                   fontSize: 13, fontWeight: FontWeight.w700,
                   color: const Color(0xFFE53935))),
@@ -382,7 +383,7 @@ class _MyAccountPageState extends State<MyAccountPage>
   // ── SETTINGS ─────────────────────────────────────────────────────────────
   Widget _buildSettingsSection() {
     return _buildSection(
-      'Settings',
+      'account.settings'.tr(),
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -401,13 +402,13 @@ class _MyAccountPageState extends State<MyAccountPage>
                     text: TextSpan(
                       style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF444444)),
                       children: [
-                        const TextSpan(text: 'Hide Discover and prevent child from publishing games and challenges. '),
-                        TextSpan(text: 'Read more',
+                        TextSpan(text: 'account.hide_discover'.tr()),
+                        TextSpan(text: 'account.read_more'.tr(),
                             style: GoogleFonts.nunito(
                                 fontSize: 13, color: const Color(0xFF1A73E8),
                                 decoration: TextDecoration.underline,
                                 decorationColor: const Color(0xFF1A73E8))),
-                        const TextSpan(text: ' about Discover.'),
+                        TextSpan(text: 'account.about_discover'.tr()),
                       ],
                     ),
                   ),
@@ -426,7 +427,7 @@ class _MyAccountPageState extends State<MyAccountPage>
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text("Turn off Coding Adventure's Super Hints.",
+                  child: Text('account.turn_off_hints'.tr(),
                       style: GoogleFonts.nunito(
                           fontSize: 13, color: const Color(0xFF444444))),
                 ),
@@ -441,20 +442,17 @@ class _MyAccountPageState extends State<MyAccountPage>
   // ── DELETE ACCOUNT ────────────────────────────────────────────────────────
   Widget _buildDeleteSection() {
     return _buildSection(
-      'Delete account',
+      'account.delete_account'.tr(),
       Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Click on the button below only if you are sure that you want to delete your account. '
-            'After deleting your account you will not be able to access the game, your progress or '
-            'the challenges you created anymore. This action can not be undone. This action will also '
-            'cancel your auto renewal and you will not be charged again.',
+            'account.delete_desc'.tr(),
             style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555), height: 1.6),
           ),
           const SizedBox(height: 12),
           Text(
-            "By deleting your account, your children's account will be deleted as well.",
+            'account.delete_children_note'.tr(),
             style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555), height: 1.6),
           ),
           const SizedBox(height: 20),
@@ -465,7 +463,7 @@ class _MyAccountPageState extends State<MyAccountPage>
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             ),
-            child: Text('DELETE MY ACCOUNT',
+            child: Text('account.delete_btn'.tr(),
                 style: GoogleFonts.montserrat(
                     fontSize: 13, fontWeight: FontWeight.w700,
                     color: const Color(0xFF333333), letterSpacing: 1)),
@@ -508,7 +506,7 @@ class _MyAccountPageState extends State<MyAccountPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(Icons.chevron_left, color: Colors.white, size: 20),
-                Text('BACK',
+                Text('nav.back'.tr(),
                     style: GoogleFonts.montserrat(
                         color: Colors.white,
                         fontSize: 14,

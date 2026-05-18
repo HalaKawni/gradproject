@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'digital_lesson_page.dart';
 import '../services/api_service.dart';
@@ -100,9 +101,9 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
 
   String get _actionButtonText {
     final l = _nextLesson;
-    if (l.inProgress == true) return 'CONTINUE LESSON #${l.number}';
-    if (_completedLessons == _lessons.length) return 'REVIEW LESSON #${l.number}';
-    return 'START LESSON #${l.number}';
+    if (l.inProgress == true) return 'digital.btn_continue'.tr(namedArgs: {'num': '${l.number}'});
+    if (_completedLessons == _lessons.length) return 'digital.btn_review'.tr(namedArgs: {'num': '${l.number}'});
+    return 'digital.btn_start'.tr(namedArgs: {'num': '${l.number}'});
   }
 
   void _openLesson(_LessonData lesson) async {
@@ -185,7 +186,7 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('DIGITAL LITERACY: MINI COURSE',
+          Text('digital.course_title'.tr(),
               style: GoogleFonts.montserrat(
                   color: const Color.fromARGB(255, 202, 97, 128),
                   fontSize: 18, fontWeight: FontWeight.bold)),
@@ -224,27 +225,27 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
             decoration: BoxDecoration(
                 color: const Color.fromARGB(255, 255, 230, 154),
                 borderRadius: BorderRadius.circular(20)),
-            child: Text('${_lessons.length} LESSONS',
+            child: Text('data.lessons_count'.tr(namedArgs: {'count': '${_lessons.length}'}),
                 style: const TextStyle(
                     fontFamily: 'Chennai', fontSize: 12,
                     fontWeight: FontWeight.w800, color: Color.fromARGB(255, 0, 0, 0))),
           ),
           const SizedBox(height: 20),
-          const Text('DIGITAL LITERACY',
-              style: TextStyle(fontFamily: 'Chennai', fontSize: 28, color: Color(0xFF1A1A2E))),
+          Text('digital.course_name'.tr(),
+              style: const TextStyle(fontFamily: 'Chennai', fontSize: 28, color: Color(0xFF1A1A2E))),
           const SizedBox(height: 18),
-          Text('This course provides an overview of Digital Use and Digital Citizenship.',
+          Text('digital.course_desc'.tr(),
               style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w600,
                   color: const Color(0xFF555555), height: 1.5)),
           const SizedBox(height: 46),
-          Center(child: Text('TRACK YOUR PROGRESS',
+          Center(child: Text('data.track_progress'.tr(),
               style: const TextStyle(fontFamily: 'xolonium', fontSize: 18,
                   fontWeight: FontWeight.w500, color: Color(0xFF333333)))),
           const SizedBox(height: 8),
           Center(child: SizedBox(width: 240, height: 150,
               child: CustomPaint(painter: _ArcProgressPainter(progress: progress)))),
           const SizedBox(height: 46),
-          Center(child: Text('YOU COMPLETED $_completedLessons/${_lessons.length} LESSONS',
+          Center(child: Text('data.completed_lessons'.tr(namedArgs: {'done': '$_completedLessons', 'total': '${_lessons.length}'}),
               style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700,
                   color: const Color(0xFF666666)))),
           const SizedBox(height: 52),
@@ -401,8 +402,8 @@ class _LessonCardState extends State<_LessonCard> with SingleTickerProviderState
                                 color: const Color(0xFFFFC83D),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Text('IN PROGRESS',
-                                  style: TextStyle(
+                              child: Text('data.in_progress'.tr(),
+                                  style: const TextStyle(
                                       fontSize: 8, fontWeight: FontWeight.w800,
                                       color: Colors.white, letterSpacing: 0.5)),
                             ),

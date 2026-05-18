@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'digital_play_page.dart';
 import 'digitalplaypagelesson2.dart';
@@ -384,13 +385,13 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
               children: [
                 _buildSideButton(
                   icon: Icons.arrow_back_ios,
-                  label: 'PREVIOUS',
+                  label: 'digital.previous'.tr(),
                   onTap: _currentSlide > 0 ? _prevSlide : null,
                 ),
                 Expanded(child: _buildSlideContent(slide)),
                 _buildSideButton(
                   icon: Icons.arrow_forward_ios,
-                  label: _currentSlide == totalSlides - 1 ? 'FINISH' : 'NEXT',
+                  label: _currentSlide == totalSlides - 1 ? 'digital.finish'.tr() : 'digital.next'.tr(),
                   onTap: _canGoNext() ? _nextSlide : null,
                 ),
               ],
@@ -423,7 +424,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   const Icon(Icons.arrow_back_ios, color: Colors.white, size: 14),
-                  Text('BACK TO\nCOURSE',
+                  Text('digital.back_to_course'.tr(),
                       style: GoogleFonts.nunito(
                           color: Colors.white, fontSize: 7,
                           fontWeight: FontWeight.w800, height: 1.1),
@@ -458,7 +459,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                     child: const Icon(Icons.menu_book, color: Colors.white, size: 16),
                   ),
                   const SizedBox(width: 4),
-                  Text('LEARN',
+                  Text('digital.learn'.tr(),
                       style: GoogleFonts.nunito(
                           color: const Color(0xFF555555),
                           fontSize: 10, fontWeight: FontWeight.w800)),
@@ -520,9 +521,9 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
             ],
           ),
           const Spacer(),
-          _buildScoreBox('PLAY', _playScore, 3, Icons.sports_esports),
+          _buildScoreBox('digital.play'.tr(), _playScore, 3, Icons.sports_esports),
           const SizedBox(width: 8),
-          _buildScoreBox('REVIEW', _reviewScore, 5, Icons.chat_bubble_outline),
+          _buildScoreBox('digital.review'.tr(), _reviewScore, 5, Icons.chat_bubble_outline),
         ],
       ),
     );
@@ -634,7 +635,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFE8D080)),
                 ),
-                child: Text('CORNER QUESTION',
+                child: Text('digital.corner_question'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 13, fontWeight: FontWeight.w800,
                         color: const Color(0xFF888844), letterSpacing: 1)),
@@ -647,7 +648,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                       color: Colors.black87, height: 1.4)),
               const SizedBox(height: 8),
               if (!answered)
-                Text('Select the correct answer',
+                Text('digital.select_correct'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 14, color: Colors.black54,
                         fontWeight: FontWeight.w500)),
@@ -738,7 +739,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: const Color(0xFFE8D080)),
                 ),
-                child: Text('SURVEY QUESTION',
+                child: Text('digital.survey_question'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 13, fontWeight: FontWeight.w800,
                         color: const Color(0xFF888844), letterSpacing: 1)),
@@ -803,15 +804,15 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: const Color(0xFFE8D080)),
                     ),
-                    child: const Text('Submit Your Answer',
-                        style: TextStyle(
+                    child: Text('digital.submit_answer'.tr(),
+                        style: const TextStyle(
                             fontFamily: 'Chennai',
                             fontSize: 18, color: Color(0xFF666600))),
                   ),
                 ),
               ] else ...[
                 Text(
-                  'You answered "${slide.answers![_surveyAnswer!]}", see how other CodeMonkey users answered',
+                  'digital.survey_result'.tr(namedArgs: {'answer': slide.answers![_surveyAnswer!]}),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.nunito(
                       fontSize: 15, color: Colors.black54,
@@ -906,8 +907,8 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(color: const Color(0xFFE8D080)),
                   ),
-                  child: const Text('OPEN QUESTION',
-                      style: TextStyle(
+                  child: Text('digital.open_question'.tr(),
+                      style: const TextStyle(
                           fontFamily: 'Chennai', fontSize: 13,
                           color: Color(0xFF888844), letterSpacing: 1)),
                 ),
@@ -918,7 +919,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                         fontSize: 22, fontWeight: FontWeight.w800,
                         color: Colors.black87, height: 1.4)),
                 const SizedBox(height: 24),
-                Text('Enter your answer below:',
+                Text('digital.enter_answer'.tr(),
                     style: GoogleFonts.nunito(
                         fontSize: 15, color: Colors.black54)),
                 const SizedBox(height: 12),
@@ -966,7 +967,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                                   offset: Offset(0, 4))]
                               : [],
                         ),
-                        child: Text('Submit Your Answer',
+                        child: Text('digital.submit_answer'.tr(),
                             style: GoogleFonts.nunito(
                                 fontSize: 18, fontWeight: FontWeight.w800,
                                 color: canSubmit && !_openAnswerSubmitted
@@ -1033,7 +1034,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
               Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('LISTEN MODE',
+                  Text('digital.listen_mode'.tr(),
                       style: GoogleFonts.nunito(
                           color: Colors.white, fontSize: 10,
                           fontWeight: FontWeight.w700)),
@@ -1073,7 +1074,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                 ],
               ),
               const SizedBox(width: 8),
-              Text(_listenMode ? 'ON' : 'OFF',
+              Text(_listenMode ? 'digital.on'.tr() : 'digital.off'.tr(),
                   style: GoogleFonts.nunito(
                       color: Colors.white, fontSize: 11,
                       fontWeight: FontWeight.w700)),

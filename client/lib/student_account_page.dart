@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'services/auth_service.dart';
 import 'dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
@@ -141,7 +142,7 @@ Future<void> _onSignUp() async {
                                 const Icon(Icons.chevron_left,
                                     color: Colors.white, size: 20),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -158,7 +159,7 @@ Future<void> _onSignUp() async {
 
                       // ── TITLE ──
                       Text(
-                        'STUDENT SIGNUP',
+                        'student.signup_label'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -207,7 +208,7 @@ Future<void> _onSignUp() async {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Enter account details',
+                                          'student.enter_details'.tr(),
                                           style: GoogleFonts.montserrat(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -217,7 +218,7 @@ Future<void> _onSignUp() async {
                                         const SizedBox(height: 20),
 
                                         // Email
-                                        _buildLabel('Email'),
+                                        _buildLabel('common.email'.tr()),
                                         _buildTextField(
                                           controller: _emailController,
                                           hasError: _showEmailError,
@@ -225,11 +226,11 @@ Future<void> _onSignUp() async {
                                               _showEmailError = false),
                                         ),
                                         if (_showEmailError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         const SizedBox(height: 14),
 
                                         // Display name
-                                        _buildLabel('Display name'),
+                                        _buildLabel('common.display_name'.tr()),
                                         _buildTextField(
                                           controller: _displayNameController,
                                           hasError: _showNameError,
@@ -237,12 +238,12 @@ Future<void> _onSignUp() async {
                                               () => _showNameError = false),
                                         ),
                                         if (_showNameError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         Padding(
                                           padding: const EdgeInsets.only(
                                               top: 6),
                                           child: Text(
-                                            'To protect your privacy, do not use your full name',
+                                            'common.privacy_hint'.tr(),
                                             style: GoogleFonts.nunito(
                                               fontSize: 12,
                                               color: const Color(0xFF888888),
@@ -252,7 +253,7 @@ Future<void> _onSignUp() async {
                                         const SizedBox(height: 14),
 
                                         // Password
-                                        _buildLabel('Password'),
+                                        _buildLabel('common.password'.tr()),
                                         _buildTextField(
                                           controller: _passwordController,
                                           hasError: _showPasswordError,
@@ -275,11 +276,11 @@ Future<void> _onSignUp() async {
                                           }),
                                         ),
                                         if (_showPasswordError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                         const SizedBox(height: 14),
 
                                         // Re-enter password
-                                        _buildLabel('Re-enter password'),
+                                        _buildLabel('common.reenter_password'.tr()),
                                         _buildTextField(
                                           controller: _rePasswordController,
                                           hasError: _showRePasswordError ||
@@ -303,9 +304,9 @@ Future<void> _onSignUp() async {
                                           }),
                                         ),
                                         if (_showRePasswordError)
-                                          _buildError('This field is required'),
+                                          _buildError('error.required'.tr()),
                                        if (_showPasswordMismatch)
-  _buildError('Passwords do not match'),
+  _buildError('error.passwords_mismatch'.tr()),
 if (_apiError != null)
   _buildError(_apiError!),
 const SizedBox(height: 28),
@@ -350,7 +351,7 @@ const SizedBox(height: 28),
         ),
       )
     : Text(
-        'SIGN UP',
+        'nav.signup'.tr(),
         style: GoogleFonts.montserrat(
           fontSize: 15,
           fontWeight: FontWeight.w800,
@@ -384,7 +385,7 @@ const SizedBox(height: 28),
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Or sign up with:',
+                                          'common.or_signup_with'.tr(),
                                           style: GoogleFonts.montserrat(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -393,7 +394,7 @@ const SizedBox(height: 28),
                                         ),
                                         const SizedBox(height: 8),
                                         Text(
-                                          'In the future, continue to log in using the same service',
+                                          'common.future_login_hint'.tr(),
                                           style: GoogleFonts.nunito(
                                             fontSize: 12,
                                             color: const Color(0xFF888888),
@@ -470,12 +471,12 @@ const SizedBox(height: 28),
                             color: Colors.white,
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -646,11 +647,11 @@ const SizedBox(height: 28),
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),

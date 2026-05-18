@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'data_lesson_page.dart';
 import '../services/api_service.dart';
@@ -91,9 +92,9 @@ class _DataCoursePageState extends State<DataCoursePage> {
 
   String get _actionButtonText {
     final l = _nextLesson;
-    if (l.inProgress == true) return 'CONTINUE WITH LESSON #${l.number}';
-    if (_completedLessons == _lessons.length) return 'REVIEW LESSON #${l.number}';
-    return 'CONTINUE WITH LESSON #${l.number}';
+    if (l.inProgress == true) return 'data.btn_continue'.tr(namedArgs: {'num': '${l.number}'});
+    if (_completedLessons == _lessons.length) return 'data.btn_review'.tr(namedArgs: {'num': '${l.number}'});
+    return 'data.btn_continue'.tr(namedArgs: {'num': '${l.number}'});
   }
 
   void _openLesson(_LessonData lesson) async {
@@ -185,7 +186,7 @@ class _DataCoursePageState extends State<DataCoursePage> {
                       color: const Color.fromARGB(255, 202, 97, 128), fontSize: 16,
                       fontWeight: FontWeight.w900, letterSpacing: 0.5)),
               const SizedBox(width: 24),
-              Text('DATA IS EVERYWHERE: MINI COURSE',
+              Text('data.course_title'.tr(),
                   style: GoogleFonts.montserrat(
                       color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w600)),
             ],
@@ -225,27 +226,27 @@ class _DataCoursePageState extends State<DataCoursePage> {
             decoration: BoxDecoration(
                 color: const Color.fromARGB(255, 255, 230, 154),
                 borderRadius: BorderRadius.circular(20)),
-            child: Text('${_lessons.length} LESSONS',
+            child: Text('data.lessons_count'.tr(namedArgs: {'count': '${_lessons.length}'}),
                 style: const TextStyle(
                     fontFamily: 'Chennai', fontSize: 12,
                     fontWeight: FontWeight.w800, color: Colors.black)),
           ),
           const SizedBox(height: 20),
-          const Text('DATA IS EVERYWHERE',
-              style: TextStyle(fontFamily: 'Chennai', fontSize: 28, color: Color(0xFF1A1A2E))),
+          Text('data.course_name'.tr(),
+              style: const TextStyle(fontFamily: 'Chennai', fontSize: 28, color: Color(0xFF1A1A2E))),
           const SizedBox(height: 18),
-          Text('This course provides a glimpse of the data world, specifically collecting and organizing data.',
+          Text('data.course_desc'.tr(),
               style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w600,
                   color: const Color(0xFF555555), height: 1.5)),
           const SizedBox(height: 46),
-          Center(child: Text('TRACK YOUR PROGRESS',
+          Center(child: Text('data.track_progress'.tr(),
               style: const TextStyle(fontFamily: 'xolonium', fontSize: 18,
                   fontWeight: FontWeight.w500, color: Color(0xFF333333)))),
           const SizedBox(height: 8),
           Center(child: SizedBox(width: 240, height: 150,
               child: CustomPaint(painter: _ArcProgressPainter(progress: progress)))),
           const SizedBox(height: 46),
-          Center(child: Text('YOU COMPLETED $_completedLessons/${_lessons.length} LESSONS',
+          Center(child: Text('data.completed_lessons'.tr(namedArgs: {'done': '$_completedLessons', 'total': '${_lessons.length}'}),
               style: GoogleFonts.montserrat(fontSize: 11, fontWeight: FontWeight.w700,
                   color: const Color(0xFF666666)))),
           const SizedBox(height: 52),
@@ -405,8 +406,8 @@ class _LessonCardState extends State<_LessonCard>
                               decoration: BoxDecoration(
                                   color: const Color(0xFFFFC83D),
                                   borderRadius: BorderRadius.circular(8)),
-                              child: const Text('IN PROGRESS',
-                                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.w800,
+                              child: Text('data.in_progress'.tr(),
+                                  style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w800,
                                       color: Colors.white, letterSpacing: 0.5)),
                             ),
                           Icon(

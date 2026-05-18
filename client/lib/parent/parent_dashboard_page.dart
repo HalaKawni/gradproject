@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'my_account_page.dart';
 
 // ── palette from dashboard_page.dart ──────────────────────────────────────
@@ -29,7 +30,7 @@ class ParentDashboardPage extends StatefulWidget {
 
 class _ParentDashboardPageState extends State<ParentDashboardPage> {
   String _activeTab        = 'Summary';
-  String _activeSidebar    = 'PARENT DASHBOARD';
+  String _activeSidebar    = 'PARENT_DASHBOARD';
   bool   _showProfileMenu  = false;
 
   @override
@@ -48,12 +49,12 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  _sideItem('PARENT DASHBOARD'),
-                  _sideItem('PARENT RESOURCES'),
-                  _sideItem('DISCOVER'),
+                  _sideItem('PARENT_DASHBOARD', label: 'parent_dash.sidebar_dashboard'.tr()),
+                  _sideItem('PARENT_RESOURCES', label: 'parent_dash.sidebar_resources'.tr()),
+                  _sideItem('DISCOVER', label: 'parent_dash.sidebar_discover'.tr()),
                   // push HELP CENTER to bottom
                   const Expanded(child: SizedBox()),
-                  _sideItem('HELP CENTER', icon: Icons.help_outline),
+                  _sideItem('HELP_CENTER', label: 'parent_dash.sidebar_help'.tr(), icon: Icons.help_outline),
                   const SizedBox(height: 16),
                 ],
               ),
@@ -71,7 +72,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                     // Scrollable content
                     Expanded(
                       child: SingleChildScrollView(
-                        child: _activeSidebar == 'PARENT RESOURCES'
+                        child: _activeSidebar == 'PARENT_RESOURCES'
                             ? _buildParentResourcesPage()
                             : Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -121,10 +122,11 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
   }
 
   // ── SIDEBAR ITEM ────────────────────────────────────────────────────────
-  Widget _sideItem(String label, {IconData? icon}) {
-    final isActive = _activeSidebar == label;
+  Widget _sideItem(String key, {String? label, IconData? icon}) {
+    final isActive = _activeSidebar == key;
+    final displayLabel = label ?? key;
     return GestureDetector(
-      onTap: () => setState(() => _activeSidebar = label),
+      onTap: () => setState(() => _activeSidebar = key),
       child: Container(
         width: double.infinity,
         color: isActive ? _kActiveItem : Colors.transparent,
@@ -136,7 +138,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
               const SizedBox(width: 8),
             ],
             Text(
-              label,
+              displayLabel,
               style: GoogleFonts.montserrat(
                 fontSize:   12,
                 fontWeight: FontWeight.w600,
@@ -248,14 +250,14 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                       ),
                     );
                   },
-                  child: Text('My Account',
+                  child: Text('parent_dash.my_account'.tr(),
                       style: GoogleFonts.nunito(
                           fontSize: 14, color: const Color(0xFF1A73E8))),
                 ),
                 const SizedBox(height: 4),
                 GestureDetector(
                   onTap: () => setState(() => _showProfileMenu = false),
-                  child: Text('My Profile',
+                  child: Text('parent_dash.my_profile'.tr(),
                       style: GoogleFonts.nunito(
                           fontSize: 14, color: const Color(0xFF1A73E8))),
                 ),
@@ -280,7 +282,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Hello, ${widget.parentName}',
+                Text('parent_dash.hello'.tr(namedArgs: {'name': widget.parentName}),
                     style: GoogleFonts.nunito(
                       fontSize:   28,
                       fontWeight: FontWeight.w800,
@@ -288,7 +290,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                     )),
                 const SizedBox(height: 6),
                 Text(
-                  "Welcome to your parent dashboard! Here you can view your children's progress and achievements.",
+                  'parent_dash.welcome_desc'.tr(),
                   style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF3A5A7C), height: 1.5),
                 ),
                 const SizedBox(height: 20),
@@ -308,11 +310,11 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _feat('Full access to all activities'),
+              _feat('parent_dash.feat_access'.tr()),
               const SizedBox(height: 4),
-              _feat('More than 500 challenges'),
+              _feat('parent_dash.feat_challenges'.tr()),
               const SizedBox(height: 4),
-              _feat('Game creation courses'),
+              _feat('parent_dash.feat_game'.tr()),
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(color: _kYellowShadow, borderRadius: BorderRadius.circular(20)),
@@ -329,9 +331,9 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                     ),
                     child: RichText(
                       text: TextSpan(children: [
-                        TextSpan(text: 'Go Premium ',
+                        TextSpan(text: 'parent_dash.go_premium'.tr(),
                             style: GoogleFonts.nunito(color: const Color(0xFF3A2A00), fontSize: 13, fontWeight: FontWeight.w800)),
-                        TextSpan(text: 'from US\$7.0/month',
+                        TextSpan(text: 'parent_dash.premium_price'.tr(),
                             style: GoogleFonts.nunito(color: const Color(0xFF5A3A00), fontSize: 12)),
                       ]),
                     ),
@@ -371,7 +373,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
         Container(
           padding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(color: _kActiveItem, borderRadius: BorderRadius.circular(6)),
-          child: Text('Add another child +',
+          child: Text('parent_dash.add_child'.tr(),
               style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
         ),
       ]),
@@ -384,7 +386,13 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       color:   Colors.white,
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       child: Row(
-        children: ['Summary', 'Courses', 'Creations'].map((tab) {
+        children: [
+            ('Summary',   'parent_dash.tab_summary'.tr()),
+            ('Courses',   'parent_dash.tab_courses'.tr()),
+            ('Creations', 'parent_dash.tab_creations'.tr()),
+          ].map((entry) {
+          final tab = entry.$1;
+          final tabLabel = entry.$2;
           final active = _activeTab == tab;
           return GestureDetector(
             onTap: () => setState(() => _activeTab = tab),
@@ -397,7 +405,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                   width: 2.5,
                 )),
               ),
-              child: Text(tab,
+              child: Text(tabLabel,
                   style: GoogleFonts.nunito(
                     fontSize:   15,
                     fontWeight: active ? FontWeight.w800 : FontWeight.w600,
@@ -430,7 +438,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cardTitle('PARENT DASHBOARD'),
+          _cardTitle('parent_dash.card_dashboard'.tr()),
           const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,12 +457,12 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Child Email:', style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
+                  Text('parent_dash.child_email'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
                   const SizedBox(height: 2),
                   Text(widget.childEmail,
                       style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF222222))),
                   const SizedBox(height: 6),
-                  Text('Change Password',
+                  Text('parent_dash.change_password'.tr(),
                       style: GoogleFonts.nunito(fontSize: 13, color: _kActiveItem, decoration: TextDecoration.underline)),
                 ],
               )),
@@ -472,7 +480,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
-                    child: Text('Log in to child account',
+                    child: Text('parent_dash.login_child'.tr(),
                         style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700)),
                   ),
                 ),
@@ -483,7 +491,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
           Row(children: [
             const Icon(Icons.info, color: Color(0xFF333333), size: 18),
             const SizedBox(width: 8),
-            Text("To start playing, log in to your child's account.",
+            Text('parent_dash.start_playing_hint'.tr(),
                 style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF444444))),
           ]),
         ],
@@ -493,10 +501,10 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
 
   Widget _statsCard() {
     final stats = [
-      ('76',    'Solutions Submitted'),
-      ('6 /96', 'Courses Started'),
-      ('0',     'Challenges Created'),
-      ('0',     'Games Created'),
+      ('76',    'parent_dash.stat_solutions'.tr()),
+      ('6 /96', 'parent_dash.stat_courses'.tr()),
+      ('0',     'parent_dash.stat_challenges'.tr()),
+      ('0',     'parent_dash.stat_games'.tr()),
     ];
     return _card(
       child: Column(
@@ -555,11 +563,11 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Parent Resources',
+          Text('parent_dash.resources_title'.tr(),
               style: GoogleFonts.nunito(
                 fontSize: 28, fontWeight: FontWeight.w800, color: _kActiveItem)),
           const SizedBox(height: 4),
-          Text('All Resources',
+          Text('parent_dash.all_resources'.tr(),
               style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF888888))),
           const SizedBox(height: 28),
 
@@ -576,19 +584,19 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Find Resources by Type',
+                Text('parent_dash.find_resources'.tr(),
                     style: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Expanded(child: _resourceCard(Icons.grid_view_rounded, _kActiveItem, 'All Solutions',
-                        'View our 3-star solutions for all challenges.', 'Search Solutions')),
+                    Expanded(child: _resourceCard(Icons.grid_view_rounded, _kActiveItem, 'parent_dash.res_all_solutions'.tr(),
+                        'parent_dash.res_all_solutions_desc'.tr(), 'parent_dash.res_all_solutions_link'.tr())),
                     const SizedBox(width: 16),
-                    Expanded(child: _resourceCard(Icons.code_rounded, const Color(0xFFEFBE1C), 'Coding Concepts',
-                        'Explore our coding concepts to enhance your understanding.', 'Search coding concept')),
+                    Expanded(child: _resourceCard(Icons.code_rounded, const Color(0xFFEFBE1C), 'parent_dash.res_coding_concepts'.tr(),
+                        'parent_dash.res_coding_concepts_desc'.tr(), 'parent_dash.res_coding_concepts_link'.tr())),
                     const SizedBox(width: 16),
-                    Expanded(child: _resourceCard(Icons.play_circle_outline_rounded, _kActiveItem, 'Videos',
-                        'Access our video collection to enhance your understanding of the various concepts.', 'Search videos')),
+                    Expanded(child: _resourceCard(Icons.play_circle_outline_rounded, _kActiveItem, 'parent_dash.res_videos'.tr(),
+                        'parent_dash.res_videos_desc'.tr(), 'parent_dash.res_videos_link'.tr())),
                   ],
                 ),
               ],
@@ -610,19 +618,19 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('More Resources',
+                Text('parent_dash.more_resources'.tr(),
                     style: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Expanded(child: _resourceCard(Icons.color_lens_outlined, _kActiveItem, 'Coloring Pages',
-                        'Download our coloring pages for an enjoyable classroom activity.', 'Download coloring pages')),
+                    Expanded(child: _resourceCard(Icons.color_lens_outlined, _kActiveItem, 'parent_dash.res_coloring'.tr(),
+                        'parent_dash.res_coloring_desc'.tr(), 'parent_dash.res_coloring_link'.tr())),
                     const SizedBox(width: 16),
-                    Expanded(child: _resourceCard(Icons.help_outline_rounded, _kNavbarBg, 'Help Center',
-                        'Utilize our help center to find articles on any aspect of our platform you are uncertain about.', 'Go to the help center')),
+                    Expanded(child: _resourceCard(Icons.help_outline_rounded, _kNavbarBg, 'parent_dash.res_help'.tr(),
+                        'parent_dash.res_help_desc'.tr(), 'parent_dash.res_help_link'.tr())),
                     const SizedBox(width: 16),
-                    Expanded(child: _resourceCard(Icons.inventory_2_outlined, _kNavbarBg, 'Media Kit',
-                        'Open our media kit to access and download a collection of adorable character images.', 'Open media kit')),
+                    Expanded(child: _resourceCard(Icons.inventory_2_outlined, _kNavbarBg, 'parent_dash.res_media'.tr(),
+                        'parent_dash.res_media_desc'.tr(), 'parent_dash.res_media_link'.tr())),
                   ],
                 ),
               ],
@@ -672,7 +680,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cardTitle('CURRENT COURSE'),
+          _cardTitle('parent_dash.card_current_course'.tr()),
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
@@ -689,12 +697,12 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Text Coding',
+                    Text('parent_dash.text_coding'.tr(),
                         style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
                     Container(
                       padding:    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
-                      child: Text('Beginner',
+                      child: Text('parent_dash.beginner'.tr(),
                           style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
                     ),
                   ],
@@ -713,9 +721,9 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
           ),
           const SizedBox(height: 10),
           Center(child: Column(children: [
-            Text('Coding Adventure',
+            Text('parent_dash.coding_adventure'.tr(),
                 style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
-            Text('Part I: Fundamentals',
+            Text('parent_dash.part_fundamentals'.tr(),
                 style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
           ])),
         ],
@@ -732,9 +740,9 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _cardTitle('TIME SPENT ON SITE'),
+          _cardTitle('parent_dash.card_time_spent'.tr()),
           const SizedBox(height: 14),
-          Text('Past 7 days (in minutes)',
+          Text('parent_dash.past_7_days'.tr(),
               style: GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF555555))),
           const SizedBox(height: 12),
           // Y-axis labels
@@ -822,7 +830,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _cardTitle('PROFICIENCY'),
+              _cardTitle('parent_dash.card_proficiency'.tr()),
               Container(
                 width: 20, height: 20,
                 decoration: const BoxDecoration(color: Color(0xFF3A3A3A), shape: BoxShape.circle),
@@ -861,7 +869,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                   const SizedBox(height: 8),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('* Max level available = Beginner',
+                    child: Text('parent_dash.max_level_note'.tr(),
                         style: GoogleFonts.nunito(fontSize: 11, color: const Color(0xFF888888), fontStyle: FontStyle.italic)),
                   ),
                 ],

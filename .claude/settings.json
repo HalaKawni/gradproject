@@ -17,7 +17,12 @@
       "Bash(findstr tts *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\lib\\\\\" -Recurse -Filter \"*.dart\" | Select-Object -ExpandProperty FullName | Sort-Object)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\" -Recurse -Filter \"*.arb\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(grep -E \"lib\\\\\\\\\\\\\\\\\\(dashboard|parent|sorry|No_page|unlock|digitalgame|datagame|home_page\\)\")",
+      "Bash(grep -E \"lib\\\\\\\\\\\\\\\\\\(parent\\\\\\\\\\\\\\\\|home_page|No_page|sorry|unlock_dialog\\)\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\magic\\Downloads\\gradproj\\client\\assets"
     ]
   }
 }

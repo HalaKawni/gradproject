@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'student.dart';
 import 'parent.dart';
 
@@ -154,7 +155,7 @@ AnimatedBuilder(
                               const Icon(Icons.chevron_left,
                                   color: Colors.white, size: 20),
                               Text(
-                                'BACK',
+                                'nav.back'.tr(),
                                 style: GoogleFonts.montserrat(
                                   color: Colors.white,
                                   fontSize: 14,
@@ -171,7 +172,7 @@ AnimatedBuilder(
 
                     // ── SIGN UP label ──
                     Text(
-                      'SIGN UP',
+                      'nav.signup'.tr(),
                       style: GoogleFonts.montserrat(
                         color: Colors.white,
                         fontSize: 13,
@@ -184,7 +185,7 @@ AnimatedBuilder(
 
                     // ── WHO ARE YOU? ──
                     Text(
-                      'WHO ARE YOU?',
+                      'signup.who_are_you'.tr(),
                       style: GoogleFonts.roboto(
                         color: Colors.white,
                         fontSize: 52,
@@ -202,7 +203,7 @@ AnimatedBuilder(
 
                     // ── Subtitle ──
                     Text(
-                      'Start your free trial today!',
+                      'signup.free_trial'.tr(),
                       style: GoogleFonts.nunito(
                         color: Colors.white,
                         fontSize: 14,
@@ -217,8 +218,8 @@ AnimatedBuilder(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         _RoleCard(
-                          title: 'STUDENT',
-                          subtitle: 'Join your classmates in fun coding games',
+                          title: 'signup.student'.tr(),
+                          subtitle: 'signup.student_subtitle'.tr(),
                           imagePath: 'assets/images/student.jpg',
                           onTap: () {
   Navigator.push(
@@ -229,9 +230,8 @@ AnimatedBuilder(
                         ),
                         const SizedBox(width: 24),
                         _RoleCard(
-                          title: 'PARENT',
-                          subtitle:
-                              'Introduce your child to Computer Science and track their progress',
+                          title: 'signup.parent'.tr(),
+                          subtitle: 'signup.parent_subtitle'.tr(),
                           imagePath: 'assets/images/parent.jpg',
                           onTap: () {Navigator.push(
       context,
@@ -251,12 +251,12 @@ AnimatedBuilder(
                           color: const Color(0xFF333333),
                         ),
                         children: [
-                          const TextSpan(text: 'Already a member? '),
+                          TextSpan(text: 'common.already_member'.tr()),
                           WidgetSpan(
                             child: GestureDetector(
                               onTap: () => Navigator.pop(context),
                               child: Text(
-                                'Log in to your account',
+                                'common.login_to_account'.tr(),
                                 style: GoogleFonts.nunito(
                                   fontSize: 14,
                                   color: const Color(0xFF1A73E8),
@@ -307,11 +307,11 @@ Widget _buildCloud(double width, double height) {
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
               _HoverNavButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {},
                 filled: true,
               ),
