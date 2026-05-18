@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'digital_play_page.dart';
@@ -22,6 +23,8 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
   int _reviewScore = 0;
   int? _hoveredDot;
 
+  final FlutterTts _tts = FlutterTts();
+
   // Corner question state
   final Map<int, int> _selectedAnswers = {};
   final Set<int> _hoveredAnswers = {};
@@ -40,9 +43,69 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
   void initState() {
     super.initState();
     _currentSlide = widget.initialSlide;
+    _initTts();
     if (widget.skipToPlay) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _navigateToPlay());
     }
+  }
+
+  Future<void> _initTts() async {
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.50);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.05);
+    // Prefer Microsoft neural voices (Aria, Jenny, Guy) — much less robotic on Windows 11
+    try {
+      final dynamic result = await _tts.getVoices;
+      if (result is List && result.isNotEmpty) {
+        Map? best;
+        for (final v in result) {
+          if (v is! Map) continue;
+          final name = (v['name'] ?? '').toString().toLowerCase();
+          if (name.contains('aria') || name.contains('jenny') ||
+              name.contains('guy') || name.contains('natural')) {
+            best = v;
+            break;
+          }
+        }
+        best ??= result.firstWhere(
+          (v) => v is Map && (v['locale'] ?? '').toString().startsWith('en'),
+          orElse: () => null,
+        ) as Map?;
+        if (best != null) {
+          await _tts.setVoice({
+            'name': best['name'].toString(),
+            'locale': (best['locale'] ?? 'en-US').toString(),
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  String _slideText(_SlideData slide) {
+    switch (slide.type) {
+      case SlideType.image:
+        return slide.narration ?? slide.title;
+      case SlideType.cornerQuestion:
+      case SlideType.survey:
+        final buf = StringBuffer('${slide.question} ');
+        for (var i = 0; i < slide.answers!.length; i++) {
+          buf.write('Option ${i + 1}: ${slide.answers![i]}. ');
+        }
+        return buf.toString();
+      case SlideType.openQuestion:
+        return slide.question!;
+    }
+  }
+
+  Future<void> _speakSlide() async {
+    final text = _slideText(_slides[_currentSlide]);
+    await _tts.stop();
+    await _tts.speak(text);
+  }
+
+  Future<void> _stopSpeaking() async {
+    await _tts.stop();
   }
 
   Future<void> _saveSlide() async {
@@ -68,6 +131,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
 
   @override
   void dispose() {
+    _tts.stop();
     _openAnswerController.dispose();
     super.dispose();
   }
@@ -78,9 +142,21 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
     switch (lessonNumber) {
       case 1:
         return [
-          _SlideData.image(title: 'Digital Use In A Nutshell',     imagePath: 'assets/images/1.jpeg'),
-          _SlideData.image(title: 'What is a Computer?',           imagePath: 'assets/images/2.jpeg'),
-          _SlideData.image(title: 'Hardware vs. Software',         imagePath: 'assets/images/3.jpeg'),
+          _SlideData.image(
+            title: 'Digital Use In A Nutshell',
+            imagePath: 'assets/images/1.jpeg',
+            narration: 'In this lesson, we review: What a computer is. Hardware versus software. How the internet and the World Wide Web work. Email fundamentals. File organization. And useful applications for students.',
+          ),
+          _SlideData.image(
+            title: 'What is a Computer?',
+            imagePath: 'assets/images/2.jpeg',
+            narration: 'What is a computer and what does it do? A computer is an information processing machine. It listens, thinks, and then speaks — well, sort of. A computer takes input from the user, processes that input, and then outputs the results to the user.',
+          ),
+          _SlideData.image(
+            title: 'Hardware vs. Software',
+            imagePath: 'assets/images/3.jpeg',
+            narration: 'Computers combine hardware and software. Hardware refers to all the physical parts of the computer. Software refers to all the programs you use on your computer.',
+          ),
           _SlideData.cornerQuestion(
             title: 'Corner Question',
             question: 'How is hardware different than software?',
@@ -92,10 +168,26 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
             ],
             correctIndex: 1,
           ),
-          _SlideData.image(title: 'The Internet',                  imagePath: 'assets/images/5.jpeg'),
-          _SlideData.image(title: 'Email Fundamentals',            imagePath: 'assets/images/6.jpeg'),
-          _SlideData.image(title: 'File Organization',             imagePath: 'assets/images/7.jpeg'),
-          _SlideData.image(title: 'Useful Applications',           imagePath: 'assets/images/8.jpeg'),
+          _SlideData.image(
+            title: 'The Internet',
+            imagePath: 'assets/images/5.jpeg',
+            narration: 'The internet is amazing. But how does it work — is it a humongous software application? Actually, the internet is a massive network of computers connected by cables, wires, and other hardware. The World Wide Web and websites are the software that runs on those computers.',
+          ),
+          _SlideData.image(
+            title: 'Email Fundamentals',
+            imagePath: 'assets/images/6.jpeg',
+            narration: 'You can send an email to many people, called recipients. There are different types of recipients. TO are your main recipients — you might want a reply from them. CC, or Carbon Copy, recipients get a copy of your email, but they are not your main audience. BCC, or Blind Carbon Copy, works like CC, but the TO and CC recipients will not know there are additional people receiving the email. The B in BCC means blind.',
+          ),
+          _SlideData.image(
+            title: 'File Organization',
+            imagePath: 'assets/images/7.jpeg',
+            narration: 'Your computer and the cloud store lots and lots of documents, called files. It is useful to organize files using folders. These folders are organized using hierarchy, and can be sorted in many ways — such as by title, date created, and date last opened.',
+          ),
+          _SlideData.image(
+            title: 'Useful Applications',
+            imagePath: 'assets/images/8.jpeg',
+            narration: 'Useful applications for students include: Word Processing — customize text documents in word processing applications. Spreadsheets — enter, organize, sort, calculate, and program your data. And Presentations — create a fantastic slideshow for your next presentation.',
+          ),
           _SlideData.cornerQuestion(
             title: 'Corner Question',
             question: 'If you are looking for information on all the animals that live in caves, what should you search for?',
@@ -107,7 +199,11 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
             ],
             correctIndex: 3,
           ),
-          _SlideData.image(title: 'Lesson 10',                     imagePath: 'assets/images/10.jpeg'),
+          _SlideData.image(
+            title: 'So Many Files',
+            imagePath: 'assets/images/10.jpeg',
+            narration: 'Wow, that is a lot of files! No wonder we need to organize them. But where do files come from? Every document you create is a file. Also, every application that runs on your computer is made up of several files.',
+          ),
           _SlideData.survey(
             title: 'Survey Question',
             question: 'Have you sent an email before?',
@@ -119,13 +215,37 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
             ],
             percentages: [22, 42, 10, 26],
           ),
-          _SlideData.image(title: 'Lesson 12',                     imagePath: 'assets/images/12.jpeg'),
-          _SlideData.image(title: 'Lesson 13',                     imagePath: 'assets/images/13.jpeg'),
-          _SlideData.image(title: 'Lesson 14',                     imagePath: 'assets/images/14.jpeg'),
-          _SlideData.image(title: 'Lesson 15',                     imagePath: 'assets/images/15.jpeg'),
-          _SlideData.image(title: 'Lesson 16',                     imagePath: 'assets/images/16.jpeg'),
-          _SlideData.image(title: 'Lesson 17',                     imagePath: 'assets/images/17.jpeg'),
-          _SlideData.image(title: 'Lesson 18',                     imagePath: 'assets/images/18.jpeg'),
+          _SlideData.image(
+            title: 'Emails',
+            imagePath: 'assets/images/12.jpeg',
+            narration: 'Emails are electronic messages sent over the internet. You need an email address to send and receive emails. Email is one of the most widely used ways to communicate online.',
+          ),
+          _SlideData.image(
+            title: 'Email Organization',
+            imagePath: 'assets/images/13.jpeg',
+            narration: 'Email applications organize your emails using different storage folders. The Inbox Folder stores your incoming emails — it is important to check it regularly. The Sent Folder stores a copy of the emails you have sent, which comes in handy sometimes. The Drafts Folder stores emails you plan on sending but have not finished writing yet. If you started an email and cannot find it, check your drafts folder.',
+          ),
+          _SlideData.image(
+            title: 'Tips for Students and Everyone Else',
+            imagePath: 'assets/images/14.jpeg',
+            narration: 'Here are some tips for students and everyone else about using the internet safely and effectively.',
+          ),
+          _SlideData.image(
+            title: 'Search Engines',
+            imagePath: 'assets/images/15.jpeg',
+            narration: 'Since the World Wide Web is so big, how do you find what you are looking for? We have search engines for that! Search engines are applications that specialize in finding information that matches the keywords you enter. It is important to use descriptive words when looking for information.',
+          ),
+          _SlideData.image(
+            title: 'Websites are Made of Webpages',
+            imagePath: 'assets/images/16.jpeg',
+            narration: 'Websites are made of webpages. Websites are created with a language called HTML, which stands for HyperText Markup Language. Each website has a unique address called a URL, or Uniform Resource Locator. You view web pages by using a browser application. Browsers like Chrome and Edge have lots of handy features to improve your experience.',
+          ),
+          _SlideData.image(
+            title: 'Using the Internet',
+            imagePath: 'assets/images/17.jpeg',
+            narration: 'When using the internet, you need a web browser like Chrome, Safari, or Edge. The internet connects millions of computers through a network. You can use search engines like Yahoo, Google, or Bing to find information.',
+          ),
+          _SlideData.image(title: 'Lesson 18', imagePath: 'assets/images/18.jpeg'),
         ];
 
       case 2:
@@ -225,7 +345,9 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
         _openAnswerController.clear();
       });
       _saveSlide();
+      if (_listenMode) _speakSlide();
     } else {
+      _stopSpeaking();
       _clearSlide();
       _navigateToPlay();
     }
@@ -241,6 +363,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
         _openAnswerController.clear();
       });
       _saveSlide();
+      if (_listenMode) _speakSlide();
     }
   }
 
@@ -916,7 +1039,14 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   GestureDetector(
-                    onTap: () => setState(() => _listenMode = !_listenMode),
+                    onTap: () {
+                      setState(() => _listenMode = !_listenMode);
+                      if (_listenMode) {
+                        _speakSlide();
+                      } else {
+                        _stopSpeaking();
+                      }
+                    },
                     child: Container(
                       width: 48, height: 24,
                       decoration: BoxDecoration(
@@ -970,6 +1100,7 @@ class _SlideData {
   final String title;
   final SlideType type;
   final String? imagePath;
+  final String? narration;
   final String? question;
   final List<String>? answers;
   final int? correctIndex;
@@ -979,6 +1110,7 @@ class _SlideData {
     required this.title,
     required this.type,
     this.imagePath,
+    this.narration,
     this.question,
     this.answers,
     this.correctIndex,
@@ -988,8 +1120,9 @@ class _SlideData {
   factory _SlideData.image({
     required String title,
     required String imagePath,
+    String? narration,
   }) {
-    return _SlideData._(title: title, type: SlideType.image, imagePath: imagePath);
+    return _SlideData._(title: title, type: SlideType.image, imagePath: imagePath, narration: narration);
   }
 
   factory _SlideData.cornerQuestion({

@@ -6,6 +6,7 @@ import 'world_map_page.dart';
 import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
 import 'digitalgame/digital_literacy_page.dart';
+import 'datagame/data_course_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -725,12 +726,14 @@ Widget _buildHeroBanner() {
   description: 'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
 ),
       _CourseData(
-        topic: 'Coding',
+        topic: 'CS Topics',
         level: 'Beginner',
-        title: 'Coding Adventure',
+        title: 'Data is Everywhere',
         subtitle: 'Functions & Variables',
         color: const Color(0xFF4A90C4),
-        imagePath: 'assets/images/monkey_no.png',
+        imagePath: 'assets/images/datacourse.png',
+          description: 'Get a glimpse into the world of data. Learn what data is and how to collect it. You will also learn how to organize your data using different graphing visualizations.',
+
       ),
       _CourseData(
         topic: 'Text Coding',
@@ -746,7 +749,10 @@ Widget _buildHeroBanner() {
         title: 'Digital Literacy',
         subtitle: 'Internet Safety',
         color: const Color(0xFF9B7BCB),
-        imagePath: 'assets/images/Jr1.png',
+        imagePath: 'assets/images/digitalcourse.png',
+        description: 'A short introduction to some important topics in the digital world: How to use computers, what are software and hardware, possible threats online and protecting your privacy.',
+
+
       ),
       _CourseData(
         topic: 'Text Coding',
@@ -1164,8 +1170,10 @@ Widget? _getGamePage(String title) {
       return null; // replace with LinusGamePage() when ready
     case 'Coding Adventure':
       return null; // replace with CodingAdventurePage() when ready
-    case 'Digital Literacy':          // ← ADD THIS
+    case 'Digital Literacy':
       return const DigitalLiteracyPage();
+    case 'Data is Everywhere':
+      return const DataCoursePage();
     default:
       return null;
   }
@@ -1326,8 +1334,11 @@ Widget? _getGamePage(String title) {
                   Navigator.of(context).pop();
   final page = _getGamePage(widget.course.title);
   if (page != null) {
+    final routeName = widget.course.title == 'Data is Everywhere'
+        ? 'data_course_hub'
+        : 'digital_literacy_hub';
     Navigator.push(context, MaterialPageRoute(
-      settings: const RouteSettings(name: 'digital_literacy_hub'),
+      settings: RouteSettings(name: routeName),
       builder: (_) => page,
     ));
   }

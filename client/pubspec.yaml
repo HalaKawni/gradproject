@@ -161,6 +161,7 @@ dependencies:
   shared_preferences: ^2.2.2
   cupertino_icons: ^1.0.8
   google_fonts: ^8.0.2
+  flutter_tts: ^4.0.2
 
 dev_dependencies:
   flutter_test:
@@ -267,6 +268,32 @@ flutter:
     - assets/images/lesson312.png
     - assets/images/avatar.png
     - assets/images/avatar2.png
+    - assets/images/digitalcourse.png
+    - assets/images/datacourse.png
+    - assets/images/data1.png
+    - assets/images/data2.png
+    - assets/images/course21.jpeg
+    - assets/images/course23.jpeg
+    - assets/images/course24.jpeg
+    - assets/images/course25.jpeg
+    - assets/images/course26.jpeg
+    - assets/images/course27.jpeg
+    - assets/images/course28.jpeg
+    - assets/images/course212.jpeg
+    - assets/images/course213.jpeg
+    - assets/images/course214.jpeg
+    - assets/images/course216.jpeg
+    - assets/images/course215.jpeg
+    - assets/images/course218.jpeg
+    - assets/images/right.svg
+    - assets/images/wrong.svg
+    - assets/images/star.svg
+
+
+  
+
+
+
 
 
 
