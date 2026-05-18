@@ -3,8 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../auth/pages/student_account_page.dart';
 import '../../auth/pages/sorry_page.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'student_account_page.dart';
-import 'sorry_page.dart';
 
 class HomeAgePage extends StatefulWidget {
   const HomeAgePage({super.key});

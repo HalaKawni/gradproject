@@ -1,13 +1,9 @@
-import 'package:client/app/navigation/app_router.dart';
-import 'package:client/core/localization/app_language.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'login_page.dart';
-import 'signup_page.dart';
-import 'codejr.dart';
+import 'package:client/features/auth/pages/login_page.dart';
+import 'package:client/features/auth/pages/signup_page.dart';
+import 'package:client/features/auth/pages/codejr.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -141,7 +137,8 @@ class WelcomePage extends StatelessWidget {
 }
 
 
-Widget _buildHero() {
+// ignore: unused_element
+Widget _unusedBrokenHero(BuildContext context) {
   return ClipPath(
     clipper: _BottomCurveClipper(),
     child: SizedBox(
@@ -164,7 +161,7 @@ Widget _buildHero() {
        Positioned.fill(
       child: Container(
         //color: const Color(0xFF6DB33F).withOpacity(0.55)
-        color: const Color.fromARGB(255, 186, 236, 245).withOpacity(0.22),
+        color: const Color.fromARGB(255, 186, 236, 245).withValues(alpha: 0.22),
       ),
     ),
           // ── TEXT + BUTTON ──
@@ -297,7 +294,8 @@ Widget _buildHero() {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildHero() {

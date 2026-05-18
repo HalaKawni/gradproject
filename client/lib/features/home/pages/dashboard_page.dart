@@ -5,13 +5,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'world_map_page.dart';
 import '../widgets/unlock_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'game_webview.dart';
-import 'monkey_game_page.dart';
-import 'world_map_page.dart';
-import 'unlock_dialog.dart';
-import 'services/game_api_service.dart';
-import 'digitalgame/digital_literacy_page.dart';
-import 'datagame/data_course_page.dart';
+import 'package:client/features/home/services/game_api_service.dart';
+import 'package:client/digitalgame/digital_literacy_page.dart';
+import 'package:client/datagame/data_course_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;

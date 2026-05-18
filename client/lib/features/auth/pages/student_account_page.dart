@@ -15,8 +15,6 @@ import '../widgets/google_sign_in_button_stub.dart'
     as google_button;
 
 import 'package:easy_localization/easy_localization.dart';
-import 'services/auth_service.dart';
-import 'dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
   const StudentAccountPage({super.key});
 

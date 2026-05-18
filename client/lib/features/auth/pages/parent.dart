@@ -15,7 +15,7 @@ import '../widgets/google_sign_in_button_stub.dart'
     if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
     as google_button;
 import 'package:easy_localization/easy_localization.dart';
-import 'parent/parent_signup_page.dart';
+import 'package:client/parent/parent_signup_page.dart';
 
 class parentAccountPage extends StatefulWidget {
   const parentAccountPage({super.key});
@@ -535,27 +535,7 @@ class _parentAccountPageState extends State<parentAccountPage>
                                                     letterSpacing: 1.5,
                                                   ),
                                                 ),
-                                                child: _loading
-                                                    ? const SizedBox(
-                                                        width: 20,
-                                                        height: 20,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                          color:
-                                                              Color(0xFF3A2A00),
-                                                          strokeWidth: 2,
-                                                        ),
-                                                      )
-                                                    : Text(
-                                                        'SIGN UP',
-                                                        style:
-                                                            GoogleFonts.montserrat(
-                                                          fontSize: 15,
-                                                          fontWeight:
-                                                              FontWeight.w800,
-                                                          letterSpacing: 1.5,
-                                                        ),
-                                                      ),
+                                                
                                               ),
                                             ),
                                           ),
