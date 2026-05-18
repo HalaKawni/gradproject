@@ -791,9 +791,10 @@ Widget _buildHeroBanner() {
         topic: 'Coding',
         level: 'Intermediate',
         title: 'Coding Chatbots',
-        subtitle: 'AI & Logic',
+        subtitle: 'AI is a Hoot',
         color: const Color(0xFF4DB6AC),
-        imagePath: 'assets/images/monkey_no.png',
+        imagePath: 'assets/images/aicourse.png',
+        description:'Create games that combine AI and blocks! First, you will train an AI model to recognize your poses. Then, you will build an exciting game where you control the owl using these poses.'
       ),
       _CourseData(
         topic: 'Text Coding',
@@ -861,24 +862,7 @@ Widget _buildHeroBanner() {
   }
 }
 
-// // ── COURSE DATA MODEL ──
-// class _CourseData {
-//   final String topic;
-//   final String level;
-//   final String title;
-//   final String subtitle;
-//   final Color color;
-//   final String imagePath;
 
-//   const _CourseData({
-//     required this.topic,
-//     required this.level,
-//     required this.title,
-//     required this.subtitle,
-//     required this.color,
-//     required this.imagePath,
-//   });
-// }
 class _CourseData {
   final String topic;
   final String level;
