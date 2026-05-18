@@ -7,7 +7,7 @@ class InstructionEditorPanel extends StatelessWidget {
   final List<InstructionSection> sections;
   final void Function(InstructionSectionType type) onAddSection;
   final void Function(String id) onRemoveSection;
-  final void Function(String id, int direction) onMoveSection;
+  final void Function(int oldIndex, int newIndex) onReorderSections;
   final void Function(String id, String title) onTitleChanged;
   final void Function(String id, String content) onContentChanged;
   final void Function(String id) onAddItem;
@@ -19,7 +19,7 @@ class InstructionEditorPanel extends StatelessWidget {
     required this.sections,
     required this.onAddSection,
     required this.onRemoveSection,
-    required this.onMoveSection,
+    required this.onReorderSections,
     required this.onTitleChanged,
     required this.onContentChanged,
     required this.onAddItem,
@@ -99,28 +99,28 @@ class InstructionEditorPanel extends StatelessWidget {
                         ),
                       ),
                     )
-                  : ListView.separated(
+                  : ReorderableListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: sections.length,
-                      separatorBuilder: (_, index) =>
-                          const SizedBox(height: 10),
+                      buildDefaultDragHandles: false,
+                      onReorder: onReorderSections,
                       itemBuilder: (context, index) {
                         final section = sections[index];
 
-                        return _InstructionSectionCard(
+                        return Padding(
                           key: ValueKey(section.id),
-                          section: section,
-                          isFirst: index == 0,
-                          isLast: index == sections.length - 1,
-                          onRemove: () => onRemoveSection(section.id),
-                          onMoveUp: () => onMoveSection(section.id, -1),
-                          onMoveDown: () => onMoveSection(section.id, 1),
-                          onTitleChanged: (value) {
-                            onTitleChanged(section.id, value);
-                          },
-                          onContentChanged: (value) {
-                            onContentChanged(section.id, value);
-                          },
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _InstructionSectionCard(
+                            section: section,
+                            dragIndex: index,
+                            onRemove: () => onRemoveSection(section.id),
+                            onTitleChanged: (value) {
+                              onTitleChanged(section.id, value);
+                            },
+                            onContentChanged: (value) {
+                              onContentChanged(section.id, value);
+                            },
+                          ),
                         );
                       },
                     ),
@@ -134,22 +134,15 @@ class InstructionEditorPanel extends StatelessWidget {
 
 class _InstructionSectionCard extends StatefulWidget {
   final InstructionSection section;
-  final bool isFirst;
-  final bool isLast;
+  final int dragIndex;
   final VoidCallback onRemove;
-  final VoidCallback onMoveUp;
-  final VoidCallback onMoveDown;
   final ValueChanged<String> onTitleChanged;
   final ValueChanged<String> onContentChanged;
 
   const _InstructionSectionCard({
-    super.key,
     required this.section,
-    required this.isFirst,
-    required this.isLast,
+    required this.dragIndex,
     required this.onRemove,
-    required this.onMoveUp,
-    required this.onMoveDown,
     required this.onTitleChanged,
     required this.onContentChanged,
   });
@@ -197,15 +190,18 @@ class _InstructionSectionCardState extends State<_InstructionSectionCard> {
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Move up',
-                      onPressed: widget.isFirst ? null : widget.onMoveUp,
-                      icon: const Icon(Icons.keyboard_arrow_up_rounded),
-                    ),
-                    IconButton(
-                      tooltip: 'Move down',
-                      onPressed: widget.isLast ? null : widget.onMoveDown,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                    ReorderableDragStartListener(
+                      index: widget.dragIndex,
+                      child: const Tooltip(
+                        message: 'Drag to arrange',
+                        child: Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(
+                            Icons.drag_indicator_rounded,
+                            color: Color(0xff64748b),
+                          ),
+                        ),
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Delete section',

@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
 import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
+import 'package:flutter/material.dart';
 
 import '../models/block_template.dart';
 import '../models/block_type.dart';
 import '../models/instruction_section.dart';
 import '../models/workspace_block.dart';
+import '../data/block_templates.dart';
 import '../widgets/instruction_editor_panel.dart';
 import '../widgets/stage_panel.dart';
 import '../widgets/top_bar.dart';
@@ -42,9 +45,9 @@ class ScratchBuilderPage extends StatefulWidget {
 }
 
 class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
-  static const double blockHeight = 40;
-  static const double containerBlockHeight = 86;
-  static const double snapDistance = 24;
+  static const double blockHeight = 35;
+  static const double containerBlockHeight = 81;
+  static const double snapDistance = 40;
 
   late final TextEditingController _titleController;
   final List<InstructionSection> instructionSections = [];
@@ -53,6 +56,7 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
   BlockType? selectedCategory;
   bool isDraggingWorkspaceBlock = false;
   bool isSaving = false;
+  bool isLoading = false;
 
   Offset spritePosition = const Offset(80, 80);
   double spriteRotation = 0;
@@ -60,13 +64,25 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
 
   int _nextId = 1;
   int _nextInstructionId = 1;
+  String? _savedProjectId;
+  String _courseId = '';
+  int _orderInCourse = 0;
+  String _difficulty = 'medium';
+  String _status = 'draft';
+  Timer? _titleSaveDebounce;
+  String? _lastAutoSavedTitle;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(
-      text: widget.initialTitle ?? 'Scratch Builder',
+      text: widget.initialTitle ?? 'New Level',
     );
+    _titleController.addListener(_handleTitleChanged);
+    _courseId = widget.initialCourseId ?? '';
+    _orderInCourse = widget.initialOrderInCourse ?? 0;
+    _difficulty = widget.initialDifficulty;
+    _status = widget.initialStatus;
     instructionSections.addAll([
       InstructionSection(
         id: 'section_${_nextInstructionId++}',
@@ -81,12 +97,38 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
         items: const ['Drag blocks into the workspace.', 'Run your program.'],
       ),
     ]);
+    if (widget.initialProjectId != null) {
+      _loadProject(widget.initialProjectId!);
+    }
   }
 
   @override
   void dispose() {
+    _titleSaveDebounce?.cancel();
+    _titleController.removeListener(_handleTitleChanged);
     _titleController.dispose();
     super.dispose();
+  }
+
+  void _handleTitleChanged() {
+    if (widget.playMode || isLoading) {
+      return;
+    }
+
+    _titleSaveDebounce?.cancel();
+    _titleSaveDebounce = Timer(const Duration(milliseconds: 700), () {
+      _autoSaveTitle();
+    });
+  }
+
+  Future<void> _autoSaveTitle() async {
+    final normalizedTitle = _normalizedTitle;
+    if (_lastAutoSavedTitle == normalizedTitle || isSaving) {
+      return;
+    }
+
+    _lastAutoSavedTitle = normalizedTitle;
+    await _saveProject(publish: _status == 'published', showFeedback: false);
   }
 
   void _toggleCategory(BlockType type) {
@@ -121,18 +163,11 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
     });
   }
 
-  void _moveInstructionSection(String id, int direction) {
+  void _reorderInstructionSections(int oldIndex, int newIndex) {
     setState(() {
-      final index = instructionSections.indexWhere(
-        (section) => section.id == id,
-      );
-      if (index == -1) return;
-
-      final newIndex = index + direction;
-      if (newIndex < 0 || newIndex >= instructionSections.length) return;
-
-      final section = instructionSections.removeAt(index);
-      instructionSections.insert(newIndex, section);
+      final adjustedNewIndex = newIndex > oldIndex ? newIndex - 1 : newIndex;
+      final section = instructionSections.removeAt(oldIndex);
+      instructionSections.insert(adjustedNewIndex, section);
     });
   }
 
@@ -524,86 +559,433 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
     });
   }
 
-  Future<void> _saveProject({required bool publish}) async {
+  Future<void> _saveProject({
+    required bool publish,
+    bool showFeedback = true,
+  }) async {
     if (isSaving) return;
 
     setState(() {
       isSaving = true;
     });
 
-    await Future<void>.delayed(const Duration(milliseconds: 250));
+    try {
+      final projectJson = _buildProjectJson(
+        status: publish ? 'published' : 'draft',
+      );
+      final response = _savedProjectId == null
+          ? await ApiService.createBuilderProject(
+              authToken: widget.session.token,
+              projectJson: projectJson,
+            )
+          : widget.useAdminLevelApi
+          ? await ApiService.updateAdminLevel(
+              authToken: widget.session.token,
+              levelId: _savedProjectId!,
+              levelJson: {
+                'title': projectJson['title'],
+                'description': projectJson['description'],
+                'status': projectJson['status'],
+                'builderType': projectJson['builderType'],
+                'courseId': projectJson['courseId'],
+                'orderInCourse': projectJson['orderInCourse'],
+                'difficulty': projectJson['difficulty'],
+                'draftData': projectJson,
+              },
+            )
+          : await ApiService.updateBuilderProject(
+              authToken: widget.session.token,
+              projectId: _savedProjectId!,
+              projectJson: projectJson,
+            );
 
-    if (!mounted) return;
+      if (!mounted) return;
 
+      if (response['success'] == true) {
+        final data = response['data'];
+        if (data is Map && data['_id'] != null) {
+          _savedProjectId = data['_id'].toString();
+        }
+        _status = publish ? 'published' : 'draft';
+        if (showFeedback) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(publish ? 'Project published' : 'Draft saved'),
+            ),
+          );
+        }
+      } else if (showFeedback) {
+        final errors = response['errors'];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errors is List && errors.isNotEmpty
+                  ? errors.join('\n')
+                  : response['message']?.toString() ??
+                        'Failed to save project.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted || !showFeedback) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadProject(String projectId) async {
     setState(() {
-      isSaving = false;
+      isLoading = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(publish ? 'Project published' : 'Draft saved')),
+    try {
+      final response = widget.allowPublishedAccess
+          ? await ApiService.getPublishedBuilderProjectById(
+              authToken: widget.session.token,
+              projectId: projectId,
+            )
+          : widget.useAdminLevelApi
+          ? await ApiService.getAdminLevelById(
+              authToken: widget.session.token,
+              levelId: projectId,
+            )
+          : await ApiService.getBuilderProjectById(
+              authToken: widget.session.token,
+              projectId: projectId,
+            );
+
+      if (!mounted) return;
+
+      if (response['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              response['message']?.toString() ??
+                  'Failed to load scratch project.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      final data = Map<String, dynamic>.from(response['data'] as Map);
+      final rawDraftData = data['draftData'];
+      final draftData = rawDraftData is Map
+          ? Map<String, dynamic>.from(rawDraftData)
+          : data;
+      final loadedSections = _readInstructionSections(
+        draftData['instructionSections'],
+      );
+      final loadedBlocks = _readWorkspaceBlocks(draftData['workspaceBlocks']);
+
+      setState(() {
+        _savedProjectId = data['_id']?.toString() ?? projectId;
+        _courseId =
+            data['courseId']?.toString() ??
+            draftData['courseId']?.toString() ??
+            _courseId;
+        _orderInCourse =
+            _readInt(data['orderInCourse']) ??
+            _readInt(draftData['orderInCourse']) ??
+            _orderInCourse;
+        _difficulty =
+            data['difficulty']?.toString() ??
+            draftData['difficulty']?.toString() ??
+            _difficulty;
+        _status =
+            data['status']?.toString() ??
+            draftData['status']?.toString() ??
+            _status;
+        _titleController.text =
+            data['title']?.toString() ??
+            draftData['title']?.toString() ??
+            widget.initialTitle ??
+            'New Level';
+        instructionSections
+          ..clear()
+          ..addAll(loadedSections);
+        workspaceBlocks
+          ..clear()
+          ..addAll(loadedBlocks);
+        final sprite = draftData['sprite'] is Map
+            ? Map<String, dynamic>.from(draftData['sprite'] as Map)
+            : const <String, dynamic>{};
+        spritePosition = Offset(
+          _readDouble(sprite['x']) ??
+              _readDouble(draftData['spriteX']) ??
+              spritePosition.dx,
+          _readDouble(sprite['y']) ??
+              _readDouble(draftData['spriteY']) ??
+              spritePosition.dy,
+        );
+        spriteRotation =
+            _readDouble(sprite['rotation']) ??
+            _readDouble(draftData['spriteRotation']) ??
+            0;
+        spriteText =
+            sprite['text']?.toString() ??
+            draftData['spriteText']?.toString() ??
+            '';
+        _nextInstructionId = _nextNumericSuffix(
+          instructionSections.map((section) => section.id),
+          prefix: 'section_',
+        );
+        _nextId = _nextNumericSuffix(
+          workspaceBlocks.map((block) => block.id),
+          prefix: 'block_',
+        );
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Load failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  String get _normalizedTitle => _titleController.text.trim().isEmpty
+      ? 'New Level'
+      : _titleController.text.trim();
+
+  Map<String, dynamic> _buildProjectJson({required String status}) {
+    return {
+      'builderType': 'scratch',
+      'title': _normalizedTitle,
+      'description': '',
+      'status': status,
+      'courseId': _courseId,
+      'orderInCourse': _orderInCourse,
+      'difficulty': _difficulty,
+      'settings': {'stageWidth': 480, 'stageHeight': 360},
+      'instructionSections': instructionSections
+          .map(
+            (section) => {
+              'id': section.id,
+              'type': section.type.name,
+              'title': section.title,
+              'content': section.content,
+              'items': section.items,
+              'collapsed': section.collapsed,
+            },
+          )
+          .toList(),
+      'workspaceBlocks': workspaceBlocks
+          .map(
+            (block) => {
+              'id': block.id,
+              'label': block.template.label,
+              'x': block.position.dx,
+              'y': block.position.dy,
+              'previousBlockId': block.previousBlockId,
+              'nextBlockId': block.nextBlockId,
+              'inputValues': block.inputValues,
+            },
+          )
+          .toList(),
+      'sprite': {
+        'x': spritePosition.dx,
+        'y': spritePosition.dy,
+        'rotation': spriteRotation,
+        'text': spriteText,
+      },
+    };
+  }
+
+  List<InstructionSection> _readInstructionSections(Object? rawValue) {
+    if (rawValue is! List) {
+      return List<InstructionSection>.from(instructionSections);
+    }
+
+    final sections = <InstructionSection>[];
+    for (final rawSection in rawValue) {
+      if (rawSection is! Map) continue;
+      final section = Map<String, dynamic>.from(rawSection);
+      final type = _readInstructionSectionType(section['type']);
+      sections.add(
+        InstructionSection(
+          id: section['id']?.toString() ?? 'section_${sections.length + 1}',
+          type: type,
+          title: section['title']?.toString() ?? instructionSectionLabel(type),
+          content: section['content']?.toString() ?? '',
+          items: section['items'] is List
+              ? (section['items'] as List)
+                    .map((item) => item.toString())
+                    .toList()
+              : const [],
+          collapsed: section['collapsed'] == true,
+        ),
+      );
+    }
+
+    return sections.isEmpty
+        ? List<InstructionSection>.from(instructionSections)
+        : sections;
+  }
+
+  List<WorkspaceBlock> _readWorkspaceBlocks(Object? rawValue) {
+    if (rawValue is! List) {
+      return const [];
+    }
+
+    final blocks = <WorkspaceBlock>[];
+    for (final rawBlock in rawValue) {
+      if (rawBlock is! Map) continue;
+      final block = Map<String, dynamic>.from(rawBlock);
+      final template = _blockTemplateByLabel(block['label']?.toString());
+      if (template == null) continue;
+      final rawInputValues = block['inputValues'];
+      final inputValues = rawInputValues is Map
+          ? Map<String, String>.from(
+              rawInputValues.map(
+                (key, value) => MapEntry(key.toString(), value.toString()),
+              ),
+            )
+          : const <String, String>{};
+      blocks.add(
+        WorkspaceBlock(
+          id: block['id']?.toString() ?? 'block_${blocks.length + 1}',
+          template: template,
+          position: Offset(
+            _readDouble(block['x']) ?? 0,
+            _readDouble(block['y']) ?? 0,
+          ),
+          previousBlockId: block['previousBlockId']?.toString(),
+          nextBlockId: block['nextBlockId']?.toString(),
+          inputValues: inputValues,
+        ),
+      );
+    }
+
+    return blocks;
+  }
+
+  InstructionSectionType _readInstructionSectionType(Object? value) {
+    final name = value?.toString();
+    for (final type in InstructionSectionType.values) {
+      if (type.name == name) {
+        return type;
+      }
+    }
+    return InstructionSectionType.custom;
+  }
+
+  BlockTemplate? _blockTemplateByLabel(String? label) {
+    if (label == null) {
+      return null;
+    }
+    return blockTemplates.firstWhereOrNull(
+      (template) => template.label == label,
     );
+  }
+
+  double? _readDouble(Object? value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  int? _readInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  int _nextNumericSuffix(Iterable<String> ids, {required String prefix}) {
+    var next = 1;
+    for (final id in ids) {
+      if (!id.startsWith(prefix)) continue;
+      final value = int.tryParse(id.substring(prefix.length));
+      if (value != null && value >= next) {
+        next = value + 1;
+      }
+    }
+    return next;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xfff4f6fb),
-      body: SafeArea(
-        child: Column(
-          children: [
-            TopBar(
-              titleController: _titleController,
-              onRun: _runBlocks,
-              onReset: _reset,
-              onSaveDraft: () => _saveProject(publish: false),
-              onPublish: () => _saveProject(publish: true),
-              isSaving: isSaving,
-              playMode: widget.playMode,
-            ),
-            Expanded(
-              child: Row(
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Column(
                 children: [
-                  Expanded(
-                    child: InstructionEditorPanel(
-                      sections: instructionSections,
-                      onAddSection: _addInstructionSection,
-                      onRemoveSection: _removeInstructionSection,
-                      onMoveSection: _moveInstructionSection,
-                      onTitleChanged: _updateInstructionTitle,
-                      onContentChanged: _updateInstructionContent,
-                      onAddItem: _addInstructionItem,
-                      onItemChanged: _updateInstructionItem,
-                      onRemoveItem: _removeInstructionItem,
-                    ),
+                  TopBar(
+                    titleController: _titleController,
+                    onRun: _runBlocks,
+                    onReset: _reset,
+                    onSaveDraft: () => _saveProject(publish: false),
+                    onPublish: () => _saveProject(publish: true),
+                    isSaving: isSaving,
+                    playMode: widget.playMode,
                   ),
                   Expanded(
-                    child: WorkspacePanel(
-                      blocks: workspaceBlocks,
-                      selectedCategory: selectedCategory,
-                      isDraggingWorkspaceBlock: isDraggingWorkspaceBlock,
-                      onCategoryPressed: _toggleCategory,
-                      onAcceptTemplate: _addBlock,
-                      onDetachBlock: _detachFromParent,
-                      onMoveBlockStack: _moveBlockStack,
-                      onSnapBlockStack: _snapBlockStack,
-                      onDeleteBlockStack: _deleteBlockStack,
-                      onUpdateBlockInput: _updateBlockInput,
-                      onWorkspaceDragStateChanged: _setWorkspaceDragState,
-                    ),
-                  ),
-                  Expanded(
-                    child: StagePanel(
-                      spritePosition: spritePosition,
-                      spriteRotation: spriteRotation,
-                      spriteText: spriteText,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 34,
+                          child: InstructionEditorPanel(
+                            sections: instructionSections,
+                            onAddSection: _addInstructionSection,
+                            onRemoveSection: _removeInstructionSection,
+                            onReorderSections: _reorderInstructionSections,
+                            onTitleChanged: _updateInstructionTitle,
+                            onContentChanged: _updateInstructionContent,
+                            onAddItem: _addInstructionItem,
+                            onItemChanged: _updateInstructionItem,
+                            onRemoveItem: _removeInstructionItem,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 43,
+                          child: WorkspacePanel(
+                            blocks: workspaceBlocks,
+                            selectedCategory: selectedCategory,
+                            isDraggingWorkspaceBlock: isDraggingWorkspaceBlock,
+                            onCategoryPressed: _toggleCategory,
+                            onAcceptTemplate: _addBlock,
+                            onDetachBlock: _detachFromParent,
+                            onMoveBlockStack: _moveBlockStack,
+                            onSnapBlockStack: _snapBlockStack,
+                            onDeleteBlockStack: _deleteBlockStack,
+                            onUpdateBlockInput: _updateBlockInput,
+                            onWorkspaceDragStateChanged: _setWorkspaceDragState,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 43,
+                          child: StagePanel(
+                            spritePosition: spritePosition,
+                            spriteRotation: spriteRotation,
+                            spriteText: spriteText,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

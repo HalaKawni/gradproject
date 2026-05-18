@@ -67,6 +67,9 @@ class BuilderController extends ChangeNotifier {
   int get collectedCollectableCount =>
       playbackState?.collectedCollectableIds.length ?? 0;
 
+  String get suggestedDifficulty =>
+      _difficultyForScore(_calculateDifficultyScore());
+
   int get playbackRunId => _playbackRunId;
 
   List<BuilderPlaybackVisualSegment> get playbackVisualSegments =>
@@ -636,6 +639,18 @@ class BuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void replaceSolutionCommands(
+    List<LogicCommandNode> commands, {
+    String statusMessage = 'Generated a solution.',
+  }) {
+    _clearPlaybackPreview();
+    project = project.copyWith(
+      solutionCommands: List<LogicCommandNode>.unmodifiable(commands),
+    );
+    logicStatusMessage = statusMessage;
+    notifyListeners();
+  }
+
   void stopPlayback() {
     if (!isPlaybackRunning) {
       _clearPlaybackPreview();
@@ -834,7 +849,7 @@ class BuilderController extends ChangeNotifier {
     );
   }
 
-  Future<bool> publishProject() {
+  Future<bool> publishProject({String? difficultyOverride}) {
     return _persistProject(
       createSuccessMessage: 'Project published successfully.',
       updateSuccessMessage: 'Project published successfully.',
@@ -842,6 +857,7 @@ class BuilderController extends ChangeNotifier {
       updateFailureMessage: 'Failed to publish project.',
       failurePrefix: 'Publish failed',
       statusOverride: 'published',
+      difficultyOverride: difficultyOverride,
     );
   }
 
@@ -914,8 +930,10 @@ class BuilderController extends ChangeNotifier {
     required String updateFailureMessage,
     required String failurePrefix,
     String? statusOverride,
+    String? difficultyOverride,
   }) async {
     final previousStatus = project.status;
+    final previousDifficulty = project.difficulty;
 
     try {
       _runValidation();
@@ -928,8 +946,17 @@ class BuilderController extends ChangeNotifier {
         project = project.copyWith(title: normalizedTitle);
       }
 
-      if (statusOverride != null && project.status != statusOverride) {
-        project = project.copyWith(status: statusOverride);
+      if (statusOverride != null) {
+        var nextProject = project;
+        if (nextProject.status != statusOverride) {
+          nextProject = nextProject.copyWith(status: statusOverride);
+        }
+        if (statusOverride == 'published') {
+          nextProject = nextProject.copyWith(
+            difficulty: difficultyOverride ?? suggestedDifficulty,
+          );
+        }
+        project = nextProject;
       }
 
       isSaving = true;
@@ -953,8 +980,13 @@ class BuilderController extends ChangeNotifier {
           return true;
         }
 
-        if (statusOverride != null && previousStatus != project.status) {
-          project = project.copyWith(status: previousStatus);
+        if (statusOverride != null &&
+            (previousStatus != project.status ||
+                previousDifficulty != project.difficulty)) {
+          project = project.copyWith(
+            status: previousStatus,
+            difficulty: previousDifficulty,
+          );
         }
         lastMessage = response['message'] ?? createFailureMessage;
         return false;
@@ -981,8 +1013,13 @@ class BuilderController extends ChangeNotifier {
           return true;
         }
 
-        if (statusOverride != null && previousStatus != project.status) {
-          project = project.copyWith(status: previousStatus);
+        if (statusOverride != null &&
+            (previousStatus != project.status ||
+                previousDifficulty != project.difficulty)) {
+          project = project.copyWith(
+            status: previousStatus,
+            difficulty: previousDifficulty,
+          );
         }
         lastMessage = response['message'] ?? updateFailureMessage;
         return false;
@@ -999,14 +1036,24 @@ class BuilderController extends ChangeNotifier {
         return true;
       }
 
-      if (statusOverride != null && previousStatus != project.status) {
-        project = project.copyWith(status: previousStatus);
+      if (statusOverride != null &&
+          (previousStatus != project.status ||
+              previousDifficulty != project.difficulty)) {
+        project = project.copyWith(
+          status: previousStatus,
+          difficulty: previousDifficulty,
+        );
       }
       lastMessage = response['message'] ?? updateFailureMessage;
       return false;
     } catch (e) {
-      if (statusOverride != null && previousStatus != project.status) {
-        project = project.copyWith(status: previousStatus);
+      if (statusOverride != null &&
+          (previousStatus != project.status ||
+              previousDifficulty != project.difficulty)) {
+        project = project.copyWith(
+          status: previousStatus,
+          difficulty: previousDifficulty,
+        );
       }
       lastMessage = '$failurePrefix: $e';
       return false;
@@ -1018,6 +1065,58 @@ class BuilderController extends ChangeNotifier {
 
   void _runValidation() {
     validation = BuilderValidation.initial();
+  }
+
+  int _calculateDifficultyScore() {
+    final solutionScore = _scoreSolutionCommands(project.solutionCommands);
+    final obstacleScore = project.tiles
+        .where((tile) => tile.type == 'obstacle')
+        .length;
+    final collectableScore = project.entities
+        .where((entity) => entity.type == 'collectable')
+        .length;
+
+    return solutionScore + obstacleScore + collectableScore;
+  }
+
+  int _scoreSolutionCommands(List<LogicCommandNode> commands) {
+    var score = 0;
+
+    for (final command in commands) {
+      if (command.isLoop) {
+        score += 3;
+        score += _scoreSolutionCommands(command.children);
+        continue;
+      }
+
+      switch (command.command) {
+        case LogicCommandType.moveLeft:
+        case LogicCommandType.moveRight:
+          score += 1;
+          break;
+        case LogicCommandType.jumpUp:
+        case LogicCommandType.climbUpLeft:
+        case LogicCommandType.climbUpRight:
+          score += 2;
+          break;
+        case null:
+          break;
+      }
+    }
+
+    return score;
+  }
+
+  String _difficultyForScore(int score) {
+    if (score <= 10) {
+      return 'easy';
+    }
+
+    if (score <= 20) {
+      return 'medium';
+    }
+
+    return 'hard';
   }
 
   BuilderProject _normalizeProject(BuilderProject input) {

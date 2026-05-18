@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:client/core/models/auth_session.dart';
@@ -14,6 +15,8 @@ import '../models/tile_data.dart';
 import '../shared/builder_character.dart';
 import '../shared/builder_collectable.dart';
 import '../shared/builder_tool.dart';
+import '../solver/front_view_solution_converter.dart';
+import '../solver/front_view_solver.dart';
 import '../widgets/builder_status_bar.dart';
 import '../widgets/builder_toolbar.dart';
 
@@ -46,6 +49,11 @@ class _BuilderPageState extends State<BuilderPage> {
   static const double _rootLogicLaneHeight = 54;
   static const double _logicDropSnapPadding = 30;
   static const double _logicGhostProbeYOffset = -18;
+  static const List<String> _difficultyOptions = <String>[
+    'easy',
+    'medium',
+    'hard',
+  ];
 
   late BuilderController controller;
   late BuilderGame game;
@@ -53,6 +61,8 @@ class _BuilderPageState extends State<BuilderPage> {
   late final ScrollController horizontalScrollController;
   late final ScrollController verticalScrollController;
   late final VoidCallback controllerListener;
+  Timer? titleSaveDebounce;
+  String? lastAutoSavedTitle;
   final Map<_LogicDropTarget, Rect> _logicDropTargetRects =
       <_LogicDropTarget, Rect>{};
   String? selectedSolutionCommandId;
@@ -94,6 +104,7 @@ class _BuilderPageState extends State<BuilderPage> {
 
   @override
   void dispose() {
+    titleSaveDebounce?.cancel();
     titleController.dispose();
     horizontalScrollController.dispose();
     verticalScrollController.dispose();
@@ -289,6 +300,26 @@ class _BuilderPageState extends State<BuilderPage> {
     );
   }
 
+  void _handleTitleChanged(String title) {
+    controller.setTitle(title);
+    titleSaveDebounce?.cancel();
+    titleSaveDebounce = Timer(const Duration(milliseconds: 700), () {
+      _autoSaveTitle();
+    });
+  }
+
+  Future<void> _autoSaveTitle() async {
+    final normalizedTitle = titleController.text.trim().isEmpty
+        ? 'Untitled'
+        : titleController.text.trim();
+    if (lastAutoSavedTitle == normalizedTitle || controller.isSaving) {
+      return;
+    }
+
+    lastAutoSavedTitle = normalizedTitle;
+    await controller.saveProject();
+  }
+
   // Hot-reload compatibility shim: older in-memory listeners may still call
   // this removed method until the page is rebuilt or the app is restarted.
   // ignore: unused_element
@@ -368,7 +399,7 @@ class _BuilderPageState extends State<BuilderPage> {
           style: Theme.of(context).textTheme.titleLarge,
           cursorColor: Colors.black,
           maxLines: 1,
-          onChanged: controller.setTitle,
+          onChanged: _handleTitleChanged,
         ),
         actions: [
           Padding(
@@ -470,7 +501,24 @@ class _BuilderPageState extends State<BuilderPage> {
       hasAttemptedSave = true;
     });
 
-    final publishSucceeded = await controller.publishProject();
+    if (controller.hasBlockingValidationIssues) {
+      _showNotification(
+        message: _buildValidationNotificationMessage(),
+        backgroundColor: Colors.red.shade600,
+      );
+      return;
+    }
+
+    final selectedDifficulty = await _showDifficultyPickerDialog(
+      suggestedDifficulty: controller.suggestedDifficulty,
+    );
+    if (!mounted || selectedDifficulty == null) {
+      return;
+    }
+
+    final publishSucceeded = await controller.publishProject(
+      difficultyOverride: selectedDifficulty,
+    );
 
     if (!mounted) {
       return;
@@ -496,6 +544,140 @@ class _BuilderPageState extends State<BuilderPage> {
       message: controller.lastMessage ?? 'Failed to publish game.',
       backgroundColor: Colors.red.shade600,
     );
+  }
+
+  Future<String?> _showDifficultyPickerDialog({
+    required String suggestedDifficulty,
+  }) {
+    var selectedDifficulty = suggestedDifficulty;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Choose Difficulty'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: RichText(
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.blueGrey.shade700,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Suggested: '),
+                          TextSpan(
+                            text: _difficultyLabel(suggestedDifficulty),
+                            style: TextStyle(
+                              color: _difficultyColor(suggestedDifficulty),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final difficulty in _difficultyOptions) ...[
+                        if (difficulty != _difficultyOptions.first)
+                          const SizedBox(width: 8),
+                        _buildDifficultyOption(
+                          difficulty: difficulty,
+                          isSelected: selectedDifficulty == difficulty,
+                          onSelected: () {
+                            setDialogState(() {
+                              selectedDifficulty = difficulty;
+                            });
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(selectedDifficulty),
+                  child: const Text('Publish'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDifficultyOption({
+    required String difficulty,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    final color = _difficultyColor(difficulty);
+
+    return InkWell(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            _difficultyLabel(difficulty),
+            style: TextStyle(
+              color: color,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _difficultyLabel(String difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return 'Easy';
+      case 'hard':
+        return 'Hard';
+      case 'medium':
+      default:
+        return 'Medium';
+    }
+  }
+
+  Color _difficultyColor(String difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return Colors.green.shade700;
+      case 'hard':
+        return Colors.red.shade700;
+      case 'medium':
+      default:
+        return Colors.amber.shade800;
+    }
   }
 
   Future<void> _handleClearLevelPressed() async {
@@ -544,6 +726,51 @@ class _BuilderPageState extends State<BuilderPage> {
       backgroundColor: Colors.blueGrey.shade700,
     );
   }
+
+  void _handlePrintSolutionPressed() {
+    final result = const FrontViewSolver().findShortestPath(
+      project: controller.project,
+      requireAllCollectablesForSuccess:
+          controller.requireAllCollectablesForSuccess,
+    );
+
+    if (!result.solved) {
+      debugPrint('No solution found');
+      return;
+    }
+
+    final commands = const FrontViewSolutionConverter().convert(result.actions);
+    if (commands.isEmpty) {
+      debugPrint('No solution found');
+      return;
+    }
+
+    _setLogicSelection(null);
+    controller.replaceSolutionCommands(commands);
+    // debugPrint(_formatGeneratedSolutionCommands(commands).join('\n'));
+  }
+
+  // List<String> _formatGeneratedSolutionCommands(
+  //   List<LogicCommandNode> commands, {
+  //   int indent = 0,
+  // }) {
+  //   final lines = <String>[];
+  //   final prefix = '  ' * indent;
+  //
+  //   for (final command in commands) {
+  //     lines.add('$prefix${command.label}');
+  //     if (command.children.isNotEmpty) {
+  //       lines.addAll(
+  //         _formatGeneratedSolutionCommands(
+  //           command.children,
+  //           indent: indent + 1,
+  //         ),
+  //       );
+  //     }
+  //   }
+  //
+  //   return lines;
+  // }
 
   void _showNotification({
     required String message,
@@ -1963,6 +2190,21 @@ class _BuilderPageState extends State<BuilderPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        FilledButton.icon(
+          onPressed: _handlePrintSolutionPressed,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          icon: const Icon(Icons.route_rounded, size: 18),
+          label: const Text(
+            'Print Solution',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(height: 10),
         FilledButton.icon(
           onPressed: _handleClearLevelPressed,
           style: FilledButton.styleFrom(

@@ -1,7 +1,16 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/builder/shared/solver/grid_position.dart';
+import 'package:client/features/builder/top_view/flame/top_view_builder_game.dart';
+import 'package:client/features/builder/top_view/models/top_view_board_style.dart';
+import 'package:client/features/builder/top_view/models/top_view_character.dart';
+import 'package:client/features/builder/top_view/solver/top_view_level_grid.dart';
+import 'package:client/features/builder/top_view/solver/top_view_solution_converter.dart';
+import 'package:client/features/builder/top_view/solver/top_view_solver.dart';
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 class TopViewBuilderPage extends StatefulWidget {
@@ -43,9 +52,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   static const double _editorLineHeight = 1.45;
   static const double _editorLineHeightPixels =
       _editorFontSize * _editorLineHeight;
-  static const double _runTilesPerSecond = 6;
-  static const double _runEaseTiles = 0.45;
-  static const Duration _runFrameInterval = Duration(milliseconds: 16);
+  static const double _runTilesPerSecond = 3;
+  static const double _playerSpriteTileScale = 2.3;
+  static const double _obstacleSpriteTileScale = 1.8;
+  static const List<String> _difficultyOptions = <String>[
+    'easy',
+    'medium',
+    'hard',
+  ];
   static const StrutStyle _editorStrutStyle = StrutStyle(
     fontFamily: 'monospace',
     fontSize: _editorFontSize,
@@ -54,12 +68,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   );
 
   final Map<_Cell, _BoardItemType> _items = <_Cell, _BoardItemType>{};
+  final Map<_Cell, String> _obstacleStylesByCell = <_Cell, String>{};
   final List<_CodeBlock> _allowedBlocks = <_CodeBlock>[];
   late final TextEditingController _titleController;
   late final TextEditingController _codeController;
   late final ScrollController _codeScrollController;
   late final ScrollController _lineNumberScrollController;
   late final FocusNode _codeFocusNode;
+  late final TopViewBuilderGame _topViewGame;
 
   bool _rulerActive = false;
   bool _isBoardItemDragging = false;
@@ -67,17 +83,60 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   bool _isRunningCode = false;
   bool _isLoadingProject = false;
   bool _isSavingProject = false;
+  bool _useAnglesInGeneratedTurns = false;
   double _initialPlayerHeadingDegrees = 0;
   String? _savedProjectId;
   String _courseId = '';
   int _orderInCourse = 0;
   String _difficulty = 'medium';
+  String _status = 'draft';
+  String _playerCharacterId = defaultTopViewCharacterId;
+  String _backgroundId = defaultTopViewBackgroundId;
+  String _obstacleStyleId = defaultTopViewObstacleStyleId;
   String? _loadedPossibleSolutionCode;
   int _runGeneration = 0;
   int? _activeCodeLine;
   _Cell? _rulerStart;
   _PlayerPreviewData? _playerPreview;
   late final ValueNotifier<_RulerOverlayData> _rulerOverlay;
+  Timer? _titleSaveDebounce;
+  String? _lastAutoSavedTitle;
+
+  void _syncTopViewGame({bool resetPlayer = false}) {
+    final playerCell = _playerCell;
+    _topViewGame.syncBoard(
+      items: _items.entries
+          .map(
+            (entry) => TopViewRenderItem(
+              type: entry.value.id,
+              cell: TopViewRenderCell(
+                column: entry.key.column,
+                row: entry.key.row,
+              ),
+              obstacleStyleId: entry.value == _BoardItemType.obstacle
+                  ? _obstacleStylesByCell[entry.key]
+                  : null,
+            ),
+          )
+          .toList(),
+      playerCell: playerCell == null
+          ? null
+          : TopViewRenderCell(column: playerCell.column, row: playerCell.row),
+      playerCharacterId: _playerCharacterId,
+      backgroundId: _backgroundId,
+      obstacleStyleId: _obstacleStyleId,
+      playerHeadingDegrees: _initialPlayerHeadingDegrees,
+    );
+
+    if (resetPlayer) {
+      _topViewGame.resetPlayerToCell(
+        playerCell == null
+            ? null
+            : TopViewRenderCell(column: playerCell.column, row: playerCell.row),
+        _initialPlayerHeadingDegrees,
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -87,11 +146,20 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _codeScrollController = ScrollController()..addListener(_handleCodeScroll);
     _lineNumberScrollController = ScrollController();
     _codeFocusNode = FocusNode();
+    _topViewGame = TopViewBuilderGame(
+      columns: _cols,
+      rows: _rows,
+      playerSpriteTileScale: _playerSpriteTileScale,
+      obstacleSpriteTileScale: _obstacleSpriteTileScale,
+      runTilesPerSecond: _runTilesPerSecond,
+    );
     _rulerOverlay = ValueNotifier<_RulerOverlayData>(const _RulerOverlayData());
     _courseId = widget.initialCourseId ?? '';
     _orderInCourse = widget.initialOrderInCourse ?? 0;
     _difficulty = widget.initialDifficulty;
     _codeController.addListener(_handleCodeChanged);
+    _titleController.addListener(_handleTitleChanged);
+    _syncTopViewGame(resetPlayer: true);
     if (widget.initialProjectId != null) {
       _loadProject(widget.initialProjectId!);
     }
@@ -99,7 +167,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   @override
   void dispose() {
+    _titleSaveDebounce?.cancel();
     _codeController.removeListener(_handleCodeChanged);
+    _titleController.removeListener(_handleTitleChanged);
     _titleController.dispose();
     _codeController.dispose();
     _codeScrollController
@@ -185,6 +255,29 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _activeCodeLine = null;
       _playerPreview = null;
     });
+  }
+
+  void _handleTitleChanged() {
+    if (widget.playMode) {
+      return;
+    }
+
+    _titleSaveDebounce?.cancel();
+    _titleSaveDebounce = Timer(const Duration(milliseconds: 700), () {
+      _autoSaveTitle();
+    });
+  }
+
+  Future<void> _autoSaveTitle() async {
+    final normalizedTitle = _titleController.text.trim().isEmpty
+        ? 'New Level'
+        : _titleController.text.trim();
+    if (_lastAutoSavedTitle == normalizedTitle || _isSavingProject) {
+      return;
+    }
+
+    _lastAutoSavedTitle = normalizedTitle;
+    await _persistProject(status: _status, showFeedback: false);
   }
 
   List<_CodeExecutionStep> _parseCodeSteps() {
@@ -292,6 +385,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
     _runGeneration = generation;
     _codeFocusNode.unfocus();
+    _topViewGame.resetPlayerToCell(
+      TopViewRenderCell(column: playerCell.column, row: playerCell.row),
+      headingDegrees,
+    );
     setState(() {
       _isRunningCode = true;
       _activeCodeLine = null;
@@ -317,13 +414,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ? _normalizeDegrees(step.value)
             : _normalizeDegrees(headingDegrees + step.value);
         headingDegrees = targetHeading;
-        setState(() {
-          _playerPreview = _PlayerPreviewData(
-            position: position,
-            headingDegrees: headingDegrees,
-            path: List<Offset>.from(path),
-          );
-        });
+        _topViewGame.face(headingDegrees);
+        _playerPreview = _PlayerPreviewData(
+          position: position,
+          headingDegrees: headingDegrees,
+          path: List<Offset>.from(path),
+        );
         continue;
       }
 
@@ -331,34 +427,23 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         math.cos(_degreesToRadians(headingDegrees)),
         -math.sin(_degreesToRadians(headingDegrees)),
       );
-      final stepDirection = step.value < 0 ? -1.0 : 1.0;
-      var remainingTiles = step.value.abs();
       var hitBounds = false;
+      final targetPosition = position + direction * step.value;
 
-      while (remainingTiles > 0) {
+      if (!_isPlayerPositionInBounds(targetPosition)) {
+        hitBounds = true;
+      } else {
+        await _topViewGame.movePlayerTo(targetPosition);
         if (!mounted || generation != _runGeneration) {
           return;
         }
-
-        final tileDistance = math.min(1.0, remainingTiles);
-        final targetPosition =
-            position + direction * (tileDistance * stepDirection);
-        await _animateMove(
-          generation: generation,
-          fromPosition: position,
-          toPosition: targetPosition,
-          headingDegrees: headingDegrees,
-          path: path,
-        );
         position = targetPosition;
         path.add(position);
-
-        if (!_isPlayerPositionInBounds(position)) {
-          hitBounds = true;
-          break;
-        }
-
-        remainingTiles -= tileDistance;
+        _playerPreview = _PlayerPreviewData(
+          position: position,
+          headingDegrees: headingDegrees,
+          path: List<Offset>.from(path),
+        );
       }
 
       if (hitBounds) {
@@ -376,100 +461,6 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     });
   }
 
-  Future<void> _animateMove({
-    required int generation,
-    required Offset fromPosition,
-    required Offset toPosition,
-    required double headingDegrees,
-    required List<Offset> path,
-  }) async {
-    final distanceTiles = (toPosition - fromPosition).distance.abs();
-    if (distanceTiles == 0) {
-      return;
-    }
-
-    final duration = _movementDurationForDistance(distanceTiles);
-    final stopwatch = Stopwatch()..start();
-    while (stopwatch.elapsed < duration) {
-      if (!mounted || generation != _runGeneration) {
-        return;
-      }
-      final t = _movementProgressForElapsed(
-        elapsed: stopwatch.elapsed,
-        distanceTiles: distanceTiles,
-      );
-      final currentPosition = Offset.lerp(fromPosition, toPosition, t)!;
-      setState(() {
-        _playerPreview = _PlayerPreviewData(
-          position: currentPosition,
-          headingDegrees: headingDegrees,
-          path: <Offset>[...path, currentPosition],
-        );
-      });
-      await Future<void>.delayed(_runFrameInterval);
-    }
-
-    if (!mounted || generation != _runGeneration) {
-      return;
-    }
-
-    setState(() {
-      _playerPreview = _PlayerPreviewData(
-        position: toPosition,
-        headingDegrees: headingDegrees,
-        path: <Offset>[...path, toPosition],
-      );
-    });
-  }
-
-  Duration _movementDurationForDistance(double distanceTiles) {
-    final easeTiles = math.min(_runEaseTiles, distanceTiles / 2);
-    final seconds = (distanceTiles + 2 * easeTiles) / _runTilesPerSecond;
-    return Duration(milliseconds: math.max(160, (seconds * 1000).round()));
-  }
-
-  double _movementProgressForElapsed({
-    required Duration elapsed,
-    required double distanceTiles,
-  }) {
-    if (distanceTiles <= 0) {
-      return 1;
-    }
-
-    final easeTiles = math.min(_runEaseTiles, distanceTiles / 2);
-    final accelSeconds = 2 * easeTiles / _runTilesPerSecond;
-    final cruiseSeconds =
-        math.max(0.0, distanceTiles - 2 * easeTiles) / _runTilesPerSecond;
-    final totalSeconds = 2 * accelSeconds + cruiseSeconds;
-    final elapsedSeconds = math.min(
-      elapsed.inMicroseconds / Duration.microsecondsPerSecond,
-      totalSeconds,
-    );
-
-    if (accelSeconds == 0) {
-      return (elapsedSeconds / totalSeconds).clamp(0.0, 1.0).toDouble();
-    }
-
-    final acceleration = _runTilesPerSecond / accelSeconds;
-    double traveledTiles;
-
-    if (elapsedSeconds < accelSeconds) {
-      traveledTiles = 0.5 * acceleration * elapsedSeconds * elapsedSeconds;
-    } else if (elapsedSeconds < accelSeconds + cruiseSeconds) {
-      traveledTiles =
-          easeTiles + _runTilesPerSecond * (elapsedSeconds - accelSeconds);
-    } else {
-      final decelElapsed = elapsedSeconds - accelSeconds - cruiseSeconds;
-      traveledTiles =
-          easeTiles +
-          (distanceTiles - 2 * easeTiles) +
-          _runTilesPerSecond * decelElapsed -
-          0.5 * acceleration * decelElapsed * decelElapsed;
-    }
-
-    return (traveledTiles / distanceTiles).clamp(0.0, 1.0).toDouble();
-  }
-
   bool _isPlayerPositionInBounds(Offset position) {
     return position.dx >= 0.5 &&
         position.dx <= _cols - 0.5 &&
@@ -479,6 +470,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   void _stopCodeRun() {
     _runGeneration += 1;
+    _syncTopViewGame(resetPlayer: true);
     if (!_isRunningCode && _activeCodeLine == null && _playerPreview == null) {
       return;
     }
@@ -537,10 +529,24 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       return;
     }
 
+    final suggestedDifficulty = _difficultyForScore(
+      _calculateDifficultyScore(),
+    );
+    final selectedDifficulty = await _showDifficultyPickerDialog(
+      suggestedDifficulty: suggestedDifficulty,
+    );
+    if (!mounted || selectedDifficulty == null) {
+      return;
+    }
+
+    _difficulty = selectedDifficulty;
     await _persistProject(status: 'published');
   }
 
-  Future<void> _persistProject({required String status}) async {
+  Future<void> _persistProject({
+    required String status,
+    bool showFeedback = true,
+  }) async {
     if (_isSavingProject) {
       return;
     }
@@ -586,25 +592,32 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         if (data is Map && data['_id'] != null) {
           _savedProjectId = data['_id'].toString();
         }
+        _status = status;
         _loadedPossibleSolutionCode = _codeController.text;
-        _showSnackBar(
-          status == 'published'
-              ? 'Top view game published successfully.'
-              : 'Top view game saved successfully.',
-          backgroundColor: Colors.green.shade600,
-        );
+        if (showFeedback) {
+          _showSnackBar(
+            status == 'published'
+                ? 'Top view game published successfully.'
+                : 'Top view game saved successfully.',
+            backgroundColor: Colors.green.shade600,
+          );
+        }
       } else {
         final errors = response['errors'];
         final message = errors is List && errors.isNotEmpty
             ? errors.join('\n')
             : response['message']?.toString() ?? 'Failed to save game.';
-        _showSnackBar(message, backgroundColor: Colors.red.shade600);
+        if (showFeedback) {
+          _showSnackBar(message, backgroundColor: Colors.red.shade600);
+        }
       }
     } catch (e) {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Save failed: $e', backgroundColor: Colors.red.shade600);
+      if (showFeedback) {
+        _showSnackBar('Save failed: $e', backgroundColor: Colors.red.shade600);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -673,6 +686,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     required String projectId,
   }) {
     final items = <_Cell, _BoardItemType>{};
+    final obstacleStylesByCell = <_Cell, String>{};
     final rawItems = draftData['items'];
     if (rawItems is List) {
       for (final item in rawItems.whereType<Map>()) {
@@ -683,7 +697,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         if (type == null || column == null || row == null) {
           continue;
         }
-        items[_Cell(column: column, row: row)] = type;
+        final cell = _Cell(column: column, row: row);
+        items[cell] = type;
+        if (type == _BoardItemType.obstacle) {
+          obstacleStylesByCell[cell] = topViewObstacleStyleById(
+            itemMap['obstacleStyle']?.toString() ??
+                draftData['obstacleStyle']?.toString(),
+          ).id;
+        }
       }
     }
 
@@ -713,6 +734,19 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           data['difficulty']?.toString() ??
           draftData['difficulty']?.toString() ??
           _difficulty;
+      _status =
+          data['status']?.toString() ??
+          draftData['status']?.toString() ??
+          _status;
+      _playerCharacterId = topViewCharacterById(
+        draftData['playerCharacter']?.toString(),
+      ).id;
+      _backgroundId = topViewBackgroundById(
+        draftData['background']?.toString(),
+      ).id;
+      _obstacleStyleId = topViewObstacleStyleById(
+        draftData['obstacleStyle']?.toString(),
+      ).id;
       _titleController.text =
           data['title']?.toString() ??
           draftData['title']?.toString() ??
@@ -721,6 +755,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _items
         ..clear()
         ..addAll(items);
+      _obstacleStylesByCell
+        ..clear()
+        ..addAll(obstacleStylesByCell);
       _allowedBlocks
         ..clear()
         ..addAll(allowedBlocks);
@@ -733,6 +770,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _playerPreview = null;
       _activeCodeLine = null;
     });
+    _syncTopViewGame(resetPlayer: true);
   }
 
   Map<String, dynamic> _buildProjectJson({required String status}) {
@@ -746,6 +784,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       'courseId': _courseId,
       'orderInCourse': _orderInCourse,
       'difficulty': _difficulty,
+      'playerCharacter': _playerCharacterId,
+      'background': _backgroundId,
+      'obstacleStyle': _obstacleStyleId,
       'settings': {'columns': _cols, 'rows': _rows},
       'items': _items.entries
           .map(
@@ -753,6 +794,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               'type': entry.value.id,
               'column': entry.key.column,
               'row': entry.key.row,
+              if (entry.value == _BoardItemType.obstacle)
+                'obstacleStyle':
+                    _obstacleStylesByCell[entry.key] ?? _obstacleStyleId,
             },
           )
           .toList(),
@@ -760,6 +804,199 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       'solutionCode': _codeController.text,
       'initialDirectionDegrees': _initialPlayerHeadingDegrees,
     };
+  }
+
+  int _calculateDifficultyScore() {
+    final solutionScore = _scoreTopViewSolutionCode(_codeController.text);
+    final obstacleScore = _items.values
+        .where((item) => item == _BoardItemType.obstacle)
+        .length;
+    final collectableScore = _items.values
+        .where((item) => item == _BoardItemType.collectable)
+        .length;
+
+    return solutionScore + obstacleScore + collectableScore;
+  }
+
+  int _scoreTopViewSolutionCode(String code) {
+    var score = 0;
+    final lines = code.split('\n');
+
+    for (final rawLine in lines) {
+      final line = rawLine.trim().toLowerCase();
+      if (line.isEmpty) {
+        continue;
+      }
+
+      final parts = line.split(RegExp(r'\s+'));
+      final command = parts.first;
+
+      if (command == 'step') {
+        score += 1;
+        continue;
+      }
+
+      if (command == 'turn') {
+        if (parts.length > 1 && double.tryParse(parts[1]) != null) {
+          score += 3;
+        } else {
+          score += 2;
+        }
+        continue;
+      }
+
+      if (_screenDirectionDegrees(command) != null) {
+        score += 2;
+      }
+    }
+
+    return score;
+  }
+
+  String _difficultyForScore(int score) {
+    if (score <= 10) {
+      return 'easy';
+    }
+
+    if (score <= 20) {
+      return 'medium';
+    }
+
+    return 'hard';
+  }
+
+  Future<String?> _showDifficultyPickerDialog({
+    required String suggestedDifficulty,
+  }) {
+    var selectedDifficulty = suggestedDifficulty;
+
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Choose Difficulty'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: RichText(
+                      text: TextSpan(
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.blueGrey.shade700,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Suggested: '),
+                          TextSpan(
+                            text: _difficultyLabel(suggestedDifficulty),
+                            style: TextStyle(
+                              color: _difficultyColor(suggestedDifficulty),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final difficulty in _difficultyOptions) ...[
+                        if (difficulty != _difficultyOptions.first)
+                          const SizedBox(width: 8),
+                        _buildDifficultyOption(
+                          difficulty: difficulty,
+                          isSelected: selectedDifficulty == difficulty,
+                          onSelected: () {
+                            setDialogState(() {
+                              selectedDifficulty = difficulty;
+                            });
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(selectedDifficulty),
+                  child: const Text('Publish'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildDifficultyOption({
+    required String difficulty,
+    required bool isSelected,
+    required VoidCallback onSelected,
+  }) {
+    final color = _difficultyColor(difficulty);
+
+    return InkWell(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.16)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            _difficultyLabel(difficulty),
+            style: TextStyle(
+              color: color,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _difficultyLabel(String difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return 'Easy';
+      case 'hard':
+        return 'Hard';
+      case 'medium':
+      default:
+        return 'Medium';
+    }
+  }
+
+  Color _difficultyColor(String difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return Colors.green.shade700;
+      case 'hard':
+        return Colors.red.shade700;
+      case 'medium':
+      default:
+        return Colors.amber.shade800;
+    }
   }
 
   void _showSnackBar(String message, {required Color backgroundColor}) {
@@ -942,14 +1179,31 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       return;
     }
     setState(() {
+      final movedObstacleStyle = source == null
+          ? null
+          : _obstacleStylesByCell[source];
       if (source != null) {
         _items.remove(source);
+        _obstacleStylesByCell.remove(source);
       }
       if (type == _BoardItemType.player || type == _BoardItemType.goal) {
+        final removedCells = _items.entries
+            .where((entry) => entry.value == type && entry.key != target)
+            .map((entry) => entry.key)
+            .toList();
         _items.removeWhere((cell, item) => item == type && cell != target);
+        for (final cell in removedCells) {
+          _obstacleStylesByCell.remove(cell);
+        }
       }
       _items[target] = type;
+      if (type == _BoardItemType.obstacle) {
+        _obstacleStylesByCell[target] = movedObstacleStyle ?? _obstacleStyleId;
+      } else {
+        _obstacleStylesByCell.remove(target);
+      }
     });
+    _syncTopViewGame(resetPlayer: true);
     _stopCodeRun();
   }
 
@@ -960,7 +1214,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     }
     setState(() {
       _items.remove(cell);
+      _obstacleStylesByCell.remove(cell);
     });
+    _syncTopViewGame(resetPlayer: true);
     _stopCodeRun();
   }
 
@@ -1138,6 +1394,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _codeController.clear();
     setState(() {
       _items.clear();
+      _obstacleStylesByCell.clear();
       _allowedBlocks.clear();
       _isRunningCode = false;
       _activeCodeLine = null;
@@ -1146,6 +1403,93 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _playerPreview = null;
       _rulerOverlay.value = const _RulerOverlayData();
     });
+    _syncTopViewGame(resetPlayer: true);
+  }
+
+  void _handlePrintSolutionPressed() {
+    final playerCell = _playerCell;
+    final goalCell = _goalCell;
+    if (playerCell == null || goalCell == null) {
+      debugPrint('No solution found');
+      return;
+    }
+
+    final level = TopViewLevelGrid(
+      columns: _cols,
+      rows: _rows,
+      start: GridPosition(x: playerCell.column, y: playerCell.row),
+      goal: GridPosition(x: goalCell.column, y: goalCell.row),
+      obstacles: _items.entries
+          .where((entry) => entry.value == _BoardItemType.obstacle)
+          .map((entry) => GridPosition(x: entry.key.column, y: entry.key.row))
+          .toSet(),
+      collectables: _collectableCells
+          .map((cell) => GridPosition(x: cell.column, y: cell.row))
+          .toSet(),
+    );
+
+    final result = const TopViewSolver().findShortestPath(level: level);
+    if (!result.solved) {
+      debugPrint('No solution found');
+      return;
+    }
+
+    final solutionCode = TopViewSolutionConverter(
+      initialHeadingDegrees: _initialPlayerHeadingDegrees,
+      useTurnAngles: _useAnglesInGeneratedTurns,
+    ).convert(result.actions);
+    if (solutionCode.isEmpty) {
+      debugPrint('No solution found');
+      return;
+    }
+
+    _stopCodeRun();
+    final generatedBlocks = _codeBlocksUsedBySolution(solutionCode);
+    setState(() {
+      _allowedBlocks
+        ..clear()
+        ..addAll(generatedBlocks);
+      _codeController.text = solutionCode;
+      _codeController.selection = TextSelection.collapsed(
+        offset: solutionCode.length,
+      );
+    });
+    // debugPrint(solutionCode);
+  }
+
+  List<_CodeBlock> _codeBlocksUsedBySolution(String code) {
+    final usedBlockIds = <String>{};
+
+    for (final rawLine in code.split('\n')) {
+      final line = rawLine.trim().toLowerCase();
+      if (line.isEmpty) {
+        continue;
+      }
+
+      final parts = line.split(RegExp(r'\s+'));
+      final command = parts.first;
+
+      if (command == 'step') {
+        usedBlockIds.add('step');
+        continue;
+      }
+
+      if (command == 'turn') {
+        usedBlockIds.add('turn');
+        if (parts.length > 1 && double.tryParse(parts[1]) == null) {
+          usedBlockIds.add(parts[1]);
+        }
+        continue;
+      }
+
+      if (_screenDirectionDegrees(command) != null) {
+        usedBlockIds.add(command);
+      }
+    }
+
+    return _codeBlocks
+        .where((block) => usedBlockIds.contains(block.id))
+        .toList();
   }
 
   Offset _boardOffset(
@@ -1304,6 +1648,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
+          title: 'Board Style',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildBackgroundControl(),
+              const SizedBox(height: 14),
+              _buildObstacleStyleControl(),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildSidebarSection(
           title: 'Instructions',
           child: Wrap(
             spacing: 10,
@@ -1314,26 +1670,71 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(height: 14),
         _buildSidebarSection(
           title: 'Player Direction',
-          child: _buildInitialDirectionControl(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildCharacterControl(),
+              const SizedBox(height: 14),
+              _buildInitialDirectionControl(),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
           title: 'Level Actions',
-          child: FilledButton.icon(
-            onPressed: _handleClearLevelPressed,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SwitchListTile(
+                value: _useAnglesInGeneratedTurns,
+                onChanged: (value) {
+                  setState(() {
+                    _useAnglesInGeneratedTurns = value;
+                  });
+                },
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  'Use Turn Angles',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.blueGrey.shade800,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-            icon: const Icon(Icons.layers_clear_outlined, size: 18),
-            label: const Text(
-              'Clear Level',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed: _handlePrintSolutionPressed,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.route_rounded, size: 18),
+                label: const Text(
+                  'Print Solution',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: _handleClearLevelPressed,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.layers_clear_outlined, size: 18),
+                label: const Text(
+                  'Clear Level',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 14),
@@ -1407,6 +1808,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             child: Stack(
               clipBehavior: Clip.none,
               children: [
+                Positioned.fill(
+                  child: GameWidget(game: _topViewGame, autofocus: false),
+                ),
                 GridView.builder(
                   padding: EdgeInsets.zero,
                   physics: const NeverScrollableScrollPhysics(),
@@ -1419,8 +1823,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     final column = index % _cols;
                     final cell = _Cell(column: column, row: row);
                     final item = _items[cell];
-                    final isPreviewedPlayer =
-                        item == _BoardItemType.player && _playerPreview != null;
+                    final shouldRenderTileItem =
+                        item != null && _playerPreview == null;
                     return DragTarget<_Payload>(
                       onWillAcceptWithDetails: (details) {
                         return _acceptsBoardPayload(details.data);
@@ -1449,15 +1853,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                           child: Container(
                             decoration: BoxDecoration(
                               color: highlight
-                                  ? const Color(0xFFE8F4FF)
-                                  : item == _BoardItemType.obstacle
-                                  ? const Color(0xFFDCE4EC)
-                                  : const Color(0xFFCFE1F3),
-                              border: Border.all(
-                                color: const Color(0xFFA7C4DE),
-                              ),
+                                  ? const Color(0x99E8F4FF)
+                                  : Colors.transparent,
+                              border: Border.all(color: Colors.transparent),
                             ),
                             child: Stack(
+                              clipBehavior: Clip.none,
                               children: [
                                 Positioned.fill(
                                   child: GestureDetector(
@@ -1475,52 +1876,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                                     },
                                   ),
                                 ),
-                                if (item != null)
+                                if (item != null && shouldRenderTileItem)
                                   Positioned.fill(
-                                    child: Center(
-                                      child: _rulerActive
-                                          ? IgnorePointer(
-                                              child: Opacity(
-                                                opacity: isPreviewedPlayer
-                                                    ? 0.35
-                                                    : 1,
-                                                child: _boardIcon(item),
-                                              ),
-                                            )
-                                          : Draggable<_Payload>(
-                                              data: _Payload.boardItem(
-                                                item,
-                                                cell,
-                                              ),
-                                              feedback: Material(
-                                                color: Colors.transparent,
-                                                child: _boardIcon(
-                                                  item,
-                                                  small: true,
-                                                ),
-                                              ),
-                                              childWhenDragging:
-                                                  const SizedBox.expand(),
-                                              onDragStarted: () {
-                                                setState(() {
-                                                  _isBoardItemDragging = true;
-                                                });
-                                              },
-                                              onDragEnd: (_) {
-                                                if (!mounted) {
-                                                  return;
-                                                }
-                                                setState(() {
-                                                  _isBoardItemDragging = false;
-                                                });
-                                              },
-                                              child: Opacity(
-                                                opacity: isPreviewedPlayer
-                                                    ? 0.35
-                                                    : 1,
-                                                child: _boardIcon(item),
-                                              ),
-                                            ),
+                                    child: _buildPlacedBoardItemDragHandle(
+                                      item: item,
+                                      cell: cell,
                                     ),
                                   ),
                               ],
@@ -1531,8 +1891,6 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     );
                   },
                 ),
-                if (_playerPreview != null)
-                  _buildPlayerPreviewOverlay(cellWidth, cellHeight),
                 ValueListenableBuilder<_RulerOverlayData>(
                   valueListenable: _rulerOverlay,
                   builder: (context, ruler, child) {
@@ -1585,33 +1943,38 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
-  Widget _buildPlayerPreviewOverlay(double cellWidth, double cellHeight) {
-    final preview = _playerPreview;
-    if (preview == null) {
-      return const SizedBox.shrink();
+  Widget _buildPlacedBoardItemDragHandle({
+    required _BoardItemType item,
+    required _Cell cell,
+  }) {
+    if (_rulerActive) {
+      return const SizedBox.expand();
     }
 
-    final iconSize = math.min(cellWidth, cellHeight) * 0.72;
-    final left = preview.position.dx * cellWidth - iconSize / 2;
-    final top = preview.position.dy * cellHeight - iconSize / 2;
-
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Positioned(
-              left: left,
-              top: top,
-              width: iconSize,
-              height: iconSize,
-              child: _playerPreviewIcon(
-                headingDegrees: preview.headingDegrees,
-                size: iconSize,
-              ),
-            ),
-          ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.grab,
+      child: Draggable<_Payload>(
+        data: _Payload.boardItem(item, cell),
+        dragAnchorStrategy: pointerDragAnchorStrategy,
+        feedback: Material(
+          color: Colors.transparent,
+          child: _boardIcon(item, small: true),
         ),
+        childWhenDragging: const SizedBox.expand(),
+        onDragStarted: () {
+          setState(() {
+            _isBoardItemDragging = true;
+          });
+        },
+        onDragEnd: (_) {
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            _isBoardItemDragging = false;
+          });
+        },
+        child: const ColoredBox(color: Colors.transparent),
       ),
     );
   }
@@ -1944,6 +2307,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           setState(() {
             _initialPlayerHeadingDegrees = direction;
           });
+          _syncTopViewGame(resetPlayer: true);
         },
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
@@ -1952,6 +2316,333 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCharacterControl() {
+    final selectedCharacter = topViewCharacterById(_playerCharacterId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Character',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>(_playerCharacterId),
+          initialValue: selectedCharacter.id,
+          isExpanded: true,
+          items: [
+            for (final character in topViewCharacters)
+              DropdownMenuItem<String>(
+                value: character.id,
+                child: _buildCharacterMenuItem(character),
+              ),
+          ],
+          onChanged: (characterId) {
+            if (characterId == null ||
+                characterId == _playerCharacterId ||
+                widget.playMode) {
+              return;
+            }
+
+            _stopCodeRun();
+            setState(() {
+              _playerCharacterId = topViewCharacterById(characterId).id;
+            });
+            _syncTopViewGame(resetPlayer: true);
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.blueGrey.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.blueGrey.shade100),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 52,
+                height: 52,
+                child: Image.asset(
+                  selectedCharacter.previewAssetPath,
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Icon(
+                      Icons.pets_rounded,
+                      color: Colors.blueGrey.shade400,
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  selectedCharacter.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.blueGrey.shade900,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBackgroundControl() {
+    final selectedBackground = topViewBackgroundById(_backgroundId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Background',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>('background-$_backgroundId'),
+          initialValue: selectedBackground.id,
+          isExpanded: true,
+          items: [
+            for (final background in topViewBackgrounds)
+              DropdownMenuItem<String>(
+                value: background.id,
+                child: _buildBackgroundMenuItem(background),
+              ),
+          ],
+          onChanged: (backgroundId) {
+            if (backgroundId == null ||
+                backgroundId == _backgroundId ||
+                widget.playMode) {
+              return;
+            }
+
+            _stopCodeRun();
+            setState(() {
+              _backgroundId = topViewBackgroundById(backgroundId).id;
+            });
+            _syncTopViewGame(resetPlayer: true);
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildAssetPreviewCard(
+          assetPath: selectedBackground.assetPath,
+          label: selectedBackground.label,
+          fallbackIcon: Icons.landscape_rounded,
+          imageFit: BoxFit.cover,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildObstacleStyleControl() {
+    final selectedObstacle = topViewObstacleStyleById(_obstacleStyleId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Obstacle',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>('obstacle-$_obstacleStyleId'),
+          initialValue: selectedObstacle.id,
+          isExpanded: true,
+          items: [
+            for (final obstacle in topViewObstacleStyles)
+              DropdownMenuItem<String>(
+                value: obstacle.id,
+                child: _buildObstacleMenuItem(obstacle),
+              ),
+          ],
+          onChanged: (obstacleId) {
+            if (obstacleId == null ||
+                obstacleId == _obstacleStyleId ||
+                widget.playMode) {
+              return;
+            }
+
+            _stopCodeRun();
+            setState(() {
+              _obstacleStyleId = topViewObstacleStyleById(obstacleId).id;
+            });
+            _syncTopViewGame(resetPlayer: true);
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildAssetPreviewCard(
+          assetPath: selectedObstacle.assetPath,
+          label: selectedObstacle.label,
+          fallbackIcon: Icons.terrain_rounded,
+          imageFit: BoxFit.contain,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAssetPreviewCard({
+    required String assetPath,
+    required String label,
+    required IconData fallbackIcon,
+    required BoxFit imageFit,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.blueGrey.shade100),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              width: 52,
+              height: 52,
+              child: Image.asset(
+                assetPath,
+                fit: imageFit,
+                errorBuilder: (context, error, stackTrace) {
+                  return Icon(fallbackIcon, color: Colors.blueGrey.shade400);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.blueGrey.shade900,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCharacterMenuItem(TopViewCharacter character) {
+    return Row(
+      children: [
+        Image.asset(
+          character.previewAssetPath,
+          width: 26,
+          height: 26,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(width: 26, height: 26);
+          },
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            character.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBackgroundMenuItem(TopViewBackground background) {
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.asset(
+            background.assetPath,
+            width: 30,
+            height: 22,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return const SizedBox(width: 30, height: 22);
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            background.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildObstacleMenuItem(TopViewObstacleStyle obstacle) {
+    return Row(
+      children: [
+        Image.asset(
+          obstacle.assetPath,
+          width: 28,
+          height: 28,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(width: 28, height: 28);
+          },
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            obstacle.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2275,6 +2966,36 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   Widget _boardIcon(_BoardItemType item, {bool small = false}) {
     final size = small ? 26.0 : 18.0;
+    if (item == _BoardItemType.player) {
+      final playerSize = small ? size * 2.25 : size * 3.4;
+      return SizedBox(
+        width: playerSize,
+        height: playerSize,
+        child: _topViewCharacterImage(
+          headingDegrees: _initialPlayerHeadingDegrees,
+        ),
+      );
+    }
+
+    if (item == _BoardItemType.obstacle) {
+      final obstacle = topViewObstacleStyleById(_obstacleStyleId);
+      return SizedBox(
+        width: size * 1.5,
+        height: size * 1.5,
+        child: Image.asset(
+          obstacle.assetPath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return _fallbackBoardIcon(item, size: size);
+          },
+        ),
+      );
+    }
+
+    return _fallbackBoardIcon(item, size: size);
+  }
+
+  Widget _fallbackBoardIcon(_BoardItemType item, {required double size}) {
     return Container(
       width: size,
       height: size,
@@ -2296,40 +3017,41 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   }
 
   Widget _boardItemIcon(_BoardItemType item, {required double size}) {
-    final icon = Icon(item.icon, size: size, color: Colors.white);
-    if (item != _BoardItemType.player) {
-      return icon;
-    }
-
-    return Transform.rotate(
-      angle: _degreesToRadians(90 - _initialPlayerHeadingDegrees),
-      child: icon,
-    );
+    return Icon(item.icon, size: size, color: Colors.white);
   }
 
-  Widget _playerPreviewIcon({
+  Widget _topViewCharacterImage({
     required double headingDegrees,
-    required double size,
+    bool withShadow = false,
   }) {
-    return Container(
+    final character = topViewCharacterById(_playerCharacterId);
+
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: _BoardItemType.player.color,
-        borderRadius: BorderRadius.circular(size * 0.32),
-        border: Border.all(color: Colors.white, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: withShadow
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : const [],
       ),
       child: Transform.rotate(
         angle: _degreesToRadians(90 - headingDegrees),
-        child: Icon(
-          _BoardItemType.player.icon,
-          size: size * 0.58,
-          color: Colors.white,
+        child: Image.asset(
+          character.stillAssetPath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              decoration: BoxDecoration(
+                color: _BoardItemType.player.color,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.navigation_rounded, color: Colors.white),
+            );
+          },
         ),
       ),
     );

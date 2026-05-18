@@ -31,6 +31,7 @@ class _RichInstructionEditorState extends State<RichInstructionEditor> {
   late final QuillController _controller;
   late final FocusNode _focusNode;
   late final ScrollController _scrollController;
+  late final ScrollController _toolbarScrollController;
   StreamSubscription<dynamic>? _changesSubscription;
   Timer? _saveDebounce;
   late String _lastSerializedValue;
@@ -45,6 +46,7 @@ class _RichInstructionEditorState extends State<RichInstructionEditor> {
     );
     _focusNode = FocusNode();
     _scrollController = ScrollController();
+    _toolbarScrollController = ScrollController();
     _lastSerializedValue = _serializeDocument(document);
     _listenToDocumentChanges();
   }
@@ -78,6 +80,7 @@ class _RichInstructionEditorState extends State<RichInstructionEditor> {
     _controller.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
+    _toolbarScrollController.dispose();
     super.dispose();
   }
 
@@ -116,33 +119,16 @@ class _RichInstructionEditorState extends State<RichInstructionEditor> {
               color: toolbarColor,
               border: Border(bottom: BorderSide(color: borderColor)),
             ),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              child: QuillSimpleToolbar(
-                controller: _controller,
-                config: QuillSimpleToolbarConfig(
-                  multiRowsDisplay: false,
-                  showDividers: false,
-                  showSearchButton: false,
-                  showSubscript: false,
-                  showSuperscript: false,
-                  showSmallButton: false,
-                  showListCheck: false,
-                  showDirection: false,
-                  showAlignmentButtons: true,
-                  showLineHeightButton: false,
-                  headerStyleType: HeaderStyleType.original,
-                  toolbarSize: 26,
-                  toolbarSectionSpacing: 2,
-                  toolbarRunSpacing: 2,
-                  color: toolbarColor,
-                  decoration: const BoxDecoration(),
-                  embedButtons: FlutterQuillEmbeds.toolbarButtons(
-                    videoButtonOptions: null,
-                    cameraButtonOptions: null,
-                  ),
-                ),
+            child: Scrollbar(
+              controller: _toolbarScrollController,
+              thumbVisibility: true,
+              trackVisibility: true,
+              notificationPredicate: (notification) => notification.depth == 0,
+              child: SingleChildScrollView(
+                controller: _toolbarScrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(6, 6, 6, 12),
+                child: _InstructionToolbar(controller: _controller),
               ),
             ),
           ),
@@ -190,5 +176,66 @@ class _RichInstructionEditorState extends State<RichInstructionEditor> {
 
   String _serializeDocument(Document document) {
     return jsonEncode(document.toDelta().toJson());
+  }
+}
+
+class _InstructionToolbar extends StatelessWidget {
+  final QuillController controller;
+
+  const _InstructionToolbar({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 2,
+      children: [
+        QuillToolbarHistoryButton(isUndo: true, controller: controller),
+        QuillToolbarHistoryButton(isUndo: false, controller: controller),
+        const _ToolbarDivider(),
+        QuillToolbarToggleStyleButton(
+          controller: controller,
+          attribute: Attribute.bold,
+        ),
+        QuillToolbarToggleStyleButton(
+          controller: controller,
+          attribute: Attribute.italic,
+        ),
+        QuillToolbarToggleStyleButton(
+          controller: controller,
+          attribute: Attribute.underline,
+        ),
+        QuillToolbarClearFormatButton(controller: controller),
+        const _ToolbarDivider(),
+        QuillToolbarColorButton(controller: controller, isBackground: false),
+        QuillToolbarColorButton(controller: controller, isBackground: true),
+        const _ToolbarDivider(),
+        QuillToolbarSelectHeaderStyleDropdownButton(controller: controller),
+        const _ToolbarDivider(),
+        QuillToolbarToggleStyleButton(
+          controller: controller,
+          attribute: Attribute.ol,
+        ),
+        QuillToolbarToggleStyleButton(
+          controller: controller,
+          attribute: Attribute.ul,
+        ),
+        QuillToolbarToggleCheckListButton(controller: controller),
+        QuillToolbarIndentButton(controller: controller, isIncrease: false),
+        QuillToolbarIndentButton(controller: controller, isIncrease: true),
+      ],
+    );
+  }
+}
+
+class _ToolbarDivider extends StatelessWidget {
+  const _ToolbarDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 28,
+      child: VerticalDivider(width: 10, thickness: 1),
+    );
   }
 }

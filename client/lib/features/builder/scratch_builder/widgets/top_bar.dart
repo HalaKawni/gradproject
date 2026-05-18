@@ -37,20 +37,15 @@ class TopBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Colors.deepPurple,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.extension_rounded, color: Colors.white),
+          IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back),
           ),
           const SizedBox(width: 12),
           if (playMode)
             Text(
               titleController.text,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              style: Theme.of(context).textTheme.titleLarge,
             )
           else
             SizedBox(
@@ -58,10 +53,14 @@ class TopBar extends StatelessWidget {
               child: TextField(
                 controller: titleController,
                 decoration: const InputDecoration(
-                  labelText: 'Scratch Builder',
-                  isDense: true,
-                  border: OutlineInputBorder(),
+                  hintText: 'New Level',
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
                 ),
+                style: Theme.of(context).textTheme.titleLarge,
+                cursorColor: Colors.black,
+                maxLines: 1,
               ),
             ),
           const Spacer(),
