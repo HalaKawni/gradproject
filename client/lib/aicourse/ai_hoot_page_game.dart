@@ -1,535 +1,497 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-// ─────────────────────────────────────────────
-//  PROPORTIONS (matching screenshot exactly)
-//  Left panel  : 306px  (≈ 8.1cm)
-//  Center panel: flex   (≈ 10.9cm)
-//  Right panel : 393px  (≈ 10.4cm)
-// ─────────────────────────────────────────────
-const double _kLeftWidth  = 390.0;
-const double _kRightWidth = 550.0;
 
-// ─────────────────────────────────────────────
-//  ENTRY POINT
-// ─────────────────────────────────────────────
-class AiHootGamePage extends StatefulWidget {
-  const AiHootGamePage({super.key});
+// Put these uploaded images in your Flutter project at:
+// client/assets/images/
+class CodeMonkeyScratchAssets {
+  static const String owl = 'assets/images/owl.png';
+  static const String starryNight = 'assets/images/starry_night.png';
+  static const String toolDefault = 'assets/images/default.png';
+  static const String toolDrag = 'assets/images/drag.png';
+  static const String toolErase = 'assets/images/erase.png';
+  static const String toolPaint = 'assets/images/paint.png';
+}
+
+/// Drop this file in: client/lib/codemonkey_scratch_page.dart
+/// Then open it with:
+/// Navigator.push(context, MaterialPageRoute(builder: (_) => const CodeMonkeyScratchPage()));
+///
+/// This is a CodeMonkey/Scratch-style builder page that matches the layout in
+/// your screenshot: left lesson panel, middle block workspace, right game stage,
+/// and sprite settings panel. It uses your uploaded PNG assets.
+class CodeMonkeyScratchPage extends StatefulWidget {
+  const CodeMonkeyScratchPage({super.key});
+
   @override
-  State<AiHootGamePage> createState() => _AiHootGamePageState();
+  State<CodeMonkeyScratchPage> createState() => _CodeMonkeyScratchPageState();
 }
 
-// ─────────────────────────────────────────────
-//  BLOCK TYPES
-// ─────────────────────────────────────────────
-enum BlockCategory {
-  movement, events, display, widgets, gameAndSounds,
-  control, logicAndData, variables, objectsFunctions,
-  otherObjectsFunctions, ai,
-}
-
-class BlockDef {
-  final String label;
-  final Color color;
-  final BlockCategory category;
-  final String? param;
-  const BlockDef(this.label, this.color, this.category, {this.param});
-}
-
-// ─────────────────────────────────────────────
-//  OBSTACLE
-// ─────────────────────────────────────────────
-class _Obstacle {
-  double x;
-  final double y, w, h;
-  _Obstacle({required this.x, required this.y, required this.w, required this.h});
-}
-
-// ─────────────────────────────────────────────
-//  PAGE STATE
-// ─────────────────────────────────────────────
-class _AiHootGamePageState extends State<AiHootGamePage>
-    with TickerProviderStateMixin {
-
-  // ── Exercise ──
-  int _exerciseIndex = 0;
-  static const int _totalExercises = 9;
-
-  // ── Blocks ──
-  BlockCategory _selectedCategory = BlockCategory.movement;
-  final List<BlockDef> _workspace = [];
-  static const BlockDef _triggerBlock =
-      BlockDef('On Run', Color(0xFF5BA65B), BlockCategory.events);
-
-  // ── Right panel tab: 0=Sprites,1=Widgets,2=Sounds,3=Game ──
-  int _rightTab = 0;
-
-  // ── Sprite properties checkboxes ──
-  bool _allowGravity        = true;
-  bool _collideWorldBounds  = true;
-  bool _immovable           = false;
-  bool _show                = true;
-  bool _collideOtherSprites = true;
-  bool _draggable           = false;
-
-  // ── Game engine ──
-  bool _gameRunning = false;
-  bool _gameOver    = false;
-  bool _gameWon     = false;
-
-  // Owl
-  double _owlY     = 0.65;
-  double _owlVelY  = 0.0;
-  double _owlScale = 1.0;
-  int    _owlFrame = 0; // 0-4, cycles through sprite sheet
-
-  // Obstacles
-  final List<_Obstacle> _obstacles = [];
-  final Random _rng = Random();
-  Timer?  _gameTimer;
-  Timer?  _animTimer;
-  double  _score         = 0;
-  int     _stepSize      = 1;
-  int     _jumpSize      = 1;
-  double  _obstacleSpeed = 0.004;
-
-  // ─── Block palette ───
-  static final Map<BlockCategory, List<BlockDef>> _palette = {
-    BlockCategory.movement: [
-      BlockDef('Step',  const Color(0xFF6DB84A), BlockCategory.movement, param: '1'),
-      BlockDef('Jump',  const Color(0xFF6DB84A), BlockCategory.movement, param: '1'),
-      BlockDef('Get X', const Color(0xFF6DB84A), BlockCategory.movement),
-      BlockDef('Get Y', const Color(0xFF6DB84A), BlockCategory.movement),
-      BlockDef('Set X', const Color(0xFF6DB84A), BlockCategory.movement, param: '300'),
-    ],
-    BlockCategory.events: [
-      BlockDef('On Run',       const Color(0xFF5BA65B), BlockCategory.events),
-      BlockDef('On Key Press', const Color(0xFF5BA65B), BlockCategory.events),
-    ],
-    BlockCategory.control: [
-      BlockDef('Loop', const Color(0xFFE6A020), BlockCategory.control),
-      BlockDef('If',   const Color(0xFFE6A020), BlockCategory.control),
-      BlockDef('Wait', const Color(0xFFE6A020), BlockCategory.control, param: '1'),
-    ],
-    BlockCategory.ai: [
-      BlockDef('AI Pose: Big',   const Color(0xFF9B59B6), BlockCategory.ai),
-      BlockDef('AI Pose: Small', const Color(0xFF9B59B6), BlockCategory.ai),
-      BlockDef('AI Detect',      const Color(0xFF9B59B6), BlockCategory.ai),
-    ],
-    BlockCategory.gameAndSounds: [
-      BlockDef('Play Sound', const Color(0xFFE74C3C), BlockCategory.gameAndSounds),
-      BlockDef('Game Over',  const Color(0xFFE74C3C), BlockCategory.gameAndSounds),
-    ],
-    BlockCategory.logicAndData: [
-      BlockDef('And', const Color(0xFF3498DB), BlockCategory.logicAndData),
-      BlockDef('Or',  const Color(0xFF3498DB), BlockCategory.logicAndData),
-      BlockDef('Not', const Color(0xFF3498DB), BlockCategory.logicAndData),
-    ],
-    BlockCategory.variables: [
-      BlockDef('Set Var', const Color(0xFFE67E22), BlockCategory.variables, param: 'x'),
-      BlockDef('Get Var', const Color(0xFFE67E22), BlockCategory.variables, param: 'x'),
-    ],
-    BlockCategory.display: [
-      BlockDef('Show', const Color(0xFF1ABC9C), BlockCategory.display),
-      BlockDef('Hide', const Color(0xFF1ABC9C), BlockCategory.display),
-    ],
-    BlockCategory.objectsFunctions: [
-      BlockDef('Move To', const Color(0xFF2980B9), BlockCategory.objectsFunctions),
-      BlockDef('Resize',  const Color(0xFF2980B9), BlockCategory.objectsFunctions, param: '1'),
-    ],
-    BlockCategory.otherObjectsFunctions: [
-      BlockDef('Collide', const Color(0xFF95A5A6), BlockCategory.otherObjectsFunctions),
-    ],
-    BlockCategory.widgets: [
-      BlockDef('Button', const Color(0xFF16A085), BlockCategory.widgets),
-      BlockDef('Slider', const Color(0xFF16A085), BlockCategory.widgets),
-    ],
-  };
-
-  static const Map<BlockCategory, String> _catLabels = {
-    BlockCategory.movement:              'Movement',
-    BlockCategory.events:                'Events',
-    BlockCategory.display:               'Display',
-    BlockCategory.widgets:               'Widgets',
-    BlockCategory.gameAndSounds:         'Game and Sounds',
-    BlockCategory.control:               'Control',
-    BlockCategory.logicAndData:          'Logic and Data',
-    BlockCategory.variables:             'Variables',
-    BlockCategory.objectsFunctions:      "Object's Functions",
-    BlockCategory.otherObjectsFunctions: "Other objects' Functions",
-    BlockCategory.ai:                    'AI',
-  };
-
-  static const List<Map<String, String>> _exercises = [
-    {
-      'title': 'Nice to Meet You, Oliver.',
-      'body':
-        "It's going to be an exciting night! We are going to learn how to build an AI-based game to move Oliver, the owl, between obstacles and get to the end of the route.\n\n"
-        "The player will use different postures to change the size of the owl so it can go below or over tiles.\n"
-        "This is the game you will create at the end of the course:",
-      'hint':
-        'A [Loop] block repeats the blocks inside it over and over for as long as the game runs.\n\n'
-        'The [Step] block makes the Owl move.',
-    },
-    {
-      'title': 'Make Oliver Step!',
-      'body': 'Drag a Step block into the workspace and connect it below the On Run trigger. Press RUN to see Oliver walk forward.',
-      'hint': 'The [Step] block takes a number — try changing it from 1 to 3!',
-    },
-    {
-      'title': 'Add a Loop',
-      'body': 'Wrap your Step block in a Loop so Oliver keeps moving forever.',
-      'hint': 'Drag the [Loop] block from Control, then drag [Step] inside the loop.',
-    },
-    {
-      'title': 'Jumping Over Obstacles',
-      'body': 'Add a Jump block after the Step block. Oliver will now step forward AND jump each tick.',
-      'hint': 'Adjust the [Jump] value to control how high Oliver jumps.',
-    },
-    {
-      'title': 'Intro to AI Poses',
-      'body': 'Use the AI Pose blocks to make Oliver grow BIG or shrink SMALL.',
-      'hint': 'Try placing [AI Pose: Big] and [AI Pose: Small] in sequence.',
-    },
-    {
-      'title': 'Combine Movement + AI',
-      'body': 'Now combine Step, Jump, and AI Pose blocks to guide Oliver through a tricky obstacle course.',
-      'hint': 'Order matters — think about when to grow vs shrink.',
-    },
-    {
-      'title': 'Score Points',
-      'body': "Oliver earns points every time he passes an obstacle. How high can you get his score?",
-      'hint': 'Keep your program looping — more steps = more points!',
-    },
-    {
-      'title': 'Game Over Logic',
-      'body': 'Add a Game Over block inside an If condition so the game ends when Oliver collides with a tile.',
-      'hint': "Use the [Collide] block from Other objects' Functions.",
-    },
-    {
-      'title': 'Final Challenge!',
-      'body': 'Build the complete game: Loop → Step → AI Detect → resize Oliver → avoid all obstacles!',
-      'hint': 'You got this! Combine everything you have learned.',
-    },
+class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
+  static const List<String> _categories = [
+    'Movement',
+    'Events',
+    'Display',
+    'Widgets',
+    'Game and Sounds',
+    'Control',
+    'Logic and Data',
+    'Variables',
+    "Object's Functions",
+    "Other objects' Functions",
+    'AI',
   ];
 
-  // ─────────────────────────────────────────────
-  //  LIFECYCLE
-  // ─────────────────────────────────────────────
-  @override
-  void dispose() {
-    _gameTimer?.cancel();
-    _animTimer?.cancel();
-    super.dispose();
-  }
+  String _selectedCategory = 'Movement';
+  bool _isRunning = false;
 
-  // ─────────────────────────────────────────────
-  //  GAME ENGINE
-  // ─────────────────────────────────────────────
-  void _runGame() {
-    _gameTimer?.cancel();
-    _animTimer?.cancel();
-    setState(() {
-      _gameRunning = true;
-      _gameOver    = false;
-      _gameWon     = false;
-      _owlY        = 0.65;
-      _owlVelY     = 0.0;
-      _owlScale    = 1.0;
-      _owlFrame    = 0;
-      _score       = 0;
-      _obstacles.clear();
-      _parseBlocks();
-    });
-    for (int i = 0; i < 4; i++) _spawnObstacle(baseX: 0.55 + i * 0.3);
-    _animTimer = Timer.periodic(const Duration(milliseconds: 120), (_) {
-      if (_gameRunning) setState(() => _owlFrame = (_owlFrame + 1) % 5);
-    });
-    _gameTimer = Timer.periodic(const Duration(milliseconds: 30), _tick);
-  }
+  // Stage logical coordinates. These are mapped to pixels in the stage widget.
+  double _owlX = 36;
+  double _owlY = 315;
 
-  void _parseBlocks() {
-    _stepSize      = 1;
-    _jumpSize      = 1;
-    _obstacleSpeed = 0.004;
-    for (final b in _workspace) {
-      if (b.label == 'Step' && b.param != null) {
-        _stepSize      = int.tryParse(b.param!) ?? 1;
-        _obstacleSpeed = 0.003 + _stepSize * 0.001;
-      }
-      if (b.label == 'Jump'          && b.param != null) _jumpSize  = int.tryParse(b.param!) ?? 1;
-      if (b.label == 'AI Pose: Big')   _owlScale = 1.6;
-      if (b.label == 'AI Pose: Small') _owlScale = 0.6;
+  // owl.png is a horizontal spritesheet with 5 walking frames.
+  // This index chooses which frame is shown on the stage.
+  int _owlFrame = 0;
+
+  final List<_ScratchBlockData> _workspaceBlocks = [
+    _ScratchBlockData.event('On Run'),
+  ];
+
+  List<_ScratchBlockData> get _paletteBlocks {
+    switch (_selectedCategory) {
+      case 'Events':
+        return [_ScratchBlockData.event('On Run'), _ScratchBlockData.event('When Clicked')];
+      case 'Control':
+        return [_ScratchBlockData.control('Loop'), _ScratchBlockData.control('Wait', value: '1')];
+      case 'Variables':
+        return [_ScratchBlockData.variable('Get X'), _ScratchBlockData.variable('Get Y'), _ScratchBlockData.variable('Set X', value: '300')];
+      case 'Display':
+        return [_ScratchBlockData.display('Say', value: 'Hello'), _ScratchBlockData.display('Hide'), _ScratchBlockData.display('Show')];
+      case 'AI':
+        return [_ScratchBlockData.ai('Think'), _ScratchBlockData.ai('Detect')];
+      default:
+        return [
+          _ScratchBlockData.movement('Step', value: '1'),
+          _ScratchBlockData.movement('Jump', value: '1'),
+          _ScratchBlockData.variable('Get X'),
+          _ScratchBlockData.variable('Get Y'),
+          _ScratchBlockData.movement('Set X', value: '300'),
+        ];
     }
   }
 
-  void _spawnObstacle({double? baseX}) {
-    final x    = baseX ?? 1.1;
-    final tall = _rng.nextBool();
-    final h    = tall ? 0.38 : 0.18;
-    final y    = tall ? _rng.nextDouble() * 0.25 : 0.55 + _rng.nextDouble() * 0.25;
-    _obstacles.add(_Obstacle(x: x, y: y, w: 0.06, h: h));
+  Future<void> _runProgram() async {
+    if (_isRunning) return;
+    setState(() => _isRunning = true);
+
+    // Start from the screenshot-like bottom-left position.
+    setState(() {
+      _owlX = 36;
+      _owlY = 315;
+      _owlFrame = 0;
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+
+    for (final block in _workspaceBlocks) {
+      if (!_isRunning) break;
+      await _executeBlock(block);
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    }
+
+    if (mounted) {
+      setState(() {
+        _isRunning = false;
+        _owlFrame = 0;
+      });
+    }
   }
 
-  void _tick(Timer t) {
-    if (!_gameRunning) return;
+  Future<void> _walkOneStep({required double distance}) async {
+    const frameCount = 5;
+    const ticks = 10;
+    const tickDuration = Duration(milliseconds: 55);
+
+    final double dx = distance / ticks;
+
+    for (var tick = 0; tick < ticks; tick++) {
+      if (!mounted || !_isRunning) return;
+
+      setState(() {
+        _owlX += dx;
+        _owlFrame = tick % frameCount;
+      });
+
+      await Future<void>.delayed(tickDuration);
+    }
+
+    if (mounted) {
+      setState(() => _owlFrame = 0);
+    }
+  }
+
+  Future<void> _executeBlock(_ScratchBlockData block) async {
+    switch (block.label) {
+      case 'Step':
+        // CodeMonkey-style walking:
+        // one Step block moves the owl a small distance, while owl.png cycles
+        // through its 5 walking frames. The position and frame change together.
+        await _walkOneStep(distance: 62);
+        break;
+      case 'Jump':
+        setState(() => _owlY -= 70);
+        await Future<void>.delayed(const Duration(milliseconds: 260));
+        setState(() => _owlY += 70);
+        await Future<void>.delayed(const Duration(milliseconds: 260));
+        break;
+      case 'Set X':
+        setState(() => _owlX = double.tryParse(block.value ?? '300') ?? 300);
+        await Future<void>.delayed(const Duration(milliseconds: 430));
+        break;
+      case 'Wait':
+        await Future<void>.delayed(Duration(milliseconds: ((double.tryParse(block.value ?? '1') ?? 1) * 1000).round()));
+        break;
+      default:
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+    }
+  }
+
+  void _addBlock(_ScratchBlockData block) {
+    if (block.kind == _ScratchBlockKind.event) {
+      setState(() {
+        _workspaceBlocks
+          ..clear()
+          ..add(block);
+      });
+      return;
+    }
+
+    setState(() => _workspaceBlocks.add(block));
+  }
+
+  void _removeBlock(int index) {
+    if (index == 0) return;
+    setState(() => _workspaceBlocks.removeAt(index));
+  }
+
+  void _clearProgram() {
     setState(() {
-      for (final o in _obstacles) o.x -= _obstacleSpeed * _stepSize;
-      _obstacles.removeWhere((o) => o.x < -0.1);
-      if (_obstacles.isEmpty || _obstacles.last.x < 0.72) _spawnObstacle();
-
-      final hasJump = _workspace.any((b) => b.label == 'Jump');
-      if (hasJump) {
-        _owlVelY += 0.0018 * _jumpSize;
-        _owlY    += _owlVelY;
-        if (_owlY > 0.78) { _owlY = 0.78; _owlVelY = -0.024 * _jumpSize; }
-        if (_owlY < 0.08) { _owlY = 0.08; _owlVelY = 0; }
-      }
-
-      _score += _obstacleSpeed * 10;
-
-      const double owlNormW = 0.055;
-      final  double owlNormH = 0.12 * _owlScale;
-      const  double owlNormX = 0.12;
-      for (final o in _obstacles) {
-        if (owlNormX + owlNormW > o.x &&
-            owlNormX            < o.x + o.w &&
-            _owlY  + owlNormH   > o.y &&
-            _owlY               < o.y + o.h) {
-          _gameRunning = false;
-          _gameOver    = true;
-          _animTimer?.cancel();
-          t.cancel();
-          return;
-        }
-      }
-      if (_score >= 200) {
-        _gameRunning = false;
-        _gameWon     = true;
-        _animTimer?.cancel();
-        t.cancel();
-      }
+      _workspaceBlocks
+        ..clear()
+        ..add(_ScratchBlockData.event('On Run'));
+      _owlX = 36;
+      _owlY = 315;
+      _owlFrame = 0;
     });
   }
 
-  void _stopGame() {
-    _gameTimer?.cancel();
-    _animTimer?.cancel();
-    setState(() { _gameRunning = false; });
-  }
-
-  // ─────────────────────────────────────────────
-  //  BUILD
-  // ─────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE8EAF0),
+      backgroundColor: const Color(0xFFE9EEF2),
       body: Column(
         children: [
-          _buildTopBar(),
+          const _TopBar(),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(width: _kLeftWidth,  child: _buildLeftPanel()),
-                Expanded(child: _buildCenterPanel()),
-                SizedBox(width: _kRightWidth, child: _buildRightPanel()),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final needsHorizontalScroll = constraints.maxWidth < 1180;
+                final width = needsHorizontalScroll ? 1380.0 : constraints.maxWidth;
+                final content = SizedBox(
+                  width: width,
+                  height: constraints.maxHeight,
+                  child: Row(
+                    children: [
+                      const Expanded(flex: 28, child: _LessonPanel()),
+                      Container(width: 2, color: const Color(0xFFD0D0D0)),
+                      Expanded(
+                        flex: 38,
+                        child: _BlocksWorkspace(
+                          selectedCategory: _selectedCategory,
+                          categories: _categories,
+                          paletteBlocks: _paletteBlocks,
+                          workspaceBlocks: _workspaceBlocks,
+                          isRunning: _isRunning,
+                          onRun: _runProgram,
+                          onClear: _clearProgram,
+                          onSelectCategory: (category) {
+                            setState(() => _selectedCategory = category);
+                          },
+                          onAddBlock: _addBlock,
+                          onRemoveBlock: _removeBlock,
+                        ),
+                      ),
+                      Container(width: 2, color: const Color(0xFF9A9A9A)),
+                      Expanded(
+                        flex: 34,
+                        child: _GameAndSpritePanel(
+                          owlX: _owlX,
+                          owlY: _owlY,
+                          owlFrame: _owlFrame,
+                          isRunning: _isRunning,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (!needsHorizontalScroll) return content;
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: content,
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  // ── TOP BAR ──
-  Widget _buildTopBar() {
+class _TopBar extends StatelessWidget {
+  const _TopBar();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      color: const Color(0xFF2B1D0E),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 59,
+      color: const Color(0xFF3B2118),
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
-          const Icon(Icons.code, color: Color(0xFFE8A020), size: 22),
+          Container(
+            width: 52,
+            height: 42,
+            decoration: BoxDecoration(
+              color: const Color(0xFFA36A35),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF140B07), width: 2),
+            ),
+            alignment: Alignment.center,
+            child: const Text('🐵', style: TextStyle(fontSize: 27)),
+          ),
           const SizedBox(width: 8),
-          Text('AI IS A HOOT: EXERCISE #${_exerciseIndex + 1}',
-              style: GoogleFonts.montserrat(
-                  color: Colors.white, fontSize: 13,
-                  fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+          const Text(
+            'CODE',
+            style: TextStyle(
+              color: Color(0xFFFFC12F),
+              fontWeight: FontWeight.w900,
+              fontSize: 34,
+              letterSpacing: 1.3,
+              height: 1,
+            ),
+          ),
+          const Text(
+            'MONKEY',
+            style: TextStyle(
+              color: Color(0xFFC7925E),
+              fontWeight: FontWeight.w900,
+              fontSize: 34,
+              letterSpacing: 1.3,
+              height: 1,
+            ),
+          ),
+          const SizedBox(width: 24),
+          const Text(
+            'AI IS A HOOT: EXERCISE #1',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+              letterSpacing: .4,
+            ),
+          ),
           const Spacer(),
-          const Icon(Icons.chat_bubble_outline, color: Colors.white54, size: 20),
-          const SizedBox(width: 16),
-          const Icon(Icons.account_circle, color: Colors.white54, size: 24),
-          const SizedBox(width: 16),
-          const Icon(Icons.menu, color: Colors.white54, size: 22),
+          const Icon(Icons.article, color: Colors.white, size: 26),
+          const SizedBox(width: 30),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Color(0xFF2E7794),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: const Text('🐧', style: TextStyle(fontSize: 25)),
+          ),
+          const SizedBox(width: 28),
+          const Icon(Icons.menu, color: Color(0xFFFFBC1D), size: 34),
         ],
       ),
     );
   }
+}
 
-  // ── LEFT PANEL (306px) ──
-  Widget _buildLeftPanel() {
-    final ex = _exercises[_exerciseIndex];
+class _LessonPanel extends StatelessWidget {
+  const _LessonPanel();
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       color: Colors.white,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Exercise nav
           Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            height: 94,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 51),
             child: Row(
               children: [
-                _NavArrow(
-                  icon: Icons.arrow_back_ios,
-                  onTap: _exerciseIndex > 0 ? () => setState(() => _exerciseIndex--) : null,
-                ),
-                const SizedBox(width: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFFCCCCCC)),
-                    borderRadius: BorderRadius.circular(5),
+                Expanded(
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border.all(color: const Color(0xFFDDDDDD)),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 25,
+                          child: Icon(Icons.arrow_left, color: Colors.amber.shade200),
+                        ),
+                        Container(width: 1, color: const Color(0xFFE4E4E4)),
+                        const Expanded(
+                          child: Center(
+                            child: Text(
+                              'Exercise 1 of 9',
+                              style: TextStyle(fontSize: 16, color: Color(0xFF203246)),
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down, color: Color(0xFF26A766), size: 20),
+                        Container(width: 1, color: const Color(0xFFE4E4E4)),
+                        SizedBox(
+                          width: 25,
+                          child: Icon(Icons.arrow_right, color: Colors.amber.shade600),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Exercise ${_exerciseIndex + 1} of $_totalExercises',
-                          style: GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 3),
-                      const Icon(Icons.arrow_drop_down, size: 16),
-                    ],
-                  ),
                 ),
-                const SizedBox(width: 4),
-                _NavArrow(
-                  icon: Icons.arrow_forward_ios,
-                  onTap: _exerciseIndex < _totalExercises - 1
-                      ? () => setState(() => _exerciseIndex++) : null,
-                ),
-                const SizedBox(width: 8),
-                _IconBtn(icon: Icons.replay,  color: const Color(0xFFF5A623), onTap: _stopGame),
-                const SizedBox(width: 5),
-                _IconBtn(icon: Icons.refresh, color: const Color(0xFFF5A623),
-                    onTap: () => setState(() => _workspace.clear())),
+                const SizedBox(width: 58),
+                const _SquareIconButton(icon: Icons.volume_up),
+                const SizedBox(width: 16),
+                const _SquareIconButton(icon: Icons.cached),
               ],
             ),
           ),
-
-          // Show solution bar
           Container(
-            width: double.infinity,
-            color: const Color(0xFFE8F5E9),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            child: Row(
+            height: 38,
+            color: const Color(0xFFD9EEF8),
+            alignment: Alignment.center,
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 15),
-                const SizedBox(width: 6),
-                Text('Show my previous solution',
-                    style: GoogleFonts.nunito(
-                        fontSize: 11.5, fontWeight: FontWeight.w700,
-                        color: const Color(0xFF4CAF50))),
+                Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
+                SizedBox(width: 7),
+                Text(
+                  'Show my previous solution',
+                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 16),
+                ),
               ],
             ),
           ),
-
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(29, 26, 34, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.gps_fixed, color: Color(0xFF4CAF50), size: 15),
-                      const SizedBox(width: 5),
-                      Text('OVERVIEW',
-                          style: GoogleFonts.montserrat(
-                              fontSize: 11.5, fontWeight: FontWeight.w800,
-                              color: const Color(0xFF4CAF50))),
-                    ],
-                  ),
-                  const Divider(color: Color(0xFF4CAF50), thickness: 1),
-                  const SizedBox(height: 4),
-                  Text(ex['title']!,
-                      style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.article_outlined, size: 12, color: Color(0xFF4CAF50)),
-                        label: Text('Listen',
-                            style: GoogleFonts.nunito(fontSize: 11.5, color: const Color(0xFF4CAF50))),
-                        style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero, minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(ex['body']!,
-                      style: GoogleFonts.nunito(
-                          fontSize: 12, color: const Color(0xFF333333), height: 1.55)),
-                  const SizedBox(height: 12),
-                  // Preview thumbnail
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 128,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Image.asset('assets/images/starry_night.png',
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  CustomPaint(painter: _StarryPainter())),
-                          const Positioned(
-                            top: 5, left: 5,
-                            child: _TimerBadge(label: '00:32'),
-                          ),
-                          const Positioned(
-                            top: 5, right: 5,
-                            child: _ResetBadge(),
-                          ),
-                          Positioned(
-                            left: 70, bottom: 18,
-                            child: Container(width: 16, height: 56,
-                                color: const Color(0xFFB94040)),
-                          ),
-                          Positioned(
-                            right: 24, bottom: 8,
-                            child: Image.asset('assets/images/owl.png',
-                                width: 32,
-                                errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.flutter_dash, size: 32, color: Colors.brown)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9F9F9),
-                      border: Border.all(color: const Color(0xFFEEEEEE)),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: ex['hint']!.split('\n\n').map((line) =>
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: RichText(text: _parseHint(line)),
+                      const Icon(Icons.track_changes, size: 38, color: Color(0xFF2E2722)),
+                      const SizedBox(width: 12),
+                      const Text(
+                        'OVERVIEW',
+                        style: TextStyle(
+                          color: Color(0xFF78AD50),
+                          fontSize: 25,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.2,
                         ),
-                      ).toList(),
+                      ),
+                      const Spacer(),
+                      Container(height: 1.4, width: 130, color: const Color(0xFF78AD50)),
+                    ],
+                  ),
+                  const SizedBox(height: 27),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Nice to Meet You, Oliver.',
+                          style: TextStyle(
+                            color: Color(0xFF101926),
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 16)),
+                      const SizedBox(width: 5),
+                      Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    "It's going to be an exciting night! We are going to learn\n"
+                    'how to build an AI-based game to move Oliver, the owl,\n'
+                    'between obstacles and get to the end of the route.\n\n'
+                    'The player will use different postures to change the size\n'
+                    'of the owl so it can go below or over tiles.\n'
+                    'This is the game you will create at the end of course:',
+                    style: TextStyle(fontSize: 16, height: 1.42, color: Color(0xFF0D1B2A)),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    height: 285,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF24343D),
+                      borderRadius: BorderRadius.circular(3),
+                      border: Border.all(color: const Color(0xFFE1E1E1), width: 4),
+                    ),
+                    child: Stack(
+                      children: [
+                        const Positioned.fill(child: _StarryNightBackground(compact: true)),
+                        Positioned(
+                          left: 118,
+                          top: 83,
+                          child: Container(
+                            width: 90,
+                            height: 96,
+                            color: const Color(0xFFB24432),
+                            child: CustomPaint(painter: _BrickPainter()),
+                          ),
+                        ),
+                        Positioned(
+                          right: 10,
+                          bottom: 6,
+                          child: const _OwlSpriteFrame(frame: 0, height: 58),
+                        ),
+                        const Positioned(
+                          left: 23,
+                          top: 92,
+                          child: Text('00:32', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  RichText(
+                    text: const TextSpan(
+                      style: TextStyle(fontSize: 16, height: 1.42, color: Color(0xFF0D1B2A)),
+                      children: [
+                        TextSpan(text: 'A '),
+                        WidgetSpan(child: _InlineCodeBlock('Loop')),
+                        TextSpan(text: ' block repeats the blocks inside it over and over\nfor as long as the game runs.\n\n'),
+                        TextSpan(text: 'The '),
+                        WidgetSpan(child: _InlineCodeBlock('Step')),
+                        TextSpan(text: ' block makes the Owl move.'),
+                      ],
                     ),
                   ),
                 ],
@@ -540,678 +502,854 @@ class _AiHootGamePageState extends State<AiHootGamePage>
       ),
     );
   }
+}
 
-  TextSpan _parseHint(String text) {
-    final spans = <InlineSpan>[];
-    final regex = RegExp(r'\[([^\]]+)\]');
-    int last = 0;
-    for (final m in regex.allMatches(text)) {
-      if (m.start > last) {
-        spans.add(TextSpan(
-          text: text.substring(last, m.start),
-          style: GoogleFonts.nunito(fontSize: 11.5, color: const Color(0xFF555555), height: 1.5),
-        ));
-      }
-      final word = m.group(1)!;
-      final isControl = word == 'Loop' || word == 'If';
-      spans.add(WidgetSpan(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-          decoration: BoxDecoration(
-            color: isControl ? const Color(0xFFE6A020) : const Color(0xFF6DB84A),
-            borderRadius: BorderRadius.circular(3),
-          ),
-          child: Text(word,
-              style: GoogleFonts.nunito(
-                  fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.white)),
-        ),
-      ));
-      last = m.end;
-    }
-    if (last < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(last),
-        style: GoogleFonts.nunito(fontSize: 11.5, color: const Color(0xFF555555), height: 1.5),
-      ));
-    }
-    return TextSpan(children: spans);
+
+class _StarryNightBackground extends StatelessWidget {
+  const _StarryNightBackground({this.compact = false});
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      CodeMonkeyScratchAssets.starryNight,
+      fit: BoxFit.none,
+      repeat: ImageRepeat.repeat,
+      alignment: Alignment.topLeft,
+      errorBuilder: (context, error, stackTrace) {
+        return CustomPaint(painter: _StarFieldPainter(compact: compact));
+      },
+    );
   }
+}
 
-  // ── CENTER PANEL (flex) ──
-  Widget _buildCenterPanel() {
+class _OwlSpriteFrame extends StatelessWidget {
+  const _OwlSpriteFrame({required this.frame, required this.height});
+
+  final int frame;
+  final double height;
+
+  static const int _frameCount = 5;
+  static const double _sheetWidth = 225;
+  static const double _sheetHeight = 68;
+  static const double _frameWidth = _sheetWidth / _frameCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final safeFrame = frame.clamp(0, _frameCount - 1);
+    final frameWidth = height * (_frameWidth / _sheetHeight);
+
+    return SizedBox(
+      width: frameWidth,
+      height: height,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment(-1.0 + (2.0 * safeFrame / (_frameCount - 1)), 0),
+          widthFactor: 1 / _frameCount,
+          child: Image.asset(
+            CodeMonkeyScratchAssets.owl,
+            height: height,
+            fit: BoxFit.fitHeight,
+            errorBuilder: (context, error, stackTrace) {
+              return Text('🦉', style: TextStyle(fontSize: height * .78));
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SquareIconButton extends StatelessWidget {
+  const _SquareIconButton({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFF0F0ED),
+      width: 51,
+      height: 51,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5B719),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(offset: Offset(0, 3), color: Color(0xFFCF9212))],
+      ),
+      child: Icon(icon, color: Colors.white, size: 30),
+    );
+  }
+}
+
+class _InlineCodeBlock extends StatelessWidget {
+  const _InlineCodeBlock(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: const Color(0xFF68A84D),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+    );
+  }
+}
+
+class _BlocksWorkspace extends StatelessWidget {
+  const _BlocksWorkspace({
+    required this.selectedCategory,
+    required this.categories,
+    required this.paletteBlocks,
+    required this.workspaceBlocks,
+    required this.isRunning,
+    required this.onRun,
+    required this.onClear,
+    required this.onSelectCategory,
+    required this.onAddBlock,
+    required this.onRemoveBlock,
+  });
+
+  final String selectedCategory;
+  final List<String> categories;
+  final List<_ScratchBlockData> paletteBlocks;
+  final List<_ScratchBlockData> workspaceBlocks;
+  final bool isRunning;
+  final VoidCallback onRun;
+  final VoidCallback onClear;
+  final ValueChanged<String> onSelectCategory;
+  final ValueChanged<_ScratchBlockData> onAddBlock;
+  final ValueChanged<int> onRemoveBlock;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFE8F0F5),
       child: Column(
         children: [
-          // Oliver header + RUN
           Container(
-            height: 52,
+            height: 70,
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.fromLTRB(16, 0, 11, 0),
             child: Row(
               children: [
-                Image.asset('assets/images/owl.png', width: 26,
-                    errorBuilder: (_, __, ___) =>
-                        const Icon(Icons.flutter_dash, size: 26, color: Colors.brown)),
-                const SizedBox(width: 8),
-                Text('Oliver',
-                    style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w800)),
+                const _OwlSpriteFrame(frame: 0, height: 42),
+                const SizedBox(width: 10),
+                const Text('Oliver', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF1C2530))),
                 const Spacer(),
                 ElevatedButton.icon(
-                  onPressed: _gameRunning ? _stopGame : _runGame,
+                  onPressed: isRunning ? null : onRun,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _gameRunning
-                        ? const Color(0xFFE74C3C) : const Color(0xFF4CAF50),
+                    backgroundColor: const Color(0xFF46C77E),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
                   ),
-                  icon: Icon(_gameRunning ? Icons.stop : Icons.play_arrow, size: 19),
-                  label: Text(_gameRunning ? 'STOP' : 'RUN!',
-                      style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 13)),
+                  icon: Icon(isRunning ? Icons.hourglass_bottom : Icons.play_circle_fill, size: 31),
+                  label: Text(isRunning ? 'RUNNING' : 'RUN!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
           ),
-
-          // Workspace area
           Expanded(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8F9FA),
-                border: Border.all(color: const Color(0xFFDDDDDD)),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-                    child: _BlockWidget(block: _triggerBlock),
-                  ),
-                  Expanded(
-                    child: ReorderableListView(
-                      padding: const EdgeInsets.fromLTRB(14, 4, 14, 8),
-                      onReorder: (oldIdx, newIdx) {
-                        setState(() {
-                          if (newIdx > oldIdx) newIdx--;
-                          final item = _workspace.removeAt(oldIdx);
-                          _workspace.insert(newIdx, item);
-                        });
-                      },
-                      children: _workspace.asMap().entries.map((e) =>
-                        Padding(
-                          key: ValueKey(e.key),
-                          padding: const EdgeInsets.only(bottom: 5),
-                          child: Row(
+            child: DragTarget<_ScratchBlockData>(
+              onAccept: onAddBlock,
+              builder: (context, candidateData, rejectedData) {
+                return Container(
+                  width: double.infinity,
+                  color: candidateData.isEmpty ? const Color(0xFFEAF2F7) : const Color(0xFFDDEFFF),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: 11,
+                        left: 15,
+                        right: 15,
+                        bottom: 12,
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            alignment: WrapAlignment.start,
+                            crossAxisAlignment: WrapCrossAlignment.start,
+                            spacing: 10,
+                            runSpacing: 9,
                             children: [
-                              const SizedBox(width: 16),
-                              _BlockWidget(block: e.value),
-                              const SizedBox(width: 6),
-                              GestureDetector(
-                                onTap: () => setState(() => _workspace.removeAt(e.key)),
-                                child: const Icon(Icons.close, size: 14, color: Colors.black38),
-                              ),
+                              for (var i = 0; i < workspaceBlocks.length; i++)
+                                GestureDetector(
+                                  onDoubleTap: () => onRemoveBlock(i),
+                                  child: _ScratchBlock(block: workspaceBlocks[i], large: true),
+                                ),
+                              if (workspaceBlocks.length == 1)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 50, left: 15),
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(.45),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: Colors.white),
+                                  ),
+                                  child: const Text(
+                                    'Drag blocks from the palette here.\nDouble click a block to remove it.',
+                                    style: TextStyle(color: Color(0xFF7D8990), fontSize: 14),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
-                      ).toList(),
+                      ),
+                      Positioned(
+                        top: 58,
+                        right: 56,
+                        child: IconButton(
+                          onPressed: onClear,
+                          tooltip: 'Clear blocks',
+                          icon: const Icon(Icons.delete, color: Color(0xFFC9CFD2), size: 66),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            height: 104,
+            color: const Color(0xFFD9D9D9),
+            padding: const EdgeInsets.fromLTRB(8, 7, 7, 7),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: 61,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: paletteBlocks.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final block = paletteBlocks[index];
+                      return Draggable<_ScratchBlockData>(
+                        data: block,
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: Transform.scale(scale: 1.04, child: _ScratchBlock(block: block, large: true)),
+                        ),
+                        childWhenDragging: Opacity(opacity: .35, child: _ScratchBlock(block: block, large: true)),
+                        child: _ScratchBlock(block: block, large: true),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 21,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFC8C8C8),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 132),
+                      Expanded(
+                        flex: 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE2E2E2),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(8, 8, 10, 18),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 9,
+              children: [
+                for (final category in categories)
+                  _CategoryButton(
+                    label: category,
+                    color: _categoryColor(category),
+                    selected: selectedCategory == category,
+                    onTap: () => onSelectCategory(category),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryButton extends StatelessWidget {
+  const _CategoryButton({
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color, width: 2),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? const Color(0xFF17202A) : Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScratchBlock extends StatelessWidget {
+  const _ScratchBlock({required this.block, this.large = false});
+
+  final _ScratchBlockData block;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = large ? 48.0 : 35.0;
+    return SizedBox(
+      height: height,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: height,
+            padding: EdgeInsets.fromLTRB(large ? 15 : 10, 0, block.value == null ? 15 : 10, 0),
+            decoration: BoxDecoration(
+              color: block.color,
+              borderRadius: BorderRadius.circular(9),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 2))],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  block.label,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: large ? 16 : 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (block.value != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: large ? 31 : 24,
+                    height: large ? 31 : 24,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFECE5D8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 1))],
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      block.value!,
+                      style: TextStyle(
+                        color: const Color(0xFF392C22),
+                        fontSize: large ? 15 : 11,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-
-          // Pinned movement blocks row
-          Container(
-            height: 52,
-            color: const Color(0xFFF0F0ED),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              child: Row(
-                children: (_palette[BlockCategory.movement] ?? []).map((b) =>
-                  Padding(
-                    padding: const EdgeInsets.only(right: 7),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _workspace.add(b)),
-                      child: _BlockWidget(block: b),
-                    ),
-                  ),
-                ).toList(),
+          if (block.kind != _ScratchBlockKind.event)
+            Positioned(
+              left: -9,
+              top: height / 2 - 8,
+              child: Container(
+                width: 17,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: block.color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
             ),
-          ),
-
-          // Category tabs
-          Container(
-            height: 38,
-            color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
-              child: Row(
-                children: BlockCategory.values.map((cat) {
-                  final selected = cat == _selectedCategory;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 5),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _selectedCategory = cat),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: selected ? _catColor(cat) : Colors.white,
-                          border: Border.all(
-                              color: selected ? _catColor(cat) : const Color(0xFFCCCCCC)),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(_catLabels[cat]!,
-                            style: GoogleFonts.nunito(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: selected ? Colors.white : const Color(0xFF555555))),
-                      ),
-                    ),
-                  );
-                }).toList(),
+          if (block.kind != _ScratchBlockKind.event)
+            Positioned(
+              right: -6,
+              top: height / 2 - 8,
+              child: Container(
+                width: 15,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: block.color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
             ),
-          ),
-
-          // Palette blocks
-          Container(
-            height: 62,
-            color: const Color(0xFFF5F5F5),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-              child: Row(
-                children: (_palette[_selectedCategory] ?? []).map((b) =>
-                  Padding(
-                    padding: const EdgeInsets.only(right: 7),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _workspace.add(b)),
-                      child: _BlockWidget(block: b),
-                    ),
-                  ),
-                ).toList(),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
+}
 
-  Color _catColor(BlockCategory cat) {
-    switch (cat) {
-      case BlockCategory.movement:              return const Color(0xFF6DB84A);
-      case BlockCategory.events:                return const Color(0xFF5BA65B);
-      case BlockCategory.display:               return const Color(0xFF1ABC9C);
-      case BlockCategory.widgets:               return const Color(0xFF16A085);
-      case BlockCategory.gameAndSounds:         return const Color(0xFFE74C3C);
-      case BlockCategory.control:               return const Color(0xFFE6A020);
-      case BlockCategory.logicAndData:          return const Color(0xFF3498DB);
-      case BlockCategory.variables:             return const Color(0xFFE67E22);
-      case BlockCategory.objectsFunctions:      return const Color(0xFF2980B9);
-      case BlockCategory.otherObjectsFunctions: return const Color(0xFF95A5A6);
-      case BlockCategory.ai:                    return const Color(0xFF9B59B6);
-    }
-  }
+class _GameAndSpritePanel extends StatelessWidget {
+  const _GameAndSpritePanel({
+    required this.owlX,
+    required this.owlY,
+    required this.owlFrame,
+    required this.isRunning,
+  });
 
-  // ── RIGHT PANEL (393px) ──
-  Widget _buildRightPanel() {
-    return Container(
-      color: const Color(0xFFEEEEEE),
-      child: Column(
-        children: [
-          // Tool icons bar (top-right of canvas)
-          Container(
-            height: 38,
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: const [
-                Icon(Icons.near_me,      size: 17, color: Colors.black54),
-                SizedBox(width: 10),
-                Icon(Icons.open_with,    size: 17, color: Colors.black54),
-                SizedBox(width: 10),
-                Icon(Icons.format_paint, size: 17, color: Colors.black54),
-                SizedBox(width: 10),
-                Icon(Icons.content_cut,  size: 17, color: Colors.black54),
-              ],
-            ),
-          ),
+  final double owlX;
+  final double owlY;
+  final int owlFrame;
+  final bool isRunning;
 
-          // Canvas
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Image.asset('assets/images/starry_night.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          CustomPaint(painter: _StarryPainter(), size: Size.infinite)),
-                ),
-
-                // Obstacles
-                if (_gameRunning || _gameOver || _gameWon)
-                  ..._obstacles.map((o) => LayoutBuilder(
-                    builder: (ctx, c) => Stack(children: [
-                      Positioned(
-                        left:   o.x * c.maxWidth,
-                        top:    o.y * c.maxHeight,
-                        width:  o.w * c.maxWidth,
-                        height: o.h * c.maxHeight,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFB94040),
-                            borderRadius: BorderRadius.circular(2),
-                            border: Border.all(color: Colors.black26),
-                          ),
-                        ),
-                      ),
-                    ]),
-                  )),
-
-                // Owl (animated sprite sheet)
-                Positioned.fill(
-                  child: LayoutBuilder(builder: (ctx, c) {
-                    final owlSize = 52.0 * _owlScale;
-                    return Stack(children: [
-                      Positioned(
-                        left: 0.12 * c.maxWidth - owlSize / 2,
-                        top:  _owlY * c.maxHeight - owlSize / 2,
-                        width: owlSize, height: owlSize,
-                        child: ClipRect(
-                          child: Align(
-                            alignment: Alignment(-1.0 + (_owlFrame * 0.5), 0),
-                            widthFactor: 0.2,
-                            child: Image.asset(
-                              'assets/images/owl.png',
-                              fit: BoxFit.contain,
-                              errorBuilder: (_, __, ___) =>
-                                  Icon(Icons.flutter_dash, size: owlSize, color: Colors.brown),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ]);
-                  }),
-                ),
-
-                // Score
-                if (_gameRunning)
-                  Positioned(
-                    top: 7, left: 7,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: Colors.black54, borderRadius: BorderRadius.circular(10)),
-                      child: Text('Score: ${_score.toInt()}',
-                          style: GoogleFonts.nunito(
-                              fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                    ),
-                  ),
-
-                // Overlay
-                if (_gameOver || _gameWon)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black54,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_gameWon ? '🎉 You Win!' : '💥 Game Over',
-                                style: GoogleFonts.nunito(
-                                    fontSize: 24, fontWeight: FontWeight.w900,
-                                    color: _gameWon
-                                        ? const Color(0xFFFFD700) : Colors.redAccent)),
-                            const SizedBox(height: 6),
-                            Text('Score: ${_score.toInt()}',
-                                style: GoogleFonts.nunito(fontSize: 15, color: Colors.white)),
-                            const SizedBox(height: 12),
-                            ElevatedButton(
-                              onPressed: _runGame,
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4CAF50)),
-                              child: Text('Try Again',
-                                  style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-
-          // Sprites / Widgets / Sounds / Game tabs
-          Container(
-            height: 32,
-            color: Colors.white,
-            child: Row(
-              children: [
-                _buildRightTabBtn('Sprites', 0),
-                _buildRightTabBtn('Widgets', 1),
-                _buildRightTabBtn('Sounds',  2),
-                _buildRightTabBtn('Game',    3),
-              ],
-            ),
-          ),
-
-          // Properties / sprite sheet panel
-          _rightTab == 0 ? _buildSpriteProperties() : _buildGenericTab(_rightTab),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRightTabBtn(String label, int idx) {
-    final selected = _rightTab == idx;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _rightTab = idx),
-        child: Container(
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                  color: selected ? const Color(0xFF4CAF50) : Colors.transparent,
-                  width: 2),
-            ),
-          ),
-          child: Text(label,
-              style: GoogleFonts.nunito(
-                  fontSize: 11.5, fontWeight: FontWeight.w700,
-                  color: selected ? const Color(0xFF333333) : const Color(0xFF999999))),
-        ),
-      ),
-    );
-  }
-
-  // Sprite properties panel — exact match to screenshot
-  Widget _buildSpriteProperties() {
+  @override
+  Widget build(BuildContext context) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          // Checkboxes grid (2 columns)
-          Row(
-            children: [
-              Expanded(child: _buildProp('Allow Gravity',       _allowGravity,
-                  (v) => setState(() => _allowGravity = v!))),
-              Expanded(child: _buildProp('Collide world bounds', _collideWorldBounds,
-                  (v) => setState(() => _collideWorldBounds = v!))),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(child: _buildProp('Immovable', _immovable,
-                  (v) => setState(() => _immovable = v!))),
-              Expanded(child: _buildProp('Show', _show,
-                  (v) => setState(() => _show = v!))),
-            ],
-          ),
-          Row(
-            children: [
-              Expanded(child: _buildProp('Collide other sprites', _collideOtherSprites,
-                  (v) => setState(() => _collideOtherSprites = v!))),
-              Expanded(child: _buildProp('Draggable', _draggable,
-                  (v) => setState(() => _draggable = v!))),
-            ],
-          ),
-          const SizedBox(height: 6),
-          GestureDetector(
-            onTap: () {},
-            child: Text('Hide preview',
-                style: GoogleFonts.nunito(
-                    fontSize: 11.5, color: const Color(0xFF1A73E8),
-                    decoration: TextDecoration.underline)),
-          ),
-          const SizedBox(height: 8),
-          // 5 owl sprite frames
-          SizedBox(
-            height: 60,
-            child: Row(
-              children: List.generate(5, (i) =>
-                Padding(
-                  padding: const EdgeInsets.only(right: 5),
-                  child: Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: (i == _owlFrame && _gameRunning)
-                              ? const Color(0xFF4CAF50)
-                              : const Color(0xFFDDDDDD)),
-                      borderRadius: BorderRadius.circular(4),
-                      color: const Color(0xFFF5F5F5),
-                    ),
-                    child: ClipRect(
-                      child: Align(
-                        alignment: Alignment(-1.0 + (i * 0.5), 0),
-                        widthFactor: 0.2,
-                        child: Image.asset('assets/images/owl.png',
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, __, ___) =>
-                                const Icon(Icons.flutter_dash, size: 34, color: Colors.brown)),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+          Expanded(
+            flex: 52,
+            child: _StagePreview(
+              owlX: owlX,
+              owlY: owlY,
+              owlFrame: owlFrame,
+              isRunning: isRunning,
             ),
           ),
-          const SizedBox(height: 10),
-          // DELETE / DUPLICATE
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF888888),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  icon: const Icon(Icons.delete_outline, size: 16),
-                  label: Text('DELETE',
-                      style: GoogleFonts.montserrat(
-                          fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4CAF50),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 11),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
-                  icon: const Icon(Icons.add_circle_outline, size: 16),
-                  label: Text('DUPLICATE',
-                      style: GoogleFonts.montserrat(
-                          fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
-                ),
-              ),
-            ],
+          Expanded(
+            flex: 48,
+            child: _SpriteInspector(isRunning: isRunning),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildProp(String label, bool value, ValueChanged<bool?> onChange) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+class _StagePreview extends StatelessWidget {
+  const _StagePreview({
+    required this.owlX,
+    required this.owlY,
+    required this.owlFrame,
+    required this.isRunning,
+  });
+
+  final double owlX;
+  final double owlY;
+  final int owlFrame;
+  final bool isRunning;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spriteSize = 74.0;
+        final maxLeft = math.max(0.0, constraints.maxWidth - spriteSize - 8);
+        final maxTop = math.max(0.0, constraints.maxHeight - spriteSize - 8);
+        final left = owlX.clamp(0.0, maxLeft);
+        final top = owlY.clamp(0.0, maxTop);
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Positioned.fill(child: _StarryNightBackground()),
+            Positioned(
+              left: constraints.maxWidth * .30,
+              bottom: 0,
+              child: Container(
+                width: 30,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF26323B),
+                  border: Border.all(color: Colors.black, width: 2),
+                ),
+              ),
+            ),
+            AnimatedPositioned(
+              left: left,
+              top: top,
+              duration: const Duration(milliseconds: 70),
+              curve: Curves.linear,
+              child: Container(
+                width: spriteSize,
+                height: spriteSize,
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFF91C75B), width: 4),
+                ),
+                alignment: Alignment.center,
+                child: Transform.rotate(
+                  angle: isRunning ? -.05 : -.16,
+                  child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: Row(
+                children: const [
+                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDefault),
+                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDrag),
+                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolErase),
+                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolPaint),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _StageToolAsset extends StatelessWidget {
+  const _StageToolAsset({required this.assetPath});
+
+  final String assetPath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 41,
+      height: 38,
+      color: const Color(0xFFC4C7C8),
+      padding: const EdgeInsets.all(5),
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return const Icon(Icons.crop_square, color: Colors.black87, size: 22);
+        },
+      ),
+    );
+  }
+}
+
+class _SpriteInspector extends StatelessWidget {
+  const _SpriteInspector({required this.isRunning});
+
+  final bool isRunning;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
       children: [
         SizedBox(
-          width: 18, height: 18,
-          child: Checkbox(
-            value: value, onChanged: onChange,
-            activeColor: const Color(0xFF4CAF50),
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          height: 53,
+          child: Row(
+            children: [
+              _InspectorTab(label: 'Sprites', selected: true),
+              _InspectorTab(label: 'Widgets'),
+              _InspectorTab(label: 'Sounds'),
+              _InspectorTab(label: 'Game'),
+            ],
           ),
         ),
-        const SizedBox(width: 3),
-        Flexible(
-          child: Text(label,
-              style: GoogleFonts.nunito(fontSize: 11, color: const Color(0xFF333333))),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(44, 9, 22, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Expanded(child: _TinyCheckbox(label: 'Allow Gravity', value: true)),
+                    Expanded(child: _TinyCheckbox(label: 'Collide world bounds', value: true)),
+                  ],
+                ),
+                const Row(
+                  children: [
+                    Expanded(child: _TinyCheckbox(label: 'Immovable', value: false)),
+                    Expanded(child: _TinyCheckbox(label: 'Show', value: true)),
+                  ],
+                ),
+                const Row(
+                  children: [
+                    Expanded(child: _TinyCheckbox(label: 'Collide other sprites', value: true)),
+                    Expanded(child: _TinyCheckbox(label: 'Draggable', value: false)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                const Text('Hide preview', style: TextStyle(color: Color(0xFF2B74B7), fontSize: 16)),
+                const SizedBox(height: 14),
+                SizedBox(
+                  height: 78,
+                  child: Row(
+                    children: List.generate(
+                      5,
+                      (index) => Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: Transform.rotate(
+                          angle: index.isEven ? -.12 : .05,
+                          child: _OwlSpriteFrame(frame: index, height: 62),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _ActionButton(label: 'DELETE', icon: Icons.cancel, color: const Color(0xFF858585)),
+                    const SizedBox(width: 16),
+                    _ActionButton(label: 'DUPLICATE', icon: Icons.copy_all, color: const Color(0xFF45C681)),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildGenericTab(int tab) {
-    final labels = ['', 'Widgets', 'Sounds', 'Game'];
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(14),
-      child: Text('${labels[tab]} panel',
-          style: GoogleFonts.nunito(fontSize: 12, color: Colors.grey)),
+class _InspectorTab extends StatelessWidget {
+  const _InspectorTab({required this.label, this.selected = false});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : const Color(0xFFD1D6D9),
+          borderRadius: selected ? BorderRadius.zero : const BorderRadius.vertical(bottom: Radius.circular(13)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.black : const Color(0xFF7A8185),
+            fontWeight: FontWeight.w800,
+            fontSize: 19,
+          ),
+        ),
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────
-//  BLOCK WIDGET
-// ─────────────────────────────────────────────
-class _BlockWidget extends StatelessWidget {
-  final BlockDef block;
-  const _BlockWidget({required this.block});
+class _TinyCheckbox extends StatelessWidget {
+  const _TinyCheckbox({required this.label, required this.value});
+
+  final String label;
+  final bool value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 28,
+          height: 28,
+          child: Checkbox(
+            value: value,
+            onChanged: (_) {},
+            visualDensity: VisualDensity.compact,
+            activeColor: const Color(0xFF667E8E),
+          ),
+        ),
+        Flexible(child: Text(label, style: const TextStyle(fontSize: 16, color: Color(0xFF414141)))),
+      ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.label, required this.icon, required this.color});
+
+  final String label;
+  final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 31,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 12),
       decoration: BoxDecoration(
-        color: block.color,
-        borderRadius: BorderRadius.circular(5),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.14),
-              blurRadius: 3, offset: const Offset(0, 2)),
-        ],
+        color: color,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), offset: const Offset(0, 3))],
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(block.label,
-              style: GoogleFonts.nunito(
-                  fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-          if (block.param != null) ...[
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.28),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: Text(block.param!,
-                  style: GoogleFonts.nunito(
-                      fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
-            ),
-          ],
+          Icon(icon, color: Colors.white, size: 22),
+          const SizedBox(width: 9),
+          Text(label, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: .5)),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────
-//  HELPERS
-// ─────────────────────────────────────────────
-class _NavArrow extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  const _NavArrow({required this.icon, this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Icon(icon, size: 13,
-        color: onTap != null ? const Color(0xFF555555) : const Color(0xFFBBBBBB)),
-  );
-}
+enum _ScratchBlockKind { event, movement, variable, control, display, ai }
 
-class _IconBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-  const _IconBtn({required this.icon, required this.color, required this.onTap});
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 32, height: 32,
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(5)),
-      child: Icon(icon, color: Colors.white, size: 17),
-    ),
-  );
-}
+class _ScratchBlockData {
+  const _ScratchBlockData({
+    required this.label,
+    required this.color,
+    required this.kind,
+    this.value,
+  });
 
-class _TimerBadge extends StatelessWidget {
   final String label;
-  const _TimerBadge({required this.label});
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-    color: Colors.black54,
-    child: Text(label,
-        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700)),
-  );
+  final Color color;
+  final _ScratchBlockKind kind;
+  final String? value;
+
+  factory _ScratchBlockData.event(String label) => _ScratchBlockData(label: label, color: const Color(0xFF5BA658), kind: _ScratchBlockKind.event);
+
+  factory _ScratchBlockData.movement(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF83B455), kind: _ScratchBlockKind.movement);
+
+  factory _ScratchBlockData.variable(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF50AEB1), kind: _ScratchBlockKind.variable);
+
+  factory _ScratchBlockData.control(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF58B082), kind: _ScratchBlockKind.control);
+
+  factory _ScratchBlockData.display(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF7156B6), kind: _ScratchBlockKind.display);
+
+  factory _ScratchBlockData.ai(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFFACAC4F), kind: _ScratchBlockKind.ai);
 }
 
-class _ResetBadge extends StatelessWidget {
-  const _ResetBadge();
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-    color: Colors.black45,
-    child: const Text('RESET',
-        style: TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w800)),
-  );
+Color _categoryColor(String category) {
+  switch (category) {
+    case 'Movement':
+      return const Color(0xFF80B05D);
+    case 'Events':
+      return const Color(0xFFB24F54);
+    case 'Display':
+      return const Color(0xFF6B54B5);
+    case 'Widgets':
+      return const Color(0xFF4D82A7);
+    case 'Game and Sounds':
+      return const Color(0xFF8C49A2);
+    case 'Control':
+      return const Color(0xFF50AD80);
+    case 'Logic and Data':
+      return const Color(0xFFB28B56);
+    case 'Variables':
+      return const Color(0xFF4EAFB1);
+    case "Object's Functions":
+      return const Color(0xFFB05282);
+    case "Other objects' Functions":
+      return const Color(0xFFB05282);
+    case 'AI':
+      return const Color(0xFFA7A84C);
+    default:
+      return const Color(0xFF777777);
+  }
 }
 
-// ─────────────────────────────────────────────
-//  STARRY PAINTER (fallback)
-// ─────────────────────────────────────────────
-class _StarryPainter extends CustomPainter {
+class _StarFieldPainter extends CustomPainter {
+  const _StarFieldPainter({this.compact = false});
+
+  final bool compact;
+
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = const Color(0xFF2E3F4F));
-    final p   = Paint()..color = Colors.white;
-    final rng = Random(42);
-    for (int i = 0; i < 55; i++) {
-      _drawStar(canvas, Offset(rng.nextDouble() * size.width,
-          rng.nextDouble() * size.height), 2.5 + rng.nextDouble() * 5, p);
+    final background = Paint()..color = const Color(0xFF26333C);
+    canvas.drawRect(Offset.zero & size, background);
+
+    final shadowPaint = Paint()..color = Colors.black.withOpacity(.65);
+    final starPaint = Paint()..color = Colors.white;
+    final borderPaint = Paint()
+      ..color = Colors.black.withOpacity(.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = compact ? 1.2 : 1.5;
+
+    final count = compact ? 45 : 84;
+    for (var i = 0; i < count; i++) {
+      final x = (((i * 73) % 997) / 997) * size.width;
+      final y = (((i * 151) % 991) / 991) * size.height;
+      final r = compact ? 3.2 + (i % 3) * 1.2 : 4.0 + (i % 4) * 1.6;
+      final angle = (i % 9) * .16;
+      final path = _starPath(Offset(x, y), r, r * .43, angle);
+      canvas.save();
+      canvas.translate(1.4, 1.4);
+      canvas.drawPath(path, shadowPaint);
+      canvas.restore();
+      canvas.drawPath(path, starPaint);
+      canvas.drawPath(path, borderPaint);
     }
   }
 
-  void _drawStar(Canvas canvas, Offset c, double r, Paint p) {
+  Path _starPath(Offset center, double outerRadius, double innerRadius, double rotation) {
     final path = Path();
-    for (int i = 0; i < 8; i++) {
-      final a  = i * pi / 4;
-      final d  = i.isEven ? r : r * 0.42;
-      final pt = Offset(c.dx + d * cos(a), c.dy + d * sin(a));
-      i == 0 ? path.moveTo(pt.dx, pt.dy) : path.lineTo(pt.dx, pt.dy);
+    for (var point = 0; point < 10; point++) {
+      final radius = point.isEven ? outerRadius : innerRadius;
+      final angle = -math.pi / 2 + rotation + point * math.pi / 5;
+      final p = Offset(center.dx + math.cos(angle) * radius, center.dy + math.sin(angle) * radius);
+      if (point == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
     }
     path.close();
-    canvas.drawPath(path, p);
+    return path;
   }
 
   @override
-  bool shouldRepaint(_StarryPainter old) => false;
+  bool shouldRepaint(covariant _StarFieldPainter oldDelegate) => oldDelegate.compact != compact;
+}
+
+class _BrickPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()
+      ..color = const Color(0xFF743025)
+      ..strokeWidth = 2;
+    for (double y = 15; y < size.height; y += 15) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+    }
+    for (double y = 0; y < size.height; y += 30) {
+      for (double x = 0; x < size.width; x += 40) {
+        canvas.drawLine(Offset(x, y), Offset(x, math.min(y + 15, size.height)), linePaint);
+      }
+    }
+    for (double y = 15; y < size.height; y += 30) {
+      for (double x = 20; x < size.width; x += 40) {
+        canvas.drawLine(Offset(x, y), Offset(x, math.min(y + 15, size.height)), linePaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

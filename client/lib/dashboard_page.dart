@@ -8,6 +8,7 @@ import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
 import 'digitalgame/digital_literacy_page.dart';
 import 'datagame/data_course_page.dart';
+import 'package:client/AIcourse/ai_hoot_page_game.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -1183,6 +1184,8 @@ Widget? _getGamePage(String title) {
       return const DigitalLiteracyPage();
     case 'Data is Everywhere':
       return const DataCoursePage();
+    case 'Coding Chatbots':
+      return const CodeMonkeyScratchPage();
     default:
       return null;
   }
@@ -1399,8 +1402,7 @@ class _ArrowBtn extends StatelessWidget {
 }
 class _AngledClipper extends CustomClipper<Path> {
   @override
- @override
-Path getClip(Size size) {
+  Path getClip(Size size) {
   final path = Path();
   path.moveTo(0, 0);
   path.lineTo(size.width * 0.40, 0);
