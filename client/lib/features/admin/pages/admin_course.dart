@@ -931,6 +931,8 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
         ? AppRoutes.topViewBuilder
         : builderType == _CourseBuilderType.scratch
         ? AppRoutes.scratchBuilder
+        : builderType == _CourseBuilderType.fourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builder;
     final arguments = builderType == _CourseBuilderType.topView
         ? TopViewBuilderRouteData(
@@ -943,6 +945,12 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
         ? ScratchBuilderRouteData(
             session: widget.session,
             useAdminLevelApi: true,
+            initialCourseId: _courseKey,
+            initialOrderInCourse: nextOrder,
+          )
+        : builderType == _CourseBuilderType.fourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
             initialCourseId: _courseKey,
             initialOrderInCourse: nextOrder,
           )
@@ -987,6 +995,13 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
                 : () => _createLevel(_CourseBuilderType.topView),
             icon: const Icon(Icons.grid_view_outlined),
             label: Text(language.t('topView')),
+          ),
+          TextButton.icon(
+            onPressed: _isSaving
+                ? null
+                : () => _createLevel(_CourseBuilderType.fourthDemo),
+            icon: const Icon(Icons.sports_esports_outlined),
+            label: const Text('Fourth Demo'),
           ),
           if (_isSaving)
             const Padding(
@@ -1054,4 +1069,4 @@ class _CourseLevelsPageState extends State<CourseLevelsPage> {
   }
 }
 
-enum _CourseBuilderType { scratch, frontView, topView }
+enum _CourseBuilderType { scratch, frontView, topView, fourthDemo }

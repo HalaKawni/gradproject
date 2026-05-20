@@ -1071,13 +1071,17 @@ class _SidebarItemState extends State<_SidebarItem> {
                 Icon(widget.icon, color: Colors.white60, size: 16),
                 const SizedBox(width: 8),
               ],
-              Text(
-                widget.label,
-                style: GoogleFonts.montserrat(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color:
-                      widget.isActive ? Colors.white : Colors.white70,
+              Expanded(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.montserrat(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        widget.isActive ? Colors.white : Colors.white70,
+                  ),
                 ),
               ),
             ],

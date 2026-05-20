@@ -312,8 +312,6 @@ flutter:
 
 
   fonts:
-    - family: VT323
-    - family: Press Start 2P
     - family: Xolonium
       fonts:
         - asset: assets/fonts/xolonium-regular.ttf

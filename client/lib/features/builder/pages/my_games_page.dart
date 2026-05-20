@@ -5,7 +5,7 @@ import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
 import '../models/saved_builder_project.dart';
 
-enum _GameCreatorOption { scratch, frontView, topView }
+enum _GameCreatorOption { scratch, frontView, topView, fourthDemo }
 
 class MyGamesPage extends StatefulWidget {
   final AuthSession session;
@@ -341,6 +341,13 @@ class _MyGamesPageState extends State<MyGamesPage> {
     );
   }
 
+  void _openFourthDemoBuilder(BuildContext context) {
+    Navigator.of(context).pushNamed(
+      AppRoutes.fourthDemoBuilder,
+      arguments: FourthDemoBuilderRouteData(session: widget.session),
+    );
+  }
+
   Future<void> _showCreateGameDialog(BuildContext context) async {
     final selection = await showDialog<_GameCreatorOption>(
       context: context,
@@ -367,6 +374,12 @@ class _MyGamesPageState extends State<MyGamesPage> {
               },
               child: const Text('Top View'),
             ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(_GameCreatorOption.fourthDemo);
+              },
+              child: const Text('Fourth Demo'),
+            ),
           ],
         );
       },
@@ -383,6 +396,8 @@ class _MyGamesPageState extends State<MyGamesPage> {
         _openFrontViewBuilder(context);
       case _GameCreatorOption.topView:
         _openTopViewBuilder(context);
+      case _GameCreatorOption.fourthDemo:
+        _openFourthDemoBuilder(context);
     }
   }
 

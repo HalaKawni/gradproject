@@ -6,6 +6,7 @@ class AppRoutes {
   static const String dashboard = '/dashboard';
   static const String builder = '/builder';
   static const String builderPlay = '/builder-play';
+  static const String fourthDemoBuilder = '/fourth-demo-builder';
   static const String topViewBuilder = '/top-view-builder';
   static const String scratchBuilder = '/scratch-builder';
   static const String myGames = '/my-games';

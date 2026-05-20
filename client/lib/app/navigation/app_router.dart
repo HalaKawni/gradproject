@@ -7,6 +7,7 @@ import 'package:client/devDemo/register_page_demo.dart';
 import 'package:client/features/auth/pages/email_verification_page.dart';
 import 'package:client/features/builder/front_view/pages/builder_play_page.dart';
 import 'package:client/features/builder/front_view/pages/builder_page.dart';
+import 'package:client/features/builder/fourth_demo/pages/fourth_demo_builder_page.dart';
 import 'package:client/features/builder/pages/my_games_page.dart';
 import 'package:client/features/builder/scratch_builder/pages/scratch_builder_page.dart';
 import 'package:client/features/builder/top_view/pages/top_view_builder_page.dart';
@@ -99,6 +100,18 @@ class AppRouter {
         return _errorRoute(
           settings,
           'The play page needs an active user session and project.',
+        );
+      case AppRoutes.fourthDemoBuilder:
+        final data = settings.arguments;
+        if (data is FourthDemoBuilderRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => FourthDemoBuilderPage(session: data.session),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The fourth demo builder page needs an active user session.',
         );
       case AppRoutes.topViewBuilder:
         final data = settings.arguments;

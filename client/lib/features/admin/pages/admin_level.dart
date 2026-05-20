@@ -7,7 +7,7 @@ import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/admin/models/admin_level.dart';
 import 'package:flutter/material.dart';
 
-enum _AdminBuilderType { scratch, frontView, topView }
+enum _AdminBuilderType { scratch, frontView, topView, fourthDemo }
 
 class AdminLevelsPage extends StatefulWidget {
   const AdminLevelsPage({super.key, required this.session});
@@ -125,6 +125,14 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
             initialCourseId: courseId,
           ),
         );
+      case _AdminBuilderType.fourthDemo:
+        await Navigator.of(context).pushNamed(
+          AppRoutes.fourthDemoBuilder,
+          arguments: FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialCourseId: courseId,
+          ),
+        );
     }
   }
 
@@ -163,6 +171,15 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                 subtitle: Text(language.t('topViewDescription')),
               ),
             ),
+            SimpleDialogOption(
+              onPressed: () =>
+                  Navigator.pop(context, _AdminBuilderType.fourthDemo),
+              child: const ListTile(
+                leading: Icon(Icons.sports_esports_outlined),
+                title: Text('Fourth Demo Builder'),
+                subtitle: Text('Frontend-only Flame game builder demo.'),
+              ),
+            ),
           ],
         );
       },
@@ -189,6 +206,11 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
           useAdminLevelApi: true,
           initialTitle: level.title,
         ),
+      );
+    } else if (level.builderType == 'fourthDemo') {
+      await Navigator.of(context).pushNamed(
+        AppRoutes.fourthDemoBuilder,
+        arguments: FourthDemoBuilderRouteData(session: widget.session),
       );
     } else {
       await Navigator.of(context).pushNamed(
@@ -813,6 +835,8 @@ class _LevelCard extends StatelessWidget {
                               ? language.t('topView')
                               : level.builderType == 'scratch'
                               ? language.t('scratch')
+                              : level.builderType == 'fourthDemo'
+                              ? 'Fourth Demo'
                               : language.t('frontView'),
                           style: const TextStyle(fontSize: 12),
                         ),

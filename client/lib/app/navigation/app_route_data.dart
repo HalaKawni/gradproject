@@ -44,6 +44,18 @@ class BuilderPlayRouteData {
   final String? initialTitle;
 }
 
+class FourthDemoBuilderRouteData {
+  const FourthDemoBuilderRouteData({
+    required this.session,
+    this.initialCourseId,
+    this.initialOrderInCourse,
+  });
+
+  final AuthSession session;
+  final String? initialCourseId;
+  final int? initialOrderInCourse;
+}
+
 class TopViewBuilderRouteData {
   const TopViewBuilderRouteData({
     required this.session,
