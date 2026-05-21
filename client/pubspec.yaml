@@ -297,6 +297,7 @@ flutter:
     - assets/images/drag.png
     - assets/images/erase.png
     - assets/images/paint.png
+    - assets/images/sprites/
 
 
 

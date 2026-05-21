@@ -59,6 +59,8 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
     _ScratchBlockData.event('On Run'),
   ];
 
+  final List<_SpriteAssetData> _projectSprites = <_SpriteAssetData>[];
+
   List<_ScratchBlockData> get _paletteBlocks {
     switch (_selectedCategory) {
       case 'Events':
@@ -186,6 +188,20 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
     });
   }
 
+  Future<void> _showAddSpriteDialog(BuildContext context) async {
+    final pickedSprite = await showDialog<_SpriteAssetData>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.55),
+      builder: (_) => const _AddSpriteDialog(),
+    );
+
+    if (!mounted || pickedSprite == null) return;
+
+    setState(() {
+      _projectSprites.add(pickedSprite);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -230,6 +246,8 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           owlY: _owlY,
                           owlFrame: _owlFrame,
                           isRunning: _isRunning,
+                          projectSprites: _projectSprites,
+                          onAddSpritePressed: () => _showAddSpriteDialog(context),
                         ),
                       ),
                     ],
@@ -920,18 +938,23 @@ class _ScratchBlock extends StatelessWidget {
   }
 }
 
+
 class _GameAndSpritePanel extends StatelessWidget {
   const _GameAndSpritePanel({
     required this.owlX,
     required this.owlY,
     required this.owlFrame,
     required this.isRunning,
+    required this.projectSprites,
+    required this.onAddSpritePressed,
   });
 
   final double owlX;
   final double owlY;
   final int owlFrame;
   final bool isRunning;
+  final List<_SpriteAssetData> projectSprites;
+  final VoidCallback onAddSpritePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -950,7 +973,10 @@ class _GameAndSpritePanel extends StatelessWidget {
           ),
           Expanded(
             flex: 48,
-            child: _SpriteInspector(isRunning: isRunning),
+            child: _SpriteInspector(
+              projectSprites: projectSprites,
+              onAddSpritePressed: onAddSpritePressed,
+            ),
           ),
         ],
       ),
@@ -1057,19 +1083,24 @@ class _StageToolAsset extends StatelessWidget {
   }
 }
 
-class _SpriteInspector extends StatelessWidget {
-  const _SpriteInspector({required this.isRunning});
 
-  final bool isRunning;
+class _SpriteInspector extends StatelessWidget {
+  const _SpriteInspector({
+    required this.projectSprites,
+    required this.onAddSpritePressed,
+  });
+
+  final List<_SpriteAssetData> projectSprites;
+  final VoidCallback onAddSpritePressed;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         SizedBox(
-          height: 53,
+          height: 56,
           child: Row(
-            children: [
+            children: const [
               _InspectorTab(label: 'Sprites', selected: true),
               _InspectorTab(label: 'Widgets'),
               _InspectorTab(label: 'Sounds'),
@@ -1078,57 +1109,24 @@ class _SpriteInspector extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(44, 9, 22, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(
+          child: Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(34, 22, 22, 22),
+            child: SingleChildScrollView(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Wrap(
+                  spacing: 18,
+                  runSpacing: 18,
                   children: [
-                    Expanded(child: _TinyCheckbox(label: 'Allow Gravity', value: true)),
-                    Expanded(child: _TinyCheckbox(label: 'Collide world bounds', value: true)),
+                    _AddNewSpriteCard(onTap: onAddSpritePressed),
+                    const _OliverSpriteCard(),
+                    for (final sprite in projectSprites)
+                      _ProjectSpriteCard(sprite: sprite),
                   ],
                 ),
-                const Row(
-                  children: [
-                    Expanded(child: _TinyCheckbox(label: 'Immovable', value: false)),
-                    Expanded(child: _TinyCheckbox(label: 'Show', value: true)),
-                  ],
-                ),
-                const Row(
-                  children: [
-                    Expanded(child: _TinyCheckbox(label: 'Collide other sprites', value: true)),
-                    Expanded(child: _TinyCheckbox(label: 'Draggable', value: false)),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                const Text('Hide preview', style: TextStyle(color: Color(0xFF2B74B7), fontSize: 16)),
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 78,
-                  child: Row(
-                    children: List.generate(
-                      5,
-                      (index) => Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: Transform.rotate(
-                          angle: index.isEven ? -.12 : .05,
-                          child: _OwlSpriteFrame(frame: index, height: 62),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _ActionButton(label: 'DELETE', icon: Icons.cancel, color: const Color(0xFF858585)),
-                    const SizedBox(width: 16),
-                    _ActionButton(label: 'DUPLICATE', icon: Icons.copy_all, color: const Color(0xFF45C681)),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -1136,6 +1134,580 @@ class _SpriteInspector extends StatelessWidget {
     );
   }
 }
+
+class _AddNewSpriteCard extends StatelessWidget {
+  const _AddNewSpriteCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(13),
+      child: Container(
+        width: 135,
+        height: 148,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E8057),
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.18),
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add, size: 55, color: Color(0xFFB9C6BE)),
+            SizedBox(height: 14),
+            Text(
+              'ADD NEW',
+              style: TextStyle(
+                color: Color(0xFFB9C6BE),
+                fontSize: 17,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OliverSpriteCard extends StatelessWidget {
+  const _OliverSpriteCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 135,
+      height: 148,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFF84B75C), width: 3),
+      ),
+      child: Stack(
+        children: [
+          const Positioned(
+            top: 9,
+            right: 9,
+            child: Icon(Icons.settings, color: Color(0xFF84B75C), size: 22),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  _OwlSpriteFrame(frame: 0, height: 61),
+                  SizedBox(height: 11),
+                  Text(
+                    'Oliver',
+                    style: TextStyle(
+                      color: Color(0xFF3D3D3D),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectSpriteCard extends StatelessWidget {
+  const _ProjectSpriteCard({required this.sprite});
+
+  final _SpriteAssetData sprite;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 135,
+      height: 148,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE1E1E1), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.10),
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          const Positioned(
+            top: 9,
+            right: 9,
+            child: Icon(Icons.settings, color: Color(0xFF84B75C), size: 20),
+          ),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 68,
+                    width: 92,
+                    child: Center(
+                      child: _SpriteSheetFrame(sprite: sprite, height: 58),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(
+                      sprite.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF3D3D3D),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AddSpriteDialog extends StatefulWidget {
+  const _AddSpriteDialog();
+
+  @override
+  State<_AddSpriteDialog> createState() => _AddSpriteDialogState();
+}
+
+class _AddSpriteDialogState extends State<_AddSpriteDialog> {
+  static const List<String> _categories = [
+    'ALL CATEGORIES',
+    'ANIMALS',
+    'NATURE',
+    'FOOD',
+    'SPORTS',
+    'SPACE',
+    'FANTASY',
+    'OBJECTS',
+    'MY SPRITES',
+  ];
+
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+
+  String _selectedCategory = 'ALL CATEGORIES';
+  String _searchText = '';
+  _SpriteAssetData? _selectedSprite = _spriteLibrary.first;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<_SpriteAssetData> get _filteredSprites {
+    final q = _searchText.trim().toLowerCase();
+    return _spriteLibrary.where((sprite) {
+      final matchesCategory = _selectedCategory == 'ALL CATEGORIES' ||
+          sprite.categories.contains(_selectedCategory);
+      final matchesSearch = q.isEmpty ||
+          sprite.displayName.toLowerCase().contains(q) ||
+          sprite.assetPath.toLowerCase().contains(q);
+      return matchesCategory && matchesSearch;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 1380,
+          maxHeight: 815,
+          minHeight: 560,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ADD A SPRITE',
+                style: TextStyle(
+                  color: Color(0xFF7BAE55),
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(height: 1, color: const Color(0xFF9DCA76)),
+              const SizedBox(height: 36),
+              Row(
+                children: [
+                  SizedBox(
+                    width: 435,
+                    height: 42,
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _searchText = value),
+                      decoration: InputDecoration(
+                        hintText: 'search...',
+                        hintStyle: const TextStyle(fontSize: 19, color: Color(0xFF6A6A6A)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                        suffixIcon: const Icon(Icons.search, color: Color(0xFF78AD50), size: 26),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          borderSide: const BorderSide(color: Color(0xFF78AD50), width: 1.5),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 52,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 51),
+                  itemBuilder: (context, index) {
+                    final category = _categories[index];
+                    return _SpriteCategoryChip(
+                      label: category,
+                      selected: _selectedCategory == category,
+                      onTap: () => setState(() => _selectedCategory = category),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: true,
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(58, 16, 38, 18),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 180,
+                      mainAxisExtent: 158,
+                      crossAxisSpacing: 22,
+                      mainAxisSpacing: 30,
+                    ),
+                    itemCount: _filteredSprites.length + 2,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return const _SpriteDialogActionTile(
+                          icon: Icons.upload,
+                          label: 'UPLOAD SPRITE\nSHEET',
+                        );
+                      }
+                      if (index == 1) {
+                        return const _SpriteDialogActionTile(
+                          icon: Icons.add,
+                          label: 'CREATE A NEW\nSHEET',
+                        );
+                      }
+
+                      final sprite = _filteredSprites[index - 2];
+                      return _SpriteLibraryTile(
+                        sprite: sprite,
+                        selected: _selectedSprite == sprite,
+                        onTap: () => setState(() => _selectedSprite = sprite),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF3F2016),
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+                    ),
+                    child: const Text('CANCEL', style: TextStyle(fontSize: 16)),
+                  ),
+                  const SizedBox(width: 64),
+                  SizedBox(
+                    width: 176,
+                    height: 47,
+                    child: ElevatedButton(
+                      onPressed: _selectedSprite == null
+                          ? null
+                          : () => Navigator.pop(context, _selectedSprite),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4D861D),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                      ),
+                      child: const Text('OK', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpriteCategoryChip extends StatelessWidget {
+  const _SpriteCategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : const Color(0xFFFFC82E),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFFFC82E), width: 1.2),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF596779),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SpriteDialogActionTile extends StatelessWidget {
+  const _SpriteDialogActionTile({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF51C68C),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(.20), offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 57, color: Colors.white),
+          const SizedBox(height: 14),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              height: 1.18,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpriteLibraryTile extends StatelessWidget {
+  const _SpriteLibraryTile({
+    required this.sprite,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _SpriteAssetData sprite;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: selected ? const Color(0xFF9A9A9A) : const Color(0xFFF2F2F2),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 3)),
+              ],
+            ),
+            child: Center(
+              child: SizedBox(
+                width: 96,
+                height: 96,
+                child: Center(child: _SpriteSheetFrame(sprite: sprite, height: 74)),
+              ),
+            ),
+          ),
+          if (selected)
+            Positioned(
+              top: -10,
+              right: -10,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF58C88B),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 31),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpriteSheetFrame extends StatelessWidget {
+  const _SpriteSheetFrame({required this.sprite, required this.height});
+
+  final _SpriteAssetData sprite;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = Image.asset(
+      sprite.assetPath,
+      height: height,
+      fit: BoxFit.fitHeight,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.image_not_supported_outlined, size: height * .55, color: Colors.grey.shade500);
+      },
+    );
+
+    final frame = sprite.previewFrame.clamp(0, sprite.frameCount - 1);
+
+    if (sprite.frameCount <= 1) {
+      return FittedBox(fit: BoxFit.contain, child: image);
+    }
+
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: ClipRect(
+        child: Align(
+          alignment: Alignment(-1.0 + (2.0 * frame / (sprite.frameCount - 1)), 0),
+          widthFactor: 1 / sprite.frameCount,
+          child: image,
+        ),
+      ),
+    );
+  }
+}
+
+class _SpriteAssetData {
+  const _SpriteAssetData({
+    required this.displayName,
+    required this.assetPath,
+    required this.categories,
+    this.frameCount = 1,
+    this.previewFrame = 0,
+  });
+
+  final String displayName;
+  final String assetPath;
+  final List<String> categories;
+  final int frameCount;
+  final int previewFrame;
+}
+
+const List<_SpriteAssetData> _spriteLibrary = [
+  _SpriteAssetData(displayName: 'Monkey', assetPath: 'assets/images/sprites/baseballMonkey.png', categories: ['ANIMALS', 'SPORTS'], frameCount: 4),
+  _SpriteAssetData(displayName: 'Cupid Monkey', assetPath: 'assets/images/sprites/cupidMonkey.png', categories: ['ANIMALS', 'FANTASY'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Banana', assetPath: 'assets/images/sprites/banana.png', categories: ['FOOD', 'NATURE']),
+  _SpriteAssetData(displayName: 'Chocolate', assetPath: 'assets/images/sprites/chocolate.png', categories: ['FOOD']),
+  _SpriteAssetData(displayName: 'Powerup', assetPath: 'assets/images/sprites/powerup.png', categories: ['OBJECTS']),
+  _SpriteAssetData(displayName: 'Tiger', assetPath: 'assets/images/sprites/tiger.png', categories: ['ANIMALS'], frameCount: 6),
+  _SpriteAssetData(displayName: 'Hippo', assetPath: 'assets/images/sprites/hippo.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Elephant', assetPath: 'assets/images/sprites/elephant.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Giraffe', assetPath: 'assets/images/sprites/giraffe.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Zebra', assetPath: 'assets/images/sprites/zebra.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Rover', assetPath: 'assets/images/sprites/rover.png', categories: ['SPACE', 'OBJECTS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Unicorn', assetPath: 'assets/images/sprites/unicorn.png', categories: ['ANIMALS', 'FANTASY'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Wizard Monkey', assetPath: 'assets/images/sprites/wizardMonkey.png', categories: ['ANIMALS', 'FANTASY'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Monster', assetPath: 'assets/images/sprites/spaceMonster.png', categories: ['SPACE', 'FANTASY'], frameCount: 4),
+  _SpriteAssetData(displayName: 'Space Monster', assetPath: 'assets/images/sprites/spaceMonster2.png', categories: ['SPACE', 'FANTASY'], frameCount: 4),
+  _SpriteAssetData(displayName: 'Space Zebra', assetPath: 'assets/images/sprites/spaceZebra.png', categories: ['ANIMALS', 'SPACE'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Astronaut', assetPath: 'assets/images/sprites/astronaut.png', categories: ['SPACE'], frameCount: 6),
+  _SpriteAssetData(displayName: 'Basketball Monkey', assetPath: 'assets/images/sprites/basketballMonkey.png', categories: ['ANIMALS', 'SPORTS'], frameCount: 4),
+  _SpriteAssetData(displayName: 'Car', assetPath: 'assets/images/sprites/car.png', categories: ['OBJECTS']),
+  _SpriteAssetData(displayName: 'Coin', assetPath: 'assets/images/sprites/coin.png', categories: ['OBJECTS']),
+  _SpriteAssetData(displayName: 'Elephant 2', assetPath: 'assets/images/sprites/elephant2.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Frog', assetPath: 'assets/images/sprites/frog.png', categories: ['ANIMALS', 'NATURE'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Heart', assetPath: 'assets/images/sprites/heart.png', categories: ['OBJECTS']),
+  _SpriteAssetData(displayName: 'Hedgehog', assetPath: 'assets/images/sprites/hedgehog.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'House', assetPath: 'assets/images/sprites/house.png', categories: ['OBJECTS']),
+  _SpriteAssetData(displayName: 'Knight Monkey', assetPath: 'assets/images/sprites/knightMonkey.png', categories: ['ANIMALS', 'FANTASY'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Ostrich', assetPath: 'assets/images/sprites/ostrich.png', categories: ['ANIMALS'], frameCount: 6),
+  _SpriteAssetData(displayName: 'Porcupine', assetPath: 'assets/images/sprites/porcupine.png', categories: ['ANIMALS'], frameCount: 5),
+  _SpriteAssetData(displayName: 'Soccer Monkey', assetPath: 'assets/images/sprites/soccerMonkey.png', categories: ['ANIMALS', 'SPORTS'], frameCount: 4),
+  _SpriteAssetData(displayName: 'Spaceman', assetPath: 'assets/images/sprites/spaceman.png', categories: ['SPACE'], frameCount: 6),
+  _SpriteAssetData(displayName: 'Star', assetPath: 'assets/images/sprites/star.png', categories: ['SPACE', 'OBJECTS']),
+  _SpriteAssetData(displayName: 'Truck', assetPath: 'assets/images/sprites/truck.png', categories: ['OBJECTS'], frameCount: 3),
+  _SpriteAssetData(displayName: 'Turtle', assetPath: 'assets/images/sprites/turtle.png', categories: ['ANIMALS', 'NATURE'], frameCount: 6),
+];
 
 class _InspectorTab extends StatelessWidget {
   const _InspectorTab({required this.label, this.selected = false});
