@@ -175,8 +175,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/game.html
-    - assets/phaser.min.js
     - assets/images/background1.jpg
     - assets/images/monkey.png
     - assets/images/monkey1.png

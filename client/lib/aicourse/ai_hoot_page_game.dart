@@ -7,6 +7,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
+import 'blocks_flutter_page.dart';
+
 
 // Put these uploaded images in your Flutter project at:
 // client/assets/images/
@@ -75,10 +77,33 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   void _onWidgetAdded(_AddedGameWidget w) {
     setState(() {
       _stageWidgets.add(w);
-      _objectWorkspaces[w.id] = [
-        _ScratchBlockData.event('On Run'),
-        _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '0'),
-      ];
+      if (w.type == _GameWidgetType.timer) {
+        _objectWorkspaces[w.id] = [
+          _ScratchBlockData.event('On Run'),
+          _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '1'),
+          _ScratchBlockData.endEvent('On End'),
+        ];
+      } else if (w.type == _GameWidgetType.button) {
+        _objectWorkspaces[w.id] = [
+          _ScratchBlockData.event('On Run'),
+          _ScratchBlockData.endEvent('On Click'),
+          _ScratchBlockData.endEvent('On Down'),
+        ];
+      } else if (w.type == _GameWidgetType.dialog) {
+        _objectWorkspaces[w.id] = [
+          _ScratchBlockData.event('On Run'),
+          _ScratchBlockData.endEvent('On Confirm'),
+        ];
+      } else if (w.type == _GameWidgetType.webcam) {
+        _objectWorkspaces[w.id] = [
+          _ScratchBlockData.event('On Run'),
+        ];
+      } else {
+        _objectWorkspaces[w.id] = [
+          _ScratchBlockData.event('On Run'),
+          _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '0'),
+        ];
+      }
     });
   }
 
@@ -99,22 +124,114 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   List<_ScratchBlockData> get _paletteBlocks {
     switch (_selectedCategory) {
       case 'Events':
-        return [_ScratchBlockData.event('On Run'), _ScratchBlockData.event('When Clicked')];
-      case 'Control':
-        return [_ScratchBlockData.control('Loop'), _ScratchBlockData.control('Wait', value: '1')];
-      case 'Variables':
-        return [_ScratchBlockData.variable('Get X'), _ScratchBlockData.variable('Get Y'), _ScratchBlockData.variable('Set X', value: '300')];
+        return [
+          _ScratchBlockData.eventC('On Key', value: '→'),
+          _ScratchBlockData.eventC('On Collide', value: 'Oliver'),
+          _ScratchBlockData.eventC('On Collide With World Bounds', value: 'Left'),
+          _ScratchBlockData.eventC('On Swipe', value: 'Left'),
+          _ScratchBlockData.eventC('On Click'),
+          _ScratchBlockData.eventC('On Update'),
+          _ScratchBlockData.eventC('On Game Tap'),
+          _ScratchBlockData.eventC('On Drag End'),
+          _ScratchBlockData.eventC('On Run'),
+        ];
       case 'Display':
-        return [_ScratchBlockData.display('Say', value: 'Hello'), _ScratchBlockData.display('Hide'), _ScratchBlockData.display('Show')];
+        return [
+          _ScratchBlockData.display('Show'),
+          _ScratchBlockData.display('Hide'),
+          _ScratchBlockData.display('Destroy'),
+          _ScratchBlockData.display('Disable'),
+          _ScratchBlockData.display('Enable'),
+          _ScratchBlockData.display('Set Scale', value: '1'),
+          _ScratchBlockData.displayReporter('Get Scale'),
+          _ScratchBlockData.display('Set Opacity', value: '1'),
+          _ScratchBlockData.displayReporter('Get Opacity'),
+        ];
+      case 'Widgets':
+        return [
+          _ScratchBlockData.widgetBlock('Set counter:', value: 'To', value2: '1'),
+          _ScratchBlockData.widgetBlock('Change counter:', value: 'By', value2: '1'),
+          _ScratchBlockData.widgetBlock('Set text:', value: 'To', value2: '“  ”'),
+          _ScratchBlockData.widgetBlock('Set timer:', value: 'To', value2: '1'),
+          _ScratchBlockData.widgetBlock('Start clock:', value: ''),
+          _ScratchBlockData.widgetReporter('Get', value: 'Value'),
+          _ScratchBlockData.widgetReporter('Get', value: 'Seconds'),
+        ];
+      case 'Game and Sounds':
+        return [
+          _ScratchBlockData.game('Play', value: 'Sound'),
+          _ScratchBlockData.game('Reset Game'),
+          _ScratchBlockData.game('Pause Game'),
+          _ScratchBlockData.game('Unpause Game'),
+          _ScratchBlockData.gameReporter('Get Game Time'),
+          _ScratchBlockData.game('Set Background', value: 'jungle'),
+        ];
+      case 'Control':
+        return [
+          _ScratchBlockData.controlC('Loop'),
+          _ScratchBlockData.controlC('Repeat', value: '10', suffix: 'times'),
+          _ScratchBlockData.controlC('if', suffix: 'do', settingsIcon: true),
+          _ScratchBlockData.controlC('if', suffix: 'do\nelse', settingsIcon: true, tall: true),
+          _ScratchBlockData.control('Wait', value: '1'),
+        ];
+      case 'Logic and Data':
+        return [
+          _ScratchBlockData.booleanBlock('not'),
+          _ScratchBlockData.booleanBlock('', value: 'and'),
+          _ScratchBlockData.booleanBlock('', value: '='),
+          _ScratchBlockData.logicReporter('0'),
+          _ScratchBlockData.logicReporter('“  ”'),
+          _ScratchBlockData.logicReporter('', value: '1', operatorSymbolArg: '+', value2: '1'),
+          _ScratchBlockData.logicReporter('Random from', value: '0', suffix: 'to', value2: '100'),
+          _ScratchBlockData.booleanBlock('', value: '<'),
+          _ScratchBlockData.booleanBlock('', value: '>'),
+        ];
+      case 'Variables':
+        return [
+          _ScratchBlockData.variable('Set variable:', value: 'To', value2: '0'),
+          _ScratchBlockData.variable('Change variable:', value: 'By', value2: '1'),
+          _ScratchBlockData.variableReporter('Get variable:'),
+          _ScratchBlockData.variable('Set X', value: '300'),
+          _ScratchBlockData.variable('Set Y', value: '200'),
+          _ScratchBlockData.variableReporter('Get X'),
+          _ScratchBlockData.variableReporter('Get Y'),
+        ];
+      case "Object's Functions":
+        return [
+          _ScratchBlockData.functionBlock('to', value: 'do something'),
+          _ScratchBlockData.functionC('to', value: 'do something', suffix: 'return'),
+          _ScratchBlockData.functionBlock('if', suffix: 'return'),
+        ];
+      case "Other objects' Functions":
+        return [
+          _ScratchBlockData.functionBlock('Oliver', value: 'do something'),
+          _ScratchBlockData.functionReporter('From', value: 'Oliver', suffix: 'get x'),
+          _ScratchBlockData.functionReporter('From', value: 'Oliver', suffix: 'get y'),
+          _ScratchBlockData.functionReporter('From', value: 'Oliver', suffix: 'get rotation'),
+        ];
       case 'AI':
-        return [_ScratchBlockData.ai('Think'), _ScratchBlockData.ai('Detect')];
+        return [
+          _ScratchBlockData.aiReporter('Predict', value: ''),
+          _ScratchBlockData.aiC('On Prediction', value: ''),
+        ];
+      case 'Movement':
       default:
         return [
           _ScratchBlockData.movement('Step', value: '1'),
           _ScratchBlockData.movement('Jump', value: '1'),
-          _ScratchBlockData.variable('Get X'),
-          _ScratchBlockData.variable('Get Y'),
+          _ScratchBlockData.movementReporter('Get X'),
+          _ScratchBlockData.movementReporter('Get Y'),
           _ScratchBlockData.movement('Set X', value: '300'),
+          _ScratchBlockData.movement('Set Y', value: '200'),
+          _ScratchBlockData.movement('Change X By', value: '0'),
+          _ScratchBlockData.movement('Change Y By', value: '0'),
+          _ScratchBlockData.movementReporter('Get Rotation'),
+          _ScratchBlockData.movement('Set Rotation', value: '0'),
+          _ScratchBlockData.movement('Change Rotation By', value: '0'),
+          _ScratchBlockData.movement('Set Speed', value: '1'),
+          _ScratchBlockData.movement('Set Allow Gravity', value: 'true'),
+          _ScratchBlockData.movementReporter('Get Distance From', value: 'Oliver'),
+          _ScratchBlockData.movementReporter('From', value: 'Oliver', suffix: 'get x'),
         ];
     }
   }
@@ -203,7 +320,13 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
       });
       return;
     }
-
+    if (block.kind == _ScratchBlockKind.endEvent) {
+      setState(() {
+        _workspaceBlocks.removeWhere((b) => b.kind == _ScratchBlockKind.endEvent);
+        _workspaceBlocks.add(block);
+      });
+      return;
+    }
     setState(() => _workspaceBlocks.add(block));
   }
 
@@ -818,13 +941,13 @@ class _BlocksWorkspace extends StatelessWidget {
             ),
           ),
           Container(
-            height: 104,
+            height: 146,
             color: const Color(0xFFD9D9D9),
-            padding: const EdgeInsets.fromLTRB(8, 7, 7, 7),
+            padding: const EdgeInsets.fromLTRB(8, 5, 7, 5),
             child: Column(
               children: [
                 SizedBox(
-                  height: 61,
+                  height: 115,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: paletteBlocks.length,
@@ -843,9 +966,9 @@ class _BlocksWorkspace extends StatelessWidget {
                     },
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 5),
                 SizedBox(
-                  height: 21,
+                  height: 16,
                   child: Row(
                     children: [
                       Expanded(
@@ -934,6 +1057,97 @@ class _CategoryButton extends StatelessWidget {
   }
 }
 
+// Converts _ScratchBlockData to a BlockDef so we can render with Scratch3Block.
+BlockDef _scratchDataToBlockDef(_ScratchBlockData block) {
+  BlockShape blockShape;
+  bool leftTab = true;
+  bool rightNotch = true;
+  ElseRowDef? elseRow;
+
+  switch (block.shape) {
+    case _ScratchBlockShape.reporter:
+      blockShape = BlockShape.reporter;
+      break;
+    case _ScratchBlockShape.booleanReporter:
+      blockShape = BlockShape.boolean;
+      break;
+    case _ScratchBlockShape.cBlock:
+      if (block.kind == _ScratchBlockKind.event || block.kind == _ScratchBlockKind.endEvent) {
+        blockShape = BlockShape.hat;
+        leftTab = false;
+        rightNotch = block.kind != _ScratchBlockKind.endEvent;
+      } else {
+        blockShape = BlockShape.cBlock;
+        if (block.tall) elseRow = const ElseRowDef(label: 'else');
+      }
+      break;
+    case _ScratchBlockShape.command:
+      if (block.kind == _ScratchBlockKind.event) {
+        blockShape = BlockShape.hat;
+        leftTab = false;
+      } else if (block.kind == _ScratchBlockKind.endEvent) {
+        blockShape = BlockShape.stack;
+        leftTab = false;
+        rightNotch = false;
+      } else {
+        blockShape = BlockShape.stack;
+      }
+  }
+
+  final fields = <BlockFieldDef>[];
+  if (block.settingsIcon) fields.add(const BlockFieldDef.gear());
+  if (block.helpIcon) fields.add(const BlockFieldDef.question());
+
+  if (block.value != null) {
+    if (block.valueDropdown) {
+      fields.add(BlockFieldDef.dropdown(block.value!));
+    } else {
+      final n = num.tryParse(block.value!);
+      if (n != null) {
+        fields.add(BlockFieldDef.number(n));
+      } else {
+        fields.add(BlockFieldDef.label(block.value!));
+      }
+    }
+  }
+
+  if (block.operatorSymbol != null) {
+    fields.add(BlockFieldDef.op(block.operatorSymbol!));
+  }
+
+  if (block.value2 != null) {
+    if (block.value2Dropdown) {
+      fields.add(BlockFieldDef.dropdown(block.value2!));
+    } else {
+      final n = num.tryParse(block.value2!);
+      if (n != null) {
+        fields.add(BlockFieldDef.number(n));
+      } else {
+        fields.add(BlockFieldDef.label(block.value2!));
+      }
+    }
+  }
+
+  if (block.suffix != null) {
+    fields.add(BlockFieldDef.label(block.suffix!.replaceAll('\n', ' / ')));
+  }
+
+  return BlockDef(
+    shape: blockShape,
+    label: block.label,
+    fields: fields,
+    leftTab: leftTab,
+    rightNotch: rightNotch,
+    elseRow: elseRow,
+    width: block.width,
+  );
+}
+
+Color _darkenColor(Color c) {
+  final hsl = HSLColor.fromColor(c);
+  return hsl.withLightness((hsl.lightness * 0.76).clamp(0.0, 1.0)).toColor();
+}
+
 class _ScratchBlock extends StatelessWidget {
   const _ScratchBlock({required this.block, this.large = false});
 
@@ -942,83 +1156,11 @@ class _ScratchBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final height = large ? 48.0 : 35.0;
-    return SizedBox(
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            height: height,
-            padding: EdgeInsets.fromLTRB(large ? 15 : 10, 0, block.value == null ? 15 : 10, 0),
-            decoration: BoxDecoration(
-              color: block.color,
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 2))],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  block.label,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: large ? 16 : 13,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                if (block.value != null) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    width: large ? 31 : 24,
-                    height: large ? 31 : 24,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFECE5D8),
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 1))],
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      block.value!,
-                      style: TextStyle(
-                        color: const Color(0xFF392C22),
-                        fontSize: large ? 15 : 11,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (block.kind != _ScratchBlockKind.event)
-            Positioned(
-              left: -9,
-              top: height / 2 - 8,
-              child: Container(
-                width: 17,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: block.color,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          if (block.kind != _ScratchBlockKind.event)
-            Positioned(
-              right: -6,
-              top: height / 2 - 8,
-              child: Container(
-                width: 15,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: block.color,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-        ],
-      ),
+    return Scratch3Block(
+      block: _scratchDataToBlockDef(block),
+      color: block.color,
+      darkColor: _darkenColor(block.color),
+      scale: large ? 1.0 : 0.72,
     );
   }
 }
@@ -1181,14 +1323,23 @@ class _StagePreview extends StatelessWidget {
             ),
             for (int i = 0; i < stageWidgets.length; i++)
               if (stageWidgets[i].show)
-                Positioned(
-                  top: 12.0 + i * 52,
-                  left: 12,
-                  child: Opacity(
-                    opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
-                    child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
+                if (stageWidgets[i].type == _GameWidgetType.dialog)
+                  Positioned(
+                    top: 18, left: 18, right: 18, bottom: 60,
+                    child: Opacity(
+                      opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                      child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
+                    ),
+                  )
+                else
+                  Positioned(
+                    top: 12.0 + i * 52,
+                    left: 12,
+                    child: Opacity(
+                      opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                      child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
+                    ),
                   ),
-                ),
             Positioned(
               top: 0,
               right: 0,
@@ -1239,12 +1390,116 @@ class _StageWidgetOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (gameWidget.type == _GameWidgetType.dialog) {
+      return Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFB8CDD8),
+          border: Border.all(color: const Color(0xFF91C75B), width: 3),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+              child: Text(
+                gameWidget.text,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: gameWidget.textColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  shadows: const [Shadow(color: Colors.black38, offset: Offset(0, 1), blurRadius: 2)],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: SizedBox(
+                width: 110, height: 64,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      heightFactor: 0.5,
+                      child: Image.asset(
+                        _AddedGameWidget.buttonImages[0],
+                        fit: BoxFit.fill,
+                        width: double.infinity,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFF6B8E3A),
+                          child: const Icon(Icons.check, color: Colors.white, size: 32),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (gameWidget.type == _GameWidgetType.webcam) {
+      return Container(
+        width: 160,
+        height: 120,
+        decoration: BoxDecoration(
+          color: const Color(0xFF3C3C3C),
+          border: Border.all(color: const Color(0xFF91C75B), width: 2),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.videocam, color: Colors.white54, size: 44),
+            SizedBox(height: 4),
+            Text('webcam', style: TextStyle(color: Colors.white38, fontSize: 11)),
+          ],
+        ),
+      );
+    }
+
+    if (gameWidget.type == _GameWidgetType.button) {
+      return Transform.rotate(
+        angle: gameWidget.rotation * 3.14159265 / 180,
+        child: Container(
+          width: 100,
+          height: 70,
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFF91C75B), width: 2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.topCenter,
+                heightFactor: 0.5,
+                child: Image.asset(
+                  _AddedGameWidget.buttonImages[gameWidget.buttonImageIndex],
+                  fit: BoxFit.fill,
+                  width: double.infinity,
+                  errorBuilder: (_, __, ___) => Container(
+                    color: const Color(0xFF6B8E3A),
+                    child: const Icon(Icons.touch_app, color: Colors.white, size: 36),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     final label = switch (gameWidget.type) {
       _GameWidgetType.counter => '0',
-      _GameWidgetType.text    => 'Your text here',
-      _GameWidgetType.timer   => '00:00',
-      _GameWidgetType.clock   => '12:00',
-      _GameWidgetType.button  => 'Button',
+      _GameWidgetType.text    => gameWidget.text,
+      _GameWidgetType.timer   => '0.0',
+      _GameWidgetType.clock   => '00:00',
+      _GameWidgetType.button  => '',
       _GameWidgetType.dialog  => '...',
       _GameWidgetType.webcam  => '',
     };
@@ -1497,6 +1752,21 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
                     const Text('NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
                     const SizedBox(height: 4),
                     _SettingsTextField(value: w.name, onChanged: (v) => setState(() => w.name = v)),
+                    if (w.type == _GameWidgetType.text) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Text('Text', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _SettingsTextField(
+                              value: w.text,
+                              onChanged: (v) { setState(() => w.text = v); widget.onWidgetChanged(); },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1513,6 +1783,59 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
               const Text('Show', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
             ],
           ),
+          if (w.type == _GameWidgetType.button) ...[
+            const SizedBox(height: 14),
+            const Text('IMAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (int i = 0; i < _AddedGameWidget.buttonImages.length; i++) ...[
+                  GestureDetector(
+                    onTap: () { setState(() => w.buttonImageIndex = i); widget.onWidgetChanged(); },
+                    child: Container(
+                      width: 64, height: 48,
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: w.buttonImageIndex == i ? const Color(0xFF3DB476) : const Color(0xFFDDDDDD),
+                          width: w.buttonImageIndex == i ? 3 : 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: ClipRect(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            heightFactor: 0.5,
+                            child: Image.asset(
+                              _AddedGameWidget.buttonImages[i],
+                              fit: BoxFit.fill,
+                              width: double.infinity,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: const Color(0xFF6B8E3A),
+                                child: const Icon(Icons.image, color: Colors.white, size: 22),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (i < _AddedGameWidget.buttonImages.length - 1) const SizedBox(width: 10),
+                ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text('ROTATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: 110,
+              child: _SettingsStepper(
+                label: '', value: w.rotation, step: 1, decimals: 0,
+                onChanged: (v) { setState(() => w.rotation = v); widget.onWidgetChanged(); },
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1525,26 +1848,28 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
                   onChanged: (v) { setState(() => w.opacity = v.clamp(0, 1)); widget.onWidgetChanged(); },
                 ),
               ),
-              const SizedBox(width: 20),
-              const Text('Text Color:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () async {
-                  final picked = await showDialog<Color>(
-                    context: context,
-                    builder: (_) => _ColorPickerDialog(initial: w.textColor),
-                  );
-                  if (picked != null && mounted) { setState(() => w.textColor = picked); widget.onWidgetChanged(); }
-                },
-                child: Container(
-                  width: 36, height: 24,
-                  decoration: BoxDecoration(
-                    color: w.textColor,
-                    border: Border.all(color: const Color(0xFFAAAAAA)),
-                    borderRadius: BorderRadius.circular(4),
+              if (w.type != _GameWidgetType.button && w.type != _GameWidgetType.webcam) ...[
+                const SizedBox(width: 20),
+                const Text('Text Color:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDialog<Color>(
+                      context: context,
+                      builder: (_) => _ColorPickerDialog(initial: w.textColor),
+                    );
+                    if (picked != null && mounted) { setState(() => w.textColor = picked); widget.onWidgetChanged(); }
+                  },
+                  child: Container(
+                    width: 36, height: 24,
+                    decoration: BoxDecoration(
+                      color: w.textColor,
+                      border: Border.all(color: const Color(0xFFAAAAAA)),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 24),
@@ -1576,6 +1901,9 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
                     copy.show = w.show;
                     copy.opacity = w.opacity;
                     copy.textColor = w.textColor;
+                    copy.text = w.text;
+                    copy.buttonImageIndex = w.buttonImageIndex;
+                    copy.rotation = w.rotation;
                     widget.onWidgetAdded(copy);
                     setState(() => _activeWidget = null);
                   },
@@ -2428,6 +2756,14 @@ class _AddedGameWidget {
   bool show = true;
   double opacity = 1.0;
   Color textColor = Colors.white;
+  String text = 'Your text here';
+  // button-specific
+  int buttonImageIndex = 0;
+  double rotation = 0.0;
+  static const List<String> buttonImages = [
+    'assets/images/sprites/default.png',
+    'assets/images/sprites/arrow.png',
+  ];
   String get label => type.name[0].toUpperCase() + type.name.substring(1);
   String get assetPath => 'assets/images/sprites/${type.name}.png';
 }
@@ -4530,7 +4866,9 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-enum _ScratchBlockKind { event, movement, variable, control, display, ai, widget }
+enum _ScratchBlockKind { event, endEvent, movement, variable, control, display, ai, widget, game, logic, functionBlock }
+
+enum _ScratchBlockShape { command, cBlock, reporter, booleanReporter }
 
 class _ScratchBlockData {
   const _ScratchBlockData({
@@ -4538,26 +4876,241 @@ class _ScratchBlockData {
     required this.color,
     required this.kind,
     this.value,
+    this.value2,
+    this.suffix,
+    this.operatorSymbol,
+    this.valueDropdown = false,
+    this.value2Dropdown = false,
+    this.settingsIcon = false,
+    this.helpIcon = false,
+    this.tall = false,
+    this.width,
+    this.shape = _ScratchBlockShape.command,
   });
 
   final String label;
   final Color color;
   final _ScratchBlockKind kind;
   final String? value;
+  final String? value2;
+  final String? suffix;
+  final String? operatorSymbol;
+  final bool valueDropdown;
+  final bool value2Dropdown;
+  final bool settingsIcon;
+  final bool helpIcon;
+  final bool tall;
+  final double? width;
+  final _ScratchBlockShape shape;
 
-  factory _ScratchBlockData.event(String label) => _ScratchBlockData(label: label, color: const Color(0xFF5BA658), kind: _ScratchBlockKind.event);
+  factory _ScratchBlockData.event(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: value != null,
+        color: const Color(0xFF5BA658),
+        kind: _ScratchBlockKind.event,
+      );
 
-  factory _ScratchBlockData.movement(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF83B455), kind: _ScratchBlockKind.movement);
+  factory _ScratchBlockData.eventC(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: value != null,
+        color: const Color(0xFFB15A5D),
+        kind: _ScratchBlockKind.event,
+        shape: _ScratchBlockShape.cBlock,
+        width: label.length > 23 ? 320 : null,
+      );
 
-  factory _ScratchBlockData.variable(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF50AEB1), kind: _ScratchBlockKind.variable);
+  factory _ScratchBlockData.endEvent(String label) => _ScratchBlockData(
+        label: label,
+        color: const Color(0xFF8B3A3A),
+        kind: _ScratchBlockKind.endEvent,
+        shape: _ScratchBlockShape.cBlock,
+      );
 
-  factory _ScratchBlockData.control(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF58B082), kind: _ScratchBlockKind.control);
+  factory _ScratchBlockData.movement(String label, {String? value, String? value2, String? suffix}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        value2: value2,
+        suffix: suffix,
+        valueDropdown: value == 'true' || value == 'Oliver',
+        color: const Color(0xFF83B455),
+        kind: _ScratchBlockKind.movement,
+      );
 
-  factory _ScratchBlockData.display(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF7156B6), kind: _ScratchBlockKind.display);
+  factory _ScratchBlockData.movementReporter(String label, {String? value, String? suffix}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        valueDropdown: value != null,
+        color: const Color(0xFF83B455),
+        kind: _ScratchBlockKind.movement,
+        shape: _ScratchBlockShape.reporter,
+      );
 
-  factory _ScratchBlockData.ai(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFFACAC4F), kind: _ScratchBlockKind.ai);
+  factory _ScratchBlockData.variable(String label, {String? value, String? value2}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        value2: value2,
+        valueDropdown: value == 'To' || value == 'By',
+        color: const Color(0xFF50AEB1),
+        kind: _ScratchBlockKind.variable,
+      );
 
-  factory _ScratchBlockData.widgetBlock(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF4D82A7), kind: _ScratchBlockKind.widget);
+  factory _ScratchBlockData.variableReporter(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        color: const Color(0xFF50AEB1),
+        kind: _ScratchBlockKind.variable,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.control(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        color: const Color(0xFF58B082),
+        kind: _ScratchBlockKind.control,
+      );
+
+  factory _ScratchBlockData.controlC(String label, {String? value, String? suffix, bool settingsIcon = false, bool tall = false}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        settingsIcon: settingsIcon,
+        tall: tall,
+        color: const Color(0xFF58B082),
+        kind: _ScratchBlockKind.control,
+        shape: _ScratchBlockShape.cBlock,
+        width: tall ? 144 : null,
+      );
+
+  factory _ScratchBlockData.display(String label, {String? value, String? value2}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        value2: value2,
+        color: const Color(0xFF7156B6),
+        kind: _ScratchBlockKind.display,
+      );
+
+  factory _ScratchBlockData.displayReporter(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        color: const Color(0xFF7156B6),
+        kind: _ScratchBlockKind.display,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.ai(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        color: const Color(0xFFACAC4F),
+        kind: _ScratchBlockKind.ai,
+      );
+
+  factory _ScratchBlockData.aiReporter(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: true,
+        color: const Color(0xFFACAC4F),
+        kind: _ScratchBlockKind.ai,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.aiC(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: true,
+        color: const Color(0xFFACAC4F),
+        kind: _ScratchBlockKind.ai,
+        shape: _ScratchBlockShape.cBlock,
+      );
+
+  factory _ScratchBlockData.widgetBlock(String label, {String? value, String? value2}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        value2: value2,
+        valueDropdown: value != null,
+        color: const Color(0xFF5B88B0),
+        kind: _ScratchBlockKind.widget,
+      );
+
+  factory _ScratchBlockData.widgetReporter(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: value != null,
+        color: const Color(0xFF5B88B0),
+        kind: _ScratchBlockKind.widget,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.game(String label, {String? value, String? value2}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        value2: value2,
+        valueDropdown: value != null,
+        color: const Color(0xFF8C58B5),
+        kind: _ScratchBlockKind.game,
+      );
+
+  factory _ScratchBlockData.gameReporter(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        color: const Color(0xFF8C58B5),
+        kind: _ScratchBlockKind.game,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.logicReporter(String label, {String? value, String? suffix, String? value2, String? operatorSymbolArg}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        value2: value2,
+        operatorSymbol: operatorSymbolArg,
+        color: const Color(0xFFB28B56),
+        kind: _ScratchBlockKind.logic,
+        shape: _ScratchBlockShape.reporter,
+      );
+
+  factory _ScratchBlockData.booleanBlock(String label, {String? value}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        valueDropdown: value == 'and' || value == '=' || value == '<' || value == '>',
+        color: const Color(0xFFB28B56),
+        kind: _ScratchBlockKind.logic,
+        shape: _ScratchBlockShape.booleanReporter,
+      );
+
+  factory _ScratchBlockData.functionBlock(String label, {String? value, String? suffix}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        helpIcon: true,
+        valueDropdown: value != null,
+        color: const Color(0xFFB05282),
+        kind: _ScratchBlockKind.functionBlock,
+      );
+
+  factory _ScratchBlockData.functionC(String label, {String? value, String? suffix}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        settingsIcon: true,
+        helpIcon: true,
+        color: const Color(0xFFB05282),
+        kind: _ScratchBlockKind.functionBlock,
+        shape: _ScratchBlockShape.cBlock,
+        width: 310,
+      );
+
+  factory _ScratchBlockData.functionReporter(String label, {String? value, String? suffix}) => _ScratchBlockData(
+        label: label,
+        value: value,
+        suffix: suffix,
+        valueDropdown: value != null,
+        color: const Color(0xFFB05282),
+        kind: _ScratchBlockKind.functionBlock,
+        shape: _ScratchBlockShape.reporter,
+      );
 }
 
 Color _categoryColor(String category) {

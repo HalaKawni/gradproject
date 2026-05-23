@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'game_webview.dart';
-import 'monkey_game_page.dart';
 import 'world_map_page.dart';
 import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
 import 'digitalgame/digital_literacy_page.dart';
 import 'datagame/data_course_page.dart';
 import 'package:client/AIcourse/ai_hoot_page_game.dart';
+import 'utils/responsive.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;
@@ -19,11 +18,12 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _showFilterExpanded = false;
   bool _showLevelError = false;
   bool _showCategoryError = false;
   bool _showTopicError = false;
-  String _activeTab = 'Filter'; // internal key, not displayed directly
+  String _activeTab = 'Filter';
   @override
 void initState() {
   super.initState();
@@ -41,6 +41,37 @@ void initState() {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+
+    final content = SingleChildScrollView(
+      child: Column(
+        children: [
+          _buildHeroBanner(),
+          _buildFilterSection(),
+          const SizedBox(height: 24),
+          _buildCoursesSection(),
+          const SizedBox(height: 40),
+        ],
+      ),
+    );
+
+    if (isMobile) {
+      return Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: const Color(0xFFF0F0ED),
+        drawer: Drawer(
+          width: 220,
+          child: SafeArea(child: _buildSidebar()),
+        ),
+        body: Column(
+          children: [
+            _buildMobileTopNavbar(),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F0ED),
       body: Row(
@@ -50,21 +81,48 @@ void initState() {
             child: Column(
               children: [
                 _buildTopNavbar(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _buildHeroBanner(),
-                        _buildFilterSection(),
-                        const SizedBox(height: 24),
-                        _buildCoursesSection(),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
-                ),
+                Expanded(child: content),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTopNavbar() {
+    return Container(
+      color: const Color.fromARGB(255, 252, 183, 199),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => _scaffoldKey.currentState?.openDrawer(),
+            child: const Icon(Icons.menu, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              'nameofweb',
+              style: GoogleFonts.montserrat(
+                color: const Color.fromARGB(255, 202, 97, 128),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFF4A7DBF),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white24, width: 2),
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 18),
           ),
         ],
       ),
@@ -141,6 +199,53 @@ void initState() {
     );
   }
 Widget _buildHeroBanner() {
+    return LayoutBuilder(builder: (context, constraints) {
+      final isMobile = constraints.maxWidth < 600;
+
+      if (isMobile) {
+        return Container(
+          color: const Color.fromARGB(255, 254, 253, 153),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4A7DBF),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: const Icon(Icons.person, color: Colors.white, size: 30),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('dashboard.welcome'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF3A2A00))),
+                    Text('${widget.username}!',
+                        style: GoogleFonts.nunito(fontSize: 17, fontWeight: FontWeight.w800, color: const Color(0xFF3A2A00))),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorldMapPage())),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A7DBF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                child: Text('dashboard.continue_coding'.tr(),
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w800, fontSize: 11)),
+              ),
+            ],
+          ),
+        );
+      }
+
     return Container(
   decoration: BoxDecoration(
     boxShadow: [
@@ -161,7 +266,7 @@ Widget _buildHeroBanner() {
             'assets/images/hot_air_baloon.png',
             fit: BoxFit.cover,
             width: double.infinity,
-            alignment: Alignment.bottomLeft, // ← shows right half
+            alignment: Alignment.bottomLeft,
           ),
 
           // ── DARK OVERLAY on image ──
@@ -217,7 +322,7 @@ Widget _buildHeroBanner() {
 
           // ── RIGHT CONTENT sits on top of image ──
           Positioned(
-            left: MediaQuery.of(context).size.width * 0.40,
+            left: constraints.maxWidth * 0.42,
             right: 24,
             top: 0,
             bottom: 0,
@@ -350,9 +455,10 @@ Widget _buildHeroBanner() {
           ),
         ],
       ),
-  ),
-    );
-  }
+    ),
+  );
+  });
+}
   // ── FILTER SECTION ──
   Widget _buildFilterSection() {
     return Container(
@@ -415,53 +521,63 @@ Widget _buildHeroBanner() {
           ),
 
           // ── FILTER PILLS ROW ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-            child: Row(
-              children: [
-                _buildFilterGroup('dashboard.level'.tr(), [
-                  _FilterPill(
-                    label: 'common.all'.tr(),
-                    isSelected: true,
-                    onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
-                  ),
-                ]),
-                const SizedBox(width: 24),
-                _buildFilterGroup('dashboard.category'.tr(), [
-                  _FilterPill(
-                    label: 'dashboard.main_courses'.tr(),
-                    isSelected: _selectedCategories.contains('Main Courses'),
-                    onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: 'dashboard.mini_courses'.tr(),
-                    isSelected: _selectedCategories.contains('Mini Courses'),
-                    onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
-                  ),
-                ]),
-                const SizedBox(width: 24),
-                _buildFilterGroup('dashboard.topic'.tr(), [
-                  _FilterPill(
-                    label: 'common.all'.tr(),
-                    isSelected: true,
-                    onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
-                  ),
-                ]),
-                const Spacer(),
-                if (_showFilterExpanded)
-                  GestureDetector(
-                    onTap: () => setState(() => _showFilterExpanded = false),
-                    child: const Icon(Icons.keyboard_arrow_up,
-                        color: Color(0xFF888888)),
-                  ),
-              ],
-            ),
-          ),
+          Builder(builder: (context) {
+            final isMobile = Responsive.isMobile(context);
+            final groups = [
+              _buildFilterGroup('dashboard.level'.tr(), [
+                _FilterPill(
+                  label: 'common.all'.tr(),
+                  isSelected: true,
+                  onTap: () => setState(() => _showFilterExpanded = !_showFilterExpanded),
+                ),
+              ]),
+              const SizedBox(width: 24),
+              _buildFilterGroup('dashboard.category'.tr(), [
+                _FilterPill(
+                  label: 'dashboard.main_courses'.tr(),
+                  isSelected: _selectedCategories.contains('Main Courses'),
+                  onTap: () => setState(() => _showFilterExpanded = !_showFilterExpanded),
+                ),
+                const SizedBox(width: 8),
+                _FilterPill(
+                  label: 'dashboard.mini_courses'.tr(),
+                  isSelected: _selectedCategories.contains('Mini Courses'),
+                  onTap: () => setState(() => _showFilterExpanded = !_showFilterExpanded),
+                ),
+              ]),
+              const SizedBox(width: 24),
+              _buildFilterGroup('dashboard.topic'.tr(), [
+                _FilterPill(
+                  label: 'common.all'.tr(),
+                  isSelected: true,
+                  onTap: () => setState(() => _showFilterExpanded = !_showFilterExpanded),
+                ),
+              ]),
+            ];
+
+            if (isMobile) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: Row(children: groups),
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Row(
+                children: [
+                  ...groups,
+                  const Spacer(),
+                  if (_showFilterExpanded)
+                    GestureDetector(
+                      onTap: () => setState(() => _showFilterExpanded = false),
+                      child: const Icon(Icons.keyboard_arrow_up, color: Color(0xFF888888)),
+                    ),
+                ],
+              ),
+            );
+          }),
 
           // ── EXPANDED FILTER ──
           if (_showFilterExpanded) ...[

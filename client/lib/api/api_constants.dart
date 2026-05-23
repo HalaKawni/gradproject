@@ -1,5 +1,5 @@
 class ApiConstants {
-static const String baseUrl = 'http://localhost:3000/api';  // 👆 Use 10.0.2.2 for Android emulator
+static const String baseUrl = 'http://192.168.1.12:3000/api';
   // Use 127.0.0.1 for Windows desktop
   // Use your actual IP (e.g. 192.168.1.5) for a real phone
 
