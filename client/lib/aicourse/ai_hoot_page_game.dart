@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 
 // Put these uploaded images in your Flutter project at:
@@ -13,6 +17,7 @@ class CodeMonkeyScratchAssets {
   static const String toolDrag = 'assets/images/drag.png';
   static const String toolErase = 'assets/images/erase.png';
   static const String toolPaint = 'assets/images/paint.png';
+  static const String uploadMonkey = 'assets/images/upload_monkey.png';
 }
 
 /// Drop this file in: client/lib/codemonkey_scratch_page.dart
@@ -50,16 +55,46 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   // Stage logical coordinates. These are mapped to pixels in the stage widget.
   double _owlX = 36;
   double _owlY = 315;
+  double _owlScale = 1.0;
+  double _owlRotation = 0.0;
+  double _owlOpacity = 1.0;
 
   // owl.png is a horizontal spritesheet with 5 walking frames.
   // This index chooses which frame is shown on the stage.
   int _owlFrame = 0;
 
-  final List<_ScratchBlockData> _workspaceBlocks = [
-    _ScratchBlockData.event('On Run'),
-  ];
+  String _selectedObjectId = 'oliver';
+  final Map<String, List<_ScratchBlockData>> _objectWorkspaces = {
+    'oliver': [_ScratchBlockData.event('On Run')],
+  };
+  List<_ScratchBlockData> get _workspaceBlocks => _objectWorkspaces[_selectedObjectId]!;
 
   final List<_SpriteAssetData> _projectSprites = <_SpriteAssetData>[];
+  final List<_AddedGameWidget> _stageWidgets = [];
+
+  void _onWidgetAdded(_AddedGameWidget w) {
+    setState(() {
+      _stageWidgets.add(w);
+      _objectWorkspaces[w.id] = [
+        _ScratchBlockData.event('On Run'),
+        _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '0'),
+      ];
+    });
+  }
+
+  void _onWidgetRemoved(_AddedGameWidget w) {
+    setState(() {
+      _stageWidgets.remove(w);
+      _objectWorkspaces.remove(w.id);
+      if (_selectedObjectId == w.id) _selectedObjectId = 'oliver';
+    });
+  }
+
+  void _onWidgetSelected(_AddedGameWidget w) {
+    setState(() => _selectedObjectId = w.id);
+  }
+
+  void _onWidgetChanged() => setState(() {});
 
   List<_ScratchBlockData> get _paletteBlocks {
     switch (_selectedCategory) {
@@ -182,10 +217,36 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
       _workspaceBlocks
         ..clear()
         ..add(_ScratchBlockData.event('On Run'));
-      _owlX = 36;
-      _owlY = 315;
-      _owlFrame = 0;
+      if (_selectedObjectId == 'oliver') {
+        _owlX = 36;
+        _owlY = 315;
+        _owlFrame = 0;
+      }
     });
+  }
+
+  void _onOliverSettingsChanged(_SpriteSettings s) {
+    setState(() {
+      _owlX = s.x.toDouble();
+      _owlY = s.y.toDouble();
+      _owlScale = s.scale;
+      _owlRotation = s.rotation;
+      _owlOpacity = s.opacity;
+    });
+  }
+
+  void _onSpriteDeleted(_SpriteAssetData sprite) {
+    setState(() => _projectSprites.remove(sprite));
+  }
+
+  void _onSpriteDuplicated(_SpriteAssetData sprite) {
+    setState(() => _projectSprites.add(_SpriteAssetData(
+      displayName: '${sprite.displayName} copy',
+      assetPath: sprite.assetPath,
+      categories: sprite.categories,
+      frameCount: sprite.frameCount,
+      imageBytes: sprite.imageBytes,
+    )));
   }
 
   Future<void> _showAddSpriteDialog(BuildContext context) async {
@@ -229,6 +290,12 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           paletteBlocks: _paletteBlocks,
                           workspaceBlocks: _workspaceBlocks,
                           isRunning: _isRunning,
+                          activeObjectName: _selectedObjectId == 'oliver'
+                              ? 'Oliver'
+                              : _stageWidgets.firstWhere((w) => w.id == _selectedObjectId, orElse: () => _stageWidgets.first).name,
+                          activeObjectAsset: _selectedObjectId == 'oliver'
+                              ? null
+                              : _stageWidgets.firstWhere((w) => w.id == _selectedObjectId, orElse: () => _stageWidgets.first).assetPath,
                           onRun: _runProgram,
                           onClear: _clearProgram,
                           onSelectCategory: (category) {
@@ -244,10 +311,21 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                         child: _GameAndSpritePanel(
                           owlX: _owlX,
                           owlY: _owlY,
+                          owlScale: _owlScale,
+                          owlRotation: _owlRotation,
+                          owlOpacity: _owlOpacity,
                           owlFrame: _owlFrame,
                           isRunning: _isRunning,
                           projectSprites: _projectSprites,
+                          stageWidgets: _stageWidgets,
                           onAddSpritePressed: () => _showAddSpriteDialog(context),
+                          onOliverSettingsChanged: _onOliverSettingsChanged,
+                          onSpriteDeleted: _onSpriteDeleted,
+                          onSpriteDuplicated: _onSpriteDuplicated,
+                          onWidgetAdded: _onWidgetAdded,
+                          onWidgetRemoved: _onWidgetRemoved,
+                          onWidgetSelected: _onWidgetSelected,
+                          onWidgetChanged: _onWidgetChanged,
                         ),
                       ),
                     ],
@@ -624,6 +702,8 @@ class _BlocksWorkspace extends StatelessWidget {
     required this.paletteBlocks,
     required this.workspaceBlocks,
     required this.isRunning,
+    required this.activeObjectName,
+    this.activeObjectAsset,
     required this.onRun,
     required this.onClear,
     required this.onSelectCategory,
@@ -636,6 +716,8 @@ class _BlocksWorkspace extends StatelessWidget {
   final List<_ScratchBlockData> paletteBlocks;
   final List<_ScratchBlockData> workspaceBlocks;
   final bool isRunning;
+  final String activeObjectName;
+  final String? activeObjectAsset;
   final VoidCallback onRun;
   final VoidCallback onClear;
   final ValueChanged<String> onSelectCategory;
@@ -654,9 +736,12 @@ class _BlocksWorkspace extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 11, 0),
             child: Row(
               children: [
-                const _OwlSpriteFrame(frame: 0, height: 42),
+                activeObjectAsset != null
+                    ? Image.asset(activeObjectAsset!, height: 42, fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.widgets, size: 36))
+                    : const _OwlSpriteFrame(frame: 0, height: 42),
                 const SizedBox(width: 10),
-                const Text('Oliver', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF1C2530))),
+                Text(activeObjectName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF1C2530))),
                 const Spacer(),
                 ElevatedButton.icon(
                   onPressed: isRunning ? null : onRun,
@@ -943,18 +1028,40 @@ class _GameAndSpritePanel extends StatelessWidget {
   const _GameAndSpritePanel({
     required this.owlX,
     required this.owlY,
+    required this.owlScale,
+    required this.owlRotation,
+    required this.owlOpacity,
     required this.owlFrame,
     required this.isRunning,
     required this.projectSprites,
+    required this.stageWidgets,
     required this.onAddSpritePressed,
+    required this.onOliverSettingsChanged,
+    required this.onSpriteDeleted,
+    required this.onSpriteDuplicated,
+    required this.onWidgetAdded,
+    required this.onWidgetRemoved,
+    required this.onWidgetSelected,
+    required this.onWidgetChanged,
   });
 
   final double owlX;
   final double owlY;
+  final double owlScale;
+  final double owlRotation;
+  final double owlOpacity;
   final int owlFrame;
   final bool isRunning;
   final List<_SpriteAssetData> projectSprites;
+  final List<_AddedGameWidget> stageWidgets;
   final VoidCallback onAddSpritePressed;
+  final ValueChanged<_SpriteSettings> onOliverSettingsChanged;
+  final ValueChanged<_SpriteAssetData> onSpriteDeleted;
+  final ValueChanged<_SpriteAssetData> onSpriteDuplicated;
+  final ValueChanged<_AddedGameWidget> onWidgetAdded;
+  final ValueChanged<_AddedGameWidget> onWidgetRemoved;
+  final ValueChanged<_AddedGameWidget> onWidgetSelected;
+  final VoidCallback onWidgetChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -967,15 +1074,32 @@ class _GameAndSpritePanel extends StatelessWidget {
             child: _StagePreview(
               owlX: owlX,
               owlY: owlY,
+              owlScale: owlScale,
+              owlRotation: owlRotation,
+              owlOpacity: owlOpacity,
               owlFrame: owlFrame,
               isRunning: isRunning,
+              stageWidgets: stageWidgets,
             ),
           ),
           Expanded(
             flex: 48,
             child: _SpriteInspector(
               projectSprites: projectSprites,
+              stageWidgets: stageWidgets,
               onAddSpritePressed: onAddSpritePressed,
+              owlX: owlX,
+              owlY: owlY,
+              owlScale: owlScale,
+              owlRotation: owlRotation,
+              owlOpacity: owlOpacity,
+              onOliverSettingsChanged: onOliverSettingsChanged,
+              onSpriteDeleted: onSpriteDeleted,
+              onSpriteDuplicated: onSpriteDuplicated,
+              onWidgetAdded: onWidgetAdded,
+              onWidgetRemoved: onWidgetRemoved,
+              onWidgetSelected: onWidgetSelected,
+              onWidgetChanged: onWidgetChanged,
             ),
           ),
         ],
@@ -988,14 +1112,22 @@ class _StagePreview extends StatelessWidget {
   const _StagePreview({
     required this.owlX,
     required this.owlY,
+    required this.owlScale,
+    required this.owlRotation,
+    required this.owlOpacity,
     required this.owlFrame,
     required this.isRunning,
+    required this.stageWidgets,
   });
 
   final double owlX;
   final double owlY;
+  final double owlScale;
+  final double owlRotation;
+  final double owlOpacity;
   final int owlFrame;
   final bool isRunning;
+  final List<_AddedGameWidget> stageWidgets;
 
   @override
   Widget build(BuildContext context) {
@@ -1035,12 +1167,28 @@ class _StagePreview extends StatelessWidget {
                   border: Border.all(color: const Color(0xFF91C75B), width: 4),
                 ),
                 alignment: Alignment.center,
-                child: Transform.rotate(
-                  angle: isRunning ? -.05 : -.16,
-                  child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+                child: Opacity(
+                  opacity: owlOpacity.clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: owlScale,
+                    child: Transform.rotate(
+                      angle: (owlRotation * math.pi / 180) + (isRunning ? -.05 : -.16),
+                      child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+                    ),
+                  ),
                 ),
               ),
             ),
+            for (int i = 0; i < stageWidgets.length; i++)
+              if (stageWidgets[i].show)
+                Positioned(
+                  top: 12.0 + i * 52,
+                  left: 12,
+                  child: Opacity(
+                    opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                    child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
+                  ),
+                ),
             Positioned(
               top: 0,
               right: 0,
@@ -1084,14 +1232,136 @@ class _StageToolAsset extends StatelessWidget {
 }
 
 
-class _SpriteInspector extends StatelessWidget {
+// ── Stage widget overlay (counter, text, timer, etc shown on stage) ───────────
+class _StageWidgetOverlay extends StatelessWidget {
+  const _StageWidgetOverlay({required this.gameWidget});
+  final _AddedGameWidget gameWidget;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (gameWidget.type) {
+      _GameWidgetType.counter => '0',
+      _GameWidgetType.text    => 'Your text here',
+      _GameWidgetType.timer   => '00:00',
+      _GameWidgetType.clock   => '12:00',
+      _GameWidgetType.button  => 'Button',
+      _GameWidgetType.dialog  => '...',
+      _GameWidgetType.webcam  => '',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: .55),
+        border: Border.all(color: const Color(0xFF91C75B), width: 2),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: gameWidget.textColor,
+          fontSize: 18,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sprite settings data ─────────────────────────────────────────────────────
+class _SpriteSettings {
+  _SpriteSettings({required this.sprite, required this.isOliver, String? name})
+      : name = name ?? sprite.displayName;
+
+  final _SpriteAssetData sprite;
+  final bool isOliver;
+  String name;
+  int x = 50;
+  int y = 365;
+  double scale = 1.0;
+  double rotation = 0.0;
+  double opacity = 1.0;
+  bool allowGravity = true;
+  bool collideWorldBounds = true;
+  bool immovable = false;
+  bool show = true;
+  bool collideOtherSprites = true;
+  bool draggable = false;
+}
+
+// ── Sprite inspector panel ────────────────────────────────────────────────────
+class _SpriteInspector extends StatefulWidget {
   const _SpriteInspector({
     required this.projectSprites,
+    required this.stageWidgets,
     required this.onAddSpritePressed,
+    required this.owlX,
+    required this.owlY,
+    required this.owlScale,
+    required this.owlRotation,
+    required this.owlOpacity,
+    required this.onOliverSettingsChanged,
+    required this.onSpriteDeleted,
+    required this.onSpriteDuplicated,
+    required this.onWidgetAdded,
+    required this.onWidgetRemoved,
+    required this.onWidgetSelected,
+    required this.onWidgetChanged,
   });
 
   final List<_SpriteAssetData> projectSprites;
+  final List<_AddedGameWidget> stageWidgets;
   final VoidCallback onAddSpritePressed;
+  final double owlX;
+  final double owlY;
+  final double owlScale;
+  final double owlRotation;
+  final double owlOpacity;
+  final ValueChanged<_SpriteSettings> onOliverSettingsChanged;
+  final ValueChanged<_SpriteAssetData> onSpriteDeleted;
+  final ValueChanged<_SpriteAssetData> onSpriteDuplicated;
+  final ValueChanged<_AddedGameWidget> onWidgetAdded;
+  final ValueChanged<_AddedGameWidget> onWidgetRemoved;
+  final ValueChanged<_AddedGameWidget> onWidgetSelected;
+  final VoidCallback onWidgetChanged;
+
+  @override
+  State<_SpriteInspector> createState() => _SpriteInspectorState();
+}
+
+class _SpriteInspectorState extends State<_SpriteInspector> {
+  _SpriteSettings? _active;
+  bool _showPreview = false;
+  int _activeTab = 0;
+  _AddedGameWidget? _activeWidget;
+
+  static const _oliverSprite = _SpriteAssetData(
+    displayName: 'Oliver',
+    assetPath: 'assets/images/owl.png',
+    categories: [],
+    frameCount: 5,
+  );
+
+  void _openSettings(_SpriteSettings s) =>
+      setState(() { _active = s; _showPreview = false; });
+
+  void _closeSettings() =>
+      setState(() { _active = null; _showPreview = false; });
+
+  void _notifyIfOliver(_SpriteSettings s) {
+    if (s.isOliver) widget.onOliverSettingsChanged(s);
+  }
+
+  _SpriteSettings _makeOliverSettings() {
+    final s = _SpriteSettings(sprite: _oliverSprite, isOliver: true, name: 'Oliver');
+    s.x = widget.owlX.round();
+    s.y = widget.owlY.round();
+    s.scale = widget.owlScale;
+    s.rotation = widget.owlRotation;
+    s.opacity = widget.owlOpacity;
+    return s;
+  }
+
+  void _switchTab(int index) => setState(() { _activeTab = index; _active = null; _activeWidget = null; _showPreview = false; });
 
   @override
   Widget build(BuildContext context) {
@@ -1100,11 +1370,11 @@ class _SpriteInspector extends StatelessWidget {
         SizedBox(
           height: 56,
           child: Row(
-            children: const [
-              _InspectorTab(label: 'Sprites', selected: true),
-              _InspectorTab(label: 'Widgets'),
-              _InspectorTab(label: 'Sounds'),
-              _InspectorTab(label: 'Game'),
+            children: [
+              _InspectorTab(label: 'Sprites', selected: _activeTab == 0, onTap: () => _switchTab(0)),
+              _InspectorTab(label: 'Widgets', selected: _activeTab == 1, onTap: () => _switchTab(1)),
+              _InspectorTab(label: 'Sounds',  selected: _activeTab == 2, onTap: () => _switchTab(2)),
+              _InspectorTab(label: 'Game',    selected: _activeTab == 3, onTap: () => _switchTab(3)),
             ],
           ),
         ),
@@ -1112,25 +1382,864 @@ class _SpriteInspector extends StatelessWidget {
           child: Container(
             width: double.infinity,
             color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(34, 22, 22, 22),
-            child: SingleChildScrollView(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Wrap(
-                  spacing: 18,
-                  runSpacing: 18,
-                  children: [
-                    _AddNewSpriteCard(onTap: onAddSpritePressed),
-                    const _OliverSpriteCard(),
-                    for (final sprite in projectSprites)
-                      _ProjectSpriteCard(sprite: sprite),
-                  ],
-                ),
-              ),
-            ),
+            child: switch (_activeTab) {
+              1 => _activeWidget != null ? _buildWidgetSettingsPanel(_activeWidget!) : _buildWidgetsTab(),
+              _ => _active != null ? _buildSettingsPanel(_active!) : _buildGrid(),
+            },
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGrid() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(34, 22, 22, 22),
+      child: SingleChildScrollView(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Wrap(
+            spacing: 18,
+            runSpacing: 18,
+            children: [
+              _AddNewSpriteCard(onTap: widget.onAddSpritePressed),
+              _OliverSpriteCard(
+                onSettingsTap: () => _openSettings(_makeOliverSettings()),
+              ),
+              for (final sprite in widget.projectSprites)
+                _ProjectSpriteCard(
+                  sprite: sprite,
+                  onSettingsTap: () => _openSettings(
+                    _SpriteSettings(sprite: sprite, isOliver: false),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWidgetsTab() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(34, 22, 22, 22),
+      child: SingleChildScrollView(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Wrap(
+            spacing: 18,
+            runSpacing: 18,
+            children: [
+              _AddNewSpriteCard(onTap: _showAddWidgetDialog),
+              for (final w in widget.stageWidgets)
+                _WidgetCard(
+                  gameWidget: w,
+                  onTap: () => widget.onWidgetSelected(w),
+                  onSettingsTap: () => setState(() => _activeWidget = w),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAddWidgetDialog() async {
+    final picked = await showDialog<_GameWidgetType>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.45),
+      builder: (_) => const _AddWidgetDialog(),
+    );
+    if (picked != null && mounted) {
+      widget.onWidgetAdded(_AddedGameWidget(picked));
+    }
+  }
+
+  Widget _buildWidgetSettingsPanel(_AddedGameWidget w) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _activeWidget = null),
+            child: Row(
+              children: [
+                Container(
+                  width: 38, height: 38,
+                  decoration: const BoxDecoration(color: Color(0xFFF5A623), shape: BoxShape.circle),
+                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 14),
+                const Text('Back to Widgets',
+                    style: TextStyle(fontSize: 16, color: Color(0xFF3D3D3D), fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 74, height: 74,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFDDDDDD)),
+                ),
+                child: Center(child: Image.asset(w.assetPath, width: 52, height: 52, fit: BoxFit.contain)),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
+                    const SizedBox(height: 4),
+                    _SettingsTextField(value: w.name, onChanged: (v) => setState(() => w.name = v)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Checkbox(
+                value: w.show,
+                activeColor: const Color(0xFF3DB476),
+                onChanged: (v) { setState(() => w.show = v ?? true); widget.onWidgetChanged(); },
+              ),
+              const Text('Show', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text('Opacity:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 110,
+                child: _SettingsStepper(
+                  label: '', value: w.opacity, step: 0.1, decimals: 1,
+                  onChanged: (v) { setState(() => w.opacity = v.clamp(0, 1)); widget.onWidgetChanged(); },
+                ),
+              ),
+              const SizedBox(width: 20),
+              const Text('Text Color:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF555555))),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDialog<Color>(
+                    context: context,
+                    builder: (_) => _ColorPickerDialog(initial: w.textColor),
+                  );
+                  if (picked != null && mounted) { setState(() => w.textColor = picked); widget.onWidgetChanged(); }
+                },
+                child: Container(
+                  width: 36, height: 24,
+                  decoration: BoxDecoration(
+                    color: w.textColor,
+                    border: Border.all(color: const Color(0xFFAAAAAA)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    widget.onWidgetRemoved(w);
+                    setState(() => _activeWidget = null);
+                  },
+                  icon: const Icon(Icons.cancel, size: 18),
+                  label: const Text('DELETE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5A5A5A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    final copy = _AddedGameWidget(w.type);
+                    copy.name = '${w.name} copy';
+                    copy.show = w.show;
+                    copy.opacity = w.opacity;
+                    copy.textColor = w.textColor;
+                    widget.onWidgetAdded(copy);
+                    setState(() => _activeWidget = null);
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('DUPLICATE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3DB476),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsPanel(_SpriteSettings s) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Back to Sprites
+          GestureDetector(
+            onTap: _closeSettings,
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF5A623),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 14),
+                const Text(
+                  'Back to Sprites',
+                  style: TextStyle(fontSize: 16, color: Color(0xFF3D3D3D), fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 22),
+          // Sprite thumbnail + Name / X / Y
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Thumbnail + Change
+              Column(
+                children: [
+                  Container(
+                    width: 74,
+                    height: 74,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFDDDDDD)),
+                    ),
+                    child: Center(
+                      child: s.isOliver
+                          ? const _OwlSpriteFrame(frame: 0, height: 52)
+                          : _SpriteSheetFrame(sprite: s.sprite, height: 52),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Change',
+                    style: TextStyle(color: Color(0xFF4A90D9), fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              const SizedBox(width: 14),
+              // Name + X + Y
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
+                    const SizedBox(height: 4),
+                    _SettingsTextField(value: s.name, onChanged: (v) { setState(() => s.name = v); _notifyIfOliver(s); }),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _SettingsStepper(label: 'X', value: s.x.toDouble(), step: 1, decimals: 0, onChanged: (v) { setState(() => s.x = v.round()); _notifyIfOliver(s); })),
+                        const SizedBox(width: 8),
+                        Expanded(child: _SettingsStepper(label: 'Y', value: s.y.toDouble(), step: 1, decimals: 0, onChanged: (v) { setState(() => s.y = v.round()); _notifyIfOliver(s); })),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // SCALE / ROTATION / OPACITY
+          Row(
+            children: [
+              Expanded(child: _SettingsStepper(label: 'SCALE',    value: s.scale,    step: 0.1, decimals: 1, onChanged: (v) { setState(() => s.scale = v); _notifyIfOliver(s); })),
+              const SizedBox(width: 8),
+              Expanded(child: _SettingsStepper(label: 'ROTATION', value: s.rotation, step: 1,   decimals: 0, onChanged: (v) { setState(() => s.rotation = v); _notifyIfOliver(s); })),
+              const SizedBox(width: 8),
+              Expanded(child: _SettingsStepper(label: 'OPACITY',  value: s.opacity,  step: 0.1, decimals: 1, onChanged: (v) { setState(() => s.opacity = v.clamp(0, 1)); _notifyIfOliver(s); })),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Checkboxes
+          _CheckboxRow(label1: 'Allow Gravity',        val1: s.allowGravity,       onChanged1: (v) => setState(() => s.allowGravity = v),
+                       label2: 'Collide world bounds', val2: s.collideWorldBounds, onChanged2: (v) => setState(() => s.collideWorldBounds = v)),
+          const SizedBox(height: 4),
+          _CheckboxRow(label1: 'Immovable', val1: s.immovable, onChanged1: (v) => setState(() => s.immovable = v),
+                       label2: 'Show',     val2: s.show,      onChanged2: (v) => setState(() => s.show = v)),
+          const SizedBox(height: 4),
+          _CheckboxRow(label1: 'Collide other sprites', val1: s.collideOtherSprites, onChanged1: (v) => setState(() => s.collideOtherSprites = v),
+                       label2: 'Draggable',             val2: s.draggable,          onChanged2: (v) => setState(() => s.draggable = v)),
+          const SizedBox(height: 14),
+          // Show / Hide preview
+          GestureDetector(
+            onTap: () => setState(() => _showPreview = !_showPreview),
+            child: Text(
+              _showPreview ? 'Hide preview' : 'Show preview',
+              style: const TextStyle(color: Color(0xFF4A90D9), fontSize: 15, fontWeight: FontWeight.w500),
+            ),
+          ),
+          if (_showPreview) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 80,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: s.sprite.frameCount.clamp(1, 10),
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: s.isOliver
+                      ? _OwlSpriteFrame(frame: i % _OwlSpriteFrame._frameCount, height: 72)
+                      : _SpriteSheetFrame(
+                          sprite: _SpriteAssetData(
+                            displayName: s.sprite.displayName,
+                            assetPath: s.sprite.assetPath,
+                            categories: s.sprite.categories,
+                            frameCount: s.sprite.frameCount,
+                            previewFrame: i,
+                            imageBytes: s.sprite.imageBytes,
+                          ),
+                          height: 72,
+                        ),
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 20),
+          // DELETE + DUPLICATE
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: s.isOliver
+                      ? null
+                      : () {
+                          widget.onSpriteDeleted(s.sprite);
+                          _closeSettings();
+                        },
+                  icon: const Icon(Icons.cancel, size: 18),
+                  label: const Text('DELETE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF5A5A5A),
+                    disabledBackgroundColor: const Color(0xFFAAAAAA),
+                    foregroundColor: Colors.white,
+                    disabledForegroundColor: Colors.white60,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    widget.onSpriteDuplicated(s.sprite);
+                    _closeSettings();
+                  },
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('DUPLICATE', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3DB476),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Widget card shown in the Widgets tab grid ─────────────────────────────────
+class _WidgetCard extends StatelessWidget {
+  const _WidgetCard({required this.gameWidget, required this.onTap, required this.onSettingsTap});
+  final _AddedGameWidget gameWidget;
+  final VoidCallback onTap;
+  final VoidCallback onSettingsTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+      width: 135,
+      height: 148,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: const Color(0xFFE1E1E1), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .10),
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 9,
+            right: 9,
+            child: GestureDetector(
+              onTap: onSettingsTap,
+              child: const Icon(Icons.settings, color: Color(0xFF84B75C), size: 20),
+            ),
+          ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset(gameWidget.assetPath, width: 64, height: 64, fit: BoxFit.contain),
+                const SizedBox(height: 10),
+                Text(
+                  gameWidget.label,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF3D3D3D)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+}
+
+// ── Color picker dialog ───────────────────────────────────────────────────────
+class _ColorPickerDialog extends StatefulWidget {
+  const _ColorPickerDialog({required this.initial});
+  final Color initial;
+  @override
+  State<_ColorPickerDialog> createState() => _ColorPickerDialogState();
+}
+
+class _ColorPickerDialogState extends State<_ColorPickerDialog> {
+  late double _hue;
+  late double _sat;
+  late double _val;
+  late TextEditingController _rCtrl, _gCtrl, _bCtrl;
+
+  Color get _current => HSVColor.fromAHSV(1, _hue, _sat, _val).toColor();
+
+  @override
+  void initState() {
+    super.initState();
+    final hsv = HSVColor.fromColor(widget.initial);
+    _hue = hsv.hue;
+    _sat = hsv.saturation;
+    _val = hsv.value;
+    _syncControllers();
+  }
+
+  void _syncControllers() {
+    final c = _current;
+    _rCtrl = TextEditingController(text: c.red.toString());
+    _gCtrl = TextEditingController(text: c.green.toString());
+    _bCtrl = TextEditingController(text: c.blue.toString());
+  }
+
+  void _updateFromRgb() {
+    final r = int.tryParse(_rCtrl.text)?.clamp(0, 255) ?? 0;
+    final g = int.tryParse(_gCtrl.text)?.clamp(0, 255) ?? 0;
+    final b = int.tryParse(_bCtrl.text)?.clamp(0, 255) ?? 0;
+    final hsv = HSVColor.fromColor(Color.fromARGB(255, r, g, b));
+    setState(() { _hue = hsv.hue; _sat = hsv.saturation; _val = hsv.value; });
+  }
+
+  void _refreshRgbFields() {
+    final c = _current;
+    _rCtrl.text = c.red.toString();
+    _gCtrl.text = c.green.toString();
+    _bCtrl.text = c.blue.toString();
+  }
+
+  @override
+  void dispose() {
+    _rCtrl.dispose(); _gCtrl.dispose(); _bCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const double squareSize = 220;
+    const double sliderH = 18;
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── SV square ──────────────────────────────────────────────────
+            GestureDetector(
+              onPanUpdate: (d) {
+                final box = context.findRenderObject() as RenderBox?;
+                if (box == null) return;
+                // find the square's local position — use local offset from the gesture
+                final local = d.localPosition;
+                setState(() {
+                  _sat = (local.dx / squareSize).clamp(0.0, 1.0);
+                  _val = 1.0 - (local.dy / squareSize).clamp(0.0, 1.0);
+                });
+                _refreshRgbFields();
+              },
+              onTapDown: (d) {
+                final local = d.localPosition;
+                setState(() {
+                  _sat = (local.dx / squareSize).clamp(0.0, 1.0);
+                  _val = 1.0 - (local.dy / squareSize).clamp(0.0, 1.0);
+                });
+                _refreshRgbFields();
+              },
+              child: SizedBox(
+                width: squareSize, height: squareSize,
+                child: CustomPaint(
+                  painter: _SvPickerPainter(hue: _hue, sat: _sat, val: _val),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // ── Hue slider ─────────────────────────────────────────────────
+            GestureDetector(
+              onPanUpdate: (d) {
+                final local = d.localPosition;
+                setState(() => _hue = (local.dx / squareSize * 360).clamp(0.0, 360.0));
+                _refreshRgbFields();
+              },
+              onTapDown: (d) {
+                final local = d.localPosition;
+                setState(() => _hue = (local.dx / squareSize * 360).clamp(0.0, 360.0));
+                _refreshRgbFields();
+              },
+              child: SizedBox(
+                width: squareSize, height: sliderH,
+                child: CustomPaint(painter: _HueSliderPainter(hue: _hue)),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // ── Preview + RGB fields ────────────────────────────────────────
+            Row(
+              children: [
+                Icon(Icons.colorize, color: const Color(0xFF888888), size: 22),
+                const SizedBox(width: 10),
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: _current,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFAAAAAA), width: 1.5),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                _RgbField(label: 'R', ctrl: _rCtrl, onSubmit: _updateFromRgb),
+                const SizedBox(width: 8),
+                _RgbField(label: 'G', ctrl: _gCtrl, onSubmit: _updateFromRgb),
+                const SizedBox(width: 8),
+                _RgbField(label: 'B', ctrl: _bCtrl, onSubmit: _updateFromRgb),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3DB476),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () => Navigator.of(context).pop(_current),
+                child: const Text('OK'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SvPickerPainter extends CustomPainter {
+  const _SvPickerPainter({required this.hue, required this.sat, required this.val});
+  final double hue, sat, val;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final hueColor = HSVColor.fromAHSV(1, hue, 1, 1).toColor();
+    // White → hue gradient (left-right)
+    final satGrad = LinearGradient(colors: [Colors.white, hueColor]);
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..shader = satGrad.createShader(Offset.zero & size),
+    );
+    // Transparent → black gradient (top-bottom)
+    final valGrad = const LinearGradient(
+      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+      colors: [Colors.transparent, Colors.black],
+    );
+    canvas.drawRect(
+      Offset.zero & size,
+      Paint()..shader = valGrad.createShader(Offset.zero & size),
+    );
+    // Thumb
+    final cx = sat * size.width;
+    final cy = (1 - val) * size.height;
+    canvas.drawCircle(Offset(cx, cy), 7, Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2);
+    canvas.drawCircle(Offset(cx, cy), 5, Paint()..color = HSVColor.fromAHSV(1, hue, sat, val).toColor());
+  }
+
+  @override
+  bool shouldRepaint(_SvPickerPainter old) => old.hue != hue || old.sat != sat || old.val != val;
+}
+
+class _HueSliderPainter extends CustomPainter {
+  const _HueSliderPainter({required this.hue});
+  final double hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grad = LinearGradient(colors: [
+      for (int i = 0; i <= 6; i++) HSVColor.fromAHSV(1, i * 60.0, 1, 1).toColor(),
+    ]);
+    final rr = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(4));
+    canvas.drawRRect(rr, Paint()..shader = grad.createShader(Offset.zero & size));
+    final tx = hue / 360 * size.width;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(tx, size.height / 2), width: 4, height: size.height + 4), const Radius.circular(2)),
+      Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HueSliderPainter old) => old.hue != hue;
+}
+
+class _RgbField extends StatelessWidget {
+  const _RgbField({required this.label, required this.ctrl, required this.onSubmit});
+  final String label;
+  final TextEditingController ctrl;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFF666666))),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: 42,
+          child: TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            onSubmitted: (_) => onSubmit(),
+            onEditingComplete: onSubmit,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Add Widget dialog ─────────────────────────────────────────────────────────
+class _AddWidgetDialog extends StatefulWidget {
+  const _AddWidgetDialog();
+  @override
+  State<_AddWidgetDialog> createState() => _AddWidgetDialogState();
+}
+
+class _AddWidgetDialogState extends State<_AddWidgetDialog> {
+  _GameWidgetType? _selected = _GameWidgetType.counter;
+
+  static const _types = [
+    (type: _GameWidgetType.counter, label: 'Counter'),
+    (type: _GameWidgetType.text,    label: 'Text'),
+    (type: _GameWidgetType.timer,   label: 'Timer'),
+    (type: _GameWidgetType.clock,   label: 'Clock'),
+    (type: _GameWidgetType.button,  label: 'Button'),
+    (type: _GameWidgetType.dialog,  label: 'Dialog'),
+    (type: _GameWidgetType.webcam,  label: 'Webcam'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 24, 16, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('Add A Widget',
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: const BoxDecoration(color: Color(0xFF4A3728), shape: BoxShape.circle),
+                      child: const Icon(Icons.close, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final t in _types)
+                    GestureDetector(
+                      onTap: () => setState(() => _selected = t.type),
+                      child: _WidgetTypeCard(
+                        label: t.label,
+                        assetPath: 'assets/images/sprites/${t.type.name}.png',
+                        selected: _selected == t.type,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Footer buttons
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+              color: const Color(0xFFF2F2F2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF6B6B6B),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _selected == null ? null : () => Navigator.of(context).pop(_selected),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3DB476),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('ADD', style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: .5)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WidgetTypeCard extends StatelessWidget {
+  const _WidgetTypeCard({required this.label, required this.assetPath, required this.selected});
+  final String label;
+  final String assetPath;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 130,
+      height: 130,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F4F5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: selected ? const Color(0xFF3DB476) : const Color(0xFFDDDDDD),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(assetPath, width: 56, height: 56, fit: BoxFit.contain),
+                const SizedBox(height: 8),
+                Text(label,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF3D3D3D))),
+              ],
+            ),
+          ),
+          if (selected)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: const BoxDecoration(color: Color(0xFF3DB476), shape: BoxShape.circle),
+                child: const Icon(Icons.check, color: Colors.white, size: 16),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -1180,7 +2289,9 @@ class _AddNewSpriteCard extends StatelessWidget {
 }
 
 class _OliverSpriteCard extends StatelessWidget {
-  const _OliverSpriteCard();
+  const _OliverSpriteCard({required this.onSettingsTap});
+
+  final VoidCallback onSettingsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1194,10 +2305,13 @@ class _OliverSpriteCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             top: 9,
             right: 9,
-            child: Icon(Icons.settings, color: Color(0xFF84B75C), size: 22),
+            child: GestureDetector(
+              onTap: onSettingsTap,
+              child: const Icon(Icons.settings, color: Color(0xFF84B75C), size: 22),
+            ),
           ),
           Center(
             child: Padding(
@@ -1226,9 +2340,10 @@ class _OliverSpriteCard extends StatelessWidget {
 }
 
 class _ProjectSpriteCard extends StatelessWidget {
-  const _ProjectSpriteCard({required this.sprite});
+  const _ProjectSpriteCard({required this.sprite, required this.onSettingsTap});
 
   final _SpriteAssetData sprite;
+  final VoidCallback onSettingsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1248,10 +2363,13 @@ class _ProjectSpriteCard extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          const Positioned(
+          Positioned(
             top: 9,
             right: 9,
-            child: Icon(Icons.settings, color: Color(0xFF84B75C), size: 20),
+            child: GestureDetector(
+              onTap: onSettingsTap,
+              child: const Icon(Icons.settings, color: Color(0xFF84B75C), size: 20),
+            ),
           ),
           Center(
             child: Padding(
@@ -1297,6 +2415,23 @@ class _AddSpriteDialog extends StatefulWidget {
   State<_AddSpriteDialog> createState() => _AddSpriteDialogState();
 }
 
+enum _AddSpriteDialogMode { library, uploadSheet, createSheet, paintEditor }
+enum _DrawTool { pencil, eraser, line, rect, oval }
+enum _GameWidgetType { counter, text, timer, clock, button, dialog, webcam }
+
+class _AddedGameWidget {
+  static int _counter = 0;
+  _AddedGameWidget(this.type) : id = 'w${++_counter}', name = type.name;
+  final String id;
+  final _GameWidgetType type;
+  String name;
+  bool show = true;
+  double opacity = 1.0;
+  Color textColor = Colors.white;
+  String get label => type.name[0].toUpperCase() + type.name.substring(1);
+  String get assetPath => 'assets/images/sprites/${type.name}.png';
+}
+
 class _AddSpriteDialogState extends State<_AddSpriteDialog> {
   static const List<String> _categories = [
     'ALL CATEGORIES',
@@ -1311,17 +2446,52 @@ class _AddSpriteDialogState extends State<_AddSpriteDialog> {
   ];
 
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _uploadScrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
 
+  _AddSpriteDialogMode _mode = _AddSpriteDialogMode.library;
   String _selectedCategory = 'ALL CATEGORIES';
   String _searchText = '';
   _SpriteAssetData? _selectedSprite = _spriteLibrary.first;
+  int _uploadFrameCount = 1;
+  Uint8List? _pickedFileBytes;
+  String _pickedFileName = '';
+  int _createSheetWidth = 200;
+  int _createSheetHeight = 200;
+
+  // Paint editor state
+  _DrawTool _activeTool = _DrawTool.pencil;
+  double _brushSize = 4.0;
+  Color _strokeColor = Colors.black;
+  Color _fillColor = Colors.white;
+  final List<_DrawStroke> _strokes = [];
+  _DrawStroke? _currentStroke;
+  final List<List<_DrawStroke>> _undoHistory = [];
+  final List<List<_DrawStroke>> _redoHistory = [];
+  final List<_SpriteAssetData> _customSprites = [];
+  final GlobalKey _canvasRepaintKey = GlobalKey();
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _uploadScrollController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (!mounted) return;
+    if (result != null && result.files.single.bytes != null) {
+      setState(() {
+        _pickedFileBytes = result.files.single.bytes;
+        _pickedFileName = result.files.single.name;
+      });
+    }
   }
 
   List<_SpriteAssetData> get _filteredSprites {
@@ -1336,158 +2506,1444 @@ class _AddSpriteDialogState extends State<_AddSpriteDialog> {
     }).toList();
   }
 
+  List<_SpriteAssetData> get _filteredCustomSprites {
+    if (_selectedCategory != 'ALL CATEGORIES' && _selectedCategory != 'MY SPRITES') {
+      return [];
+    }
+    final q = _searchText.trim().toLowerCase();
+    if (q.isEmpty) return _customSprites;
+    return _customSprites.where((s) => s.displayName.toLowerCase().contains(q)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
       backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(
-          maxWidth: 1380,
-          maxHeight: 815,
-          minHeight: 560,
+          maxWidth: 1020,
+          maxHeight: 680,
+          minHeight: 460,
         ),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 18),
+          padding: _mode == _AddSpriteDialogMode.paintEditor
+              ? EdgeInsets.zero
+              : const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          child: _mode == _AddSpriteDialogMode.library
+              ? _buildSpriteLibrary(context)
+              : _mode == _AddSpriteDialogMode.uploadSheet
+                  ? _buildUploadSpriteSheet(context)
+                  : _mode == _AddSpriteDialogMode.createSheet
+                      ? _buildCreateSpriteSheet(context)
+                      : _buildPaintEditor(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDialogTitle(String title) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF7BAE55),
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            letterSpacing: .3,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(height: 1, color: const Color(0xFF9DCA76)),
+      ],
+    );
+  }
+
+  Widget _buildSpriteLibrary(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDialogTitle('ADD A SPRITE'),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            SizedBox(
+              width: 340,
+              height: 40,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _searchText = value),
+                decoration: InputDecoration(
+                  hintText: 'search...',
+                  hintStyle: const TextStyle(fontSize: 19, color: Color(0xFF6A6A6A)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  suffixIcon: const Icon(Icons.search, color: Color(0xFF78AD50), size: 26),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(4),
+                    borderSide: const BorderSide(color: Color(0xFF78AD50), width: 1.5),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _categories.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 28),
+            itemBuilder: (context, index) {
+              final category = _categories[index];
+              return _SpriteCategoryChip(
+                label: category,
+                selected: _selectedCategory == category,
+                onTap: () => setState(() => _selectedCategory = category),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: GridView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(28, 12, 18, 14),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 148,
+                mainAxisExtent: 128,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 20,
+              ),
+              itemCount: _filteredCustomSprites.length + _filteredSprites.length + 2,
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return _SpriteDialogActionTile(
+                    icon: Icons.upload,
+                    label: 'UPLOAD SPRITE\nSHEET',
+                    onTap: () => setState(() => _mode = _AddSpriteDialogMode.uploadSheet),
+                  );
+                }
+                if (index == 1) {
+                  return _SpriteDialogActionTile(
+                    icon: Icons.add,
+                    label: 'CREATE A NEW\nSHEET',
+                    onTap: () => setState(() => _mode = _AddSpriteDialogMode.createSheet),
+                  );
+                }
+                final customCount = _filteredCustomSprites.length;
+                if (index - 2 < customCount) {
+                  final sprite = _filteredCustomSprites[index - 2];
+                  return _SpriteLibraryTile(
+                    sprite: sprite,
+                    selected: _selectedSprite == sprite,
+                    onTap: () => setState(() => _selectedSprite = sprite),
+                  );
+                }
+                final sprite = _filteredSprites[index - 2 - customCount];
+                return _SpriteLibraryTile(
+                  sprite: sprite,
+                  selected: _selectedSprite == sprite,
+                  onTap: () => setState(() => _selectedSprite = sprite),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildLibraryFooter(context),
+      ],
+    );
+  }
+
+  Widget _buildLibraryFooter(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF3F2016),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+          ),
+          child: const Text('CANCEL', style: TextStyle(fontSize: 16)),
+        ),
+        const SizedBox(width: 64),
+        SizedBox(
+          width: 176,
+          height: 47,
+          child: ElevatedButton(
+            onPressed: _selectedSprite == null
+                ? null
+                : () => Navigator.pop(context, _selectedSprite),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4D861D),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            child: const Text('OK', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(width: 7),
+      ],
+    );
+  }
+
+  Widget _buildUploadSpriteSheet(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDialogTitle('UPLOAD A SPRITE SHEET'),
+        const SizedBox(height: 44),
+        Expanded(
+          child: Scrollbar(
+            controller: _uploadScrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _uploadScrollController,
+              padding: const EdgeInsets.fromLTRB(34, 0, 18, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ReturnToSpritesButton(
+                    onTap: () => setState(() => _mode = _AddSpriteDialogMode.library),
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _SpriteUploadInstructionsCard(),
+                      const SizedBox(width: 0),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _SpriteUploadDropArea(onBrowse: _pickFile),
+                                const SizedBox(width: 24),
+                                _SpriteUploadPreview(imageBytes: _pickedFileBytes, fileName: _pickedFileName),
+                              ],
+                            ),
+                            const SizedBox(height: 28),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'Number of frames',
+                                  style: TextStyle(
+                                    color: Color(0xFF353535),
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                _UploadFrameStepper(
+                                  value: _uploadFrameCount,
+                                  onChanged: (value) => setState(() => _uploadFrameCount = value),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _buildUploadFooter(context),
+      ],
+    );
+  }
+
+  Widget _buildUploadFooter(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF3F2016),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
+          ),
+          child: const Text('CANCEL', style: TextStyle(fontSize: 16)),
+        ),
+        const SizedBox(width: 64),
+        SizedBox(
+          width: 176,
+          height: 47,
+          child: ElevatedButton(
+            onPressed: _pickedFileBytes == null
+                ? null
+                : () => Navigator.pop(
+                      context,
+                      _SpriteAssetData(
+                        displayName: _pickedFileName.isNotEmpty ? _pickedFileName : 'Custom Sprite',
+                        assetPath: '',
+                        categories: const ['MY SPRITES'],
+                        frameCount: _uploadFrameCount,
+                        imageBytes: _pickedFileBytes,
+                      ),
+                    ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF4D861D),
+              disabledBackgroundColor: const Color(0xFFA8C38D),
+              foregroundColor: Colors.white,
+              disabledForegroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            child: const Text('OK', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(width: 7),
+      ],
+    );
+  }
+
+  Widget _buildCreateSpriteSheet(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDialogTitle('CREATE A SPRITE SHEET'),
+        const SizedBox(height: 20),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _ReturnToSpritesButton(
+                  onTap: () => setState(() => _mode = _AddSpriteDialogMode.library),
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Define the sprite frame size',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        _DimensionField(
+                          key: const ValueKey('dim_width'),
+                          label: 'WIDTH:',
+                          value: _createSheetWidth,
+                          onChanged: (v) => setState(() => _createSheetWidth = v),
+                        ),
+                        const SizedBox(height: 18),
+                        _DimensionField(
+                          key: const ValueKey('dim_height'),
+                          label: 'HEIGHT:',
+                          value: _createSheetHeight,
+                          onChanged: (v) => setState(() => _createSheetHeight = v),
+                        ),
+                        const SizedBox(height: 22),
+                        SizedBox(
+                          width: 280,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: () => setState(() {
+                              _strokes.clear();
+                              _undoHistory.clear();
+                              _redoHistory.clear();
+                              _currentStroke = null;
+                              _mode = _AddSpriteDialogMode.paintEditor;
+                            }),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4D861D),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            child: const Text('OK', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 48),
+                    _SpriteSizePreview(
+                      frameWidth: _createSheetWidth,
+                      frameHeight: _createSheetHeight,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Paint editor ──────────────────────────────────────────────────────────
+
+  Size get _canvasDisplaySize {
+    const maxW = 460.0;
+    const maxH = 370.0;
+    final scale = math.min(maxW / _createSheetWidth, maxH / _createSheetHeight);
+    return Size(
+      (_createSheetWidth * scale).clamp(80.0, maxW),
+      (_createSheetHeight * scale).clamp(80.0, maxH),
+    );
+  }
+
+  void _undo() {
+    if (_undoHistory.isEmpty) return;
+    setState(() {
+      _redoHistory.add(List.from(_strokes));
+      _strokes
+        ..clear()
+        ..addAll(_undoHistory.removeLast());
+    });
+  }
+
+  void _redo() {
+    if (_redoHistory.isEmpty) return;
+    setState(() {
+      _undoHistory.add(List.from(_strokes));
+      _strokes
+        ..clear()
+        ..addAll(_redoHistory.removeLast());
+    });
+  }
+
+  void _clearCanvas() {
+    setState(() {
+      _undoHistory.add(List.from(_strokes));
+      _redoHistory.clear();
+      _strokes.clear();
+    });
+  }
+
+  Future<void> _saveSprite() async {
+    Uint8List? pngBytes;
+
+    // Null-safe canvas capture — JS TypeError from toImage() is not always
+    // catchable, so guard every step before awaiting.
+    final renderCtx = _canvasRepaintKey.currentContext;
+    if (renderCtx != null) {
+      final renderObj = renderCtx.findRenderObject();
+      if (renderObj is RenderRepaintBoundary && renderObj.hasSize) {
+        try {
+          final image = await renderObj.toImage(pixelRatio: 2.0);
+          final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+          pngBytes = byteData?.buffer.asUint8List();
+        } catch (_) {
+          // ignore — save sprite without preview bytes
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    // Snapshot the count BEFORE the setState so the name is correct even
+    // if setState triggers a re-entrant read.
+    final spriteIndex = _customSprites.length + 1;
+    final newSprite = _SpriteAssetData(
+      displayName: 'My Sprite $spriteIndex',
+      assetPath: '',
+      categories: const ['MY SPRITES'],
+      frameCount: 1,
+      imageBytes: pngBytes,
+    );
+
+    setState(() {
+      _customSprites.add(newSprite);
+      _mode = _AddSpriteDialogMode.library;
+      _selectedCategory = 'MY SPRITES';
+    });
+  }
+
+  Future<void> _showColorPicker(BuildContext context, {required bool isStroke}) async {
+    const palette = <Color>[
+      Colors.black, Colors.white, Color(0xFF808080), Color(0xFFC0C0C0),
+      Color(0xFFFF0000), Color(0xFFFF6600), Color(0xFFFFCC00), Color(0xFF00CC00),
+      Color(0xFF0066FF), Color(0xFF9900CC), Color(0xFF00CCFF), Color(0xFFFF66CC),
+      Color(0xFF660000), Color(0xFF003300), Color(0xFF000066), Color(0xFF663300),
+      Color(0xFFFFCCCC), Color(0xFFCCFFCC), Color(0xFFCCCCFF), Color(0xFFFFFFCC),
+    ];
+
+    final picked = await showDialog<Color>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isStroke ? 'Stroke Color' : 'Fill Color',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+        contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+        content: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: palette.map((c) => GestureDetector(
+            onTap: () => Navigator.pop(ctx, c),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: c,
+                border: Border.all(color: Colors.grey.shade400, width: 1.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          )).toList(),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      ),
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        if (isStroke) { _strokeColor = picked; } else { _fillColor = picked; }
+      });
+    }
+  }
+
+  Widget _buildPaintEditor(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Top bar
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(
+            children: [
+              _ReturnToSpritesButton(
+                onTap: () => setState(() => _mode = _AddSpriteDialogMode.createSheet),
+              ),
+              const SizedBox(width: 18),
+              Text(
+                'SPRITE EDITOR  $_createSheetWidth × $_createSheetHeight px',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF3A8A2E),
+                  letterSpacing: .4,
+                ),
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 140,
+                height: 44,
+                child: ElevatedButton(
+                  onPressed: _saveSprite,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4D861D),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: const Text('OK', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPaintToolbar(context),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildBrushSizeRow(),
+                    Expanded(child: _buildPaintCanvas()),
+                    _buildFrameStrip(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaintToolbar(BuildContext context) {
+    Widget toolBtn(_DrawTool tool, IconData icon, String tooltip) {
+      final active = _activeTool == tool;
+      return Tooltip(
+        message: tooltip,
+        child: GestureDetector(
+          onTap: () => setState(() => _activeTool = tool),
+          child: Container(
+            width: 44,
+            height: 40,
+            margin: const EdgeInsets.symmetric(vertical: 1),
+            decoration: BoxDecoration(
+              color: active ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+              border: active ? Border.all(color: const Color(0xFFBBBBBB)) : null,
+            ),
+            child: Icon(icon, size: 20, color: active ? const Color(0xFF2D5A1A) : const Color(0xFF555555)),
+          ),
+        ),
+      );
+    }
+
+    Widget colorSwatch(String label, Color color, bool isStroke) {
+      return GestureDetector(
+        onTap: () => _showColorPicker(context, isStroke: isStroke),
+        child: Column(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 9, color: Color(0xFF666666))),
+            const SizedBox(height: 2),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color,
+                border: Border.all(color: Colors.grey.shade400, width: 1.2),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: 52,
+      color: const Color(0xFFE8E8E8),
+      child: Column(
+        children: [
+          const SizedBox(height: 6),
+          toolBtn(_DrawTool.pencil, Icons.edit_rounded, 'Pencil'),
+          toolBtn(_DrawTool.eraser, Icons.auto_fix_normal, 'Eraser'),
+          toolBtn(_DrawTool.line, Icons.horizontal_rule, 'Line'),
+          toolBtn(_DrawTool.rect, Icons.crop_square_rounded, 'Rectangle'),
+          toolBtn(_DrawTool.oval, Icons.circle_outlined, 'Oval'),
+          const Divider(height: 14, indent: 6, endIndent: 6),
+          colorSwatch('stroke', _strokeColor, true),
+          colorSwatch('fill', _fillColor, false),
+          const Divider(height: 14, indent: 6, endIndent: 6),
+          Tooltip(
+            message: 'Undo',
+            child: GestureDetector(
+              onTap: _undo,
+              child: Icon(Icons.undo, size: 22,
+                  color: _undoHistory.isNotEmpty ? const Color(0xFF444444) : const Color(0xFFBBBBBB)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Tooltip(
+            message: 'Redo',
+            child: GestureDetector(
+              onTap: _redo,
+              child: Icon(Icons.redo, size: 22,
+                  color: _redoHistory.isNotEmpty ? const Color(0xFF444444) : const Color(0xFFBBBBBB)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _clearCanvas,
+            child: const Text('Clear',
+                style: TextStyle(fontSize: 11, color: Color(0xFF666666), fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrushSizeRow() {
+    const sizes = [1.0, 2.0, 4.0, 8.0, 14.0];
+    return Container(
+      height: 40,
+      color: const Color(0xFFE0E0E0),
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: _strokeColor,
+              border: Border.all(color: Colors.white, width: 2),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(width: 10),
+          for (final size in sizes)
+            GestureDetector(
+              onTap: () => setState(() => _brushSize = size),
+              child: Container(
+                width: 36,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: _brushSize == size
+                      ? Colors.white.withValues(alpha: 0.6)
+                      : Colors.transparent,
+                ),
+                child: Container(
+                  width: size.clamp(2.0, 18.0),
+                  height: size.clamp(2.0, 18.0),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF444444),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaintCanvas() {
+    final displaySize = _canvasDisplaySize;
+    return Container(
+      color: const Color(0xFFAAAAAA),
+      child: Center(
+        child: Container(
+          width: displaySize.width,
+          height: displaySize.height,
+          color: Colors.white,
+          child: GestureDetector(
+            onPanStart: (d) {
+              _undoHistory.add(List.from(_strokes));
+              _redoHistory.clear();
+              final stroke = _DrawStroke(
+                tool: _activeTool,
+                color: _activeTool == _DrawTool.eraser ? Colors.white : _strokeColor,
+                strokeWidth: _activeTool == _DrawTool.eraser ? _brushSize * 4 : _brushSize,
+                fillColor: (_activeTool == _DrawTool.rect || _activeTool == _DrawTool.oval)
+                    ? _fillColor
+                    : null,
+              );
+              stroke.points.add(d.localPosition);
+              setState(() => _currentStroke = stroke);
+            },
+            onPanUpdate: (d) {
+              if (_currentStroke == null) return;
+              setState(() => _currentStroke!.points.add(d.localPosition));
+            },
+            onPanEnd: (_) {
+              if (_currentStroke != null) {
+                setState(() {
+                  _strokes.add(_currentStroke!);
+                  _currentStroke = null;
+                });
+              }
+            },
+            child: RepaintBoundary(
+              key: _canvasRepaintKey,
+              child: CustomPaint(
+                painter: _SpriteCanvasPainter(
+                  strokes: _strokes,
+                  currentStroke: _currentStroke,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFrameStrip() {
+    final displaySize = _canvasDisplaySize;
+    final thumbW = (displaySize.width * 0.18).clamp(56.0, 80.0);
+    final thumbH = (displaySize.height * 0.18).clamp(48.0, 68.0);
+    return Container(
+      height: 86,
+      color: const Color(0xFFD0D0D0),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Row(
+        children: [
+          // Frame 1 thumbnail
+          Container(
+            width: thumbW,
+            height: thumbH,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: const Color(0xFF55BB80), width: 2),
+            ),
+            child: ClipRect(
+              child: FittedBox(
+                fit: BoxFit.fill,
+                child: SizedBox(
+                  width: displaySize.width,
+                  height: displaySize.height,
+                  child: CustomPaint(
+                    painter: _SpriteCanvasPainter(strokes: _strokes),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Add frame button
+          Container(
+            width: thumbH,
+            height: thumbH,
+            decoration: BoxDecoration(
+              color: const Color(0xFF44BB77),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.add, color: Colors.white, size: 30),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReturnToSpritesButton extends StatelessWidget {
+  const _ReturnToSpritesButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 88,
+        height: 91,
+        decoration: BoxDecoration(
+          color: const Color(0xFF51C68C),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(.16), offset: const Offset(0, 3)),
+          ],
+        ),
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.arrow_back, color: Colors.white, size: 38),
+            SizedBox(height: 9),
+            Text(
+              'RETURN TO\nSPRITES',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                height: 1.12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Dimension stepper field ─────────────────────────────────────────────────
+class _DimensionField extends StatefulWidget {
+  const _DimensionField({super.key, required this.label, required this.value, required this.onChanged});
+
+  final String label;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  State<_DimensionField> createState() => _DimensionFieldState();
+}
+
+class _DimensionFieldState extends State<_DimensionField> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: '${widget.value}');
+    _focusNode = FocusNode();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(_DimensionField old) {
+    super.didUpdateWidget(old);
+    // Only sync when the arrow buttons change the value (not while the user is typing)
+    if (!_focusNode.hasFocus && old.value != widget.value) {
+      _controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) _commit(_controller.text);
+    setState(() {});
+  }
+
+  void _onTextChanged(String text) {
+    final parsed = int.tryParse(text.trim());
+    // Update preview live — don't clamp to minimum while typing so "300"
+    // doesn't snap to 10 when the user has only typed "3" so far.
+    if (parsed != null && parsed > 0) {
+      widget.onChanged(math.min(parsed, 9999));
+    }
+  }
+
+  void _commit(String text) {
+    final parsed = int.tryParse(text.trim());
+    if (parsed != null) {
+      final clamped = parsed.clamp(10, 9999);
+      widget.onChanged(clamped);
+      _controller.text = '$clamped';
+    } else {
+      _controller.text = '${widget.value}';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 72,
+          child: Text(
+            widget.label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF9B8A6E),
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+        Container(
+          width: 130,
+          height: 44,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: _focusNode.hasFocus ? const Color(0xFF7BAE55) : const Color(0xFFC9C9C9),
+              width: _focusNode.hasFocus ? 2 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Color(0xFF2D2D2D), fontWeight: FontWeight.w500),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 6),
+                    isDense: true,
+                  ),
+                  onChanged: _onTextChanged,
+                  onSubmitted: _commit,
+                ),
+              ),
+              Container(width: 1, color: const Color(0xFFE0E0E0)),
+              SizedBox(
+                width: 26,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => widget.onChanged(math.min(9999, widget.value + 10)),
+                        child: const Icon(Icons.keyboard_arrow_up, size: 20, color: Color(0xFF7BAE55)),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => widget.onChanged(math.max(10, widget.value - 10)),
+                        child: const Icon(Icons.keyboard_arrow_down, size: 20, color: Color(0xFF7BAE55)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Live sprite-size preview with dimension annotations ──────────────────────
+class _SpriteSizePreview extends StatelessWidget {
+  const _SpriteSizePreview({required this.frameWidth, required this.frameHeight});
+
+  final int frameWidth;
+  final int frameHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxDisplay = 260.0;
+    const minDisplay = 60.0;
+    final scale = math.min(maxDisplay / frameWidth, maxDisplay / frameHeight);
+    final displayW = (frameWidth * scale).clamp(minDisplay, maxDisplay);
+    final displayH = (frameHeight * scale).clamp(minDisplay, maxDisplay);
+
+    const leftPad = 44.0;
+    const bottomPad = 36.0;
+
+    return SizedBox(
+      width: displayW + leftPad + 12,
+      height: displayH + bottomPad + 12,
+      child: Stack(
+        children: [
+          // White card
+          Positioned(
+            left: leftPad,
+            top: 0,
+            child: Container(
+              width: displayW,
+              height: displayH,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(.14), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Center(
+                child: _SpriteSheetFrame(
+                  sprite: const _SpriteAssetData(
+                    displayName: 'Monkey',
+                    assetPath: 'assets/images/sprites/baseballMonkey.png',
+                    categories: ['ANIMALS'],
+                    frameCount: 4,
+                    previewFrame: 0,
+                  ),
+                  height: math.min(displayH * 0.62, 52),
+                ),
+              ),
+            ),
+          ),
+          // Height annotation (left side)
+          Positioned(
+            left: 0,
+            top: 0,
+            child: CustomPaint(
+              size: Size(leftPad, displayH),
+              painter: _DimensionLinePainter(value: frameHeight, isVertical: true),
+            ),
+          ),
+          // Width annotation (bottom)
+          Positioned(
+            left: leftPad,
+            top: displayH + 2,
+            child: CustomPaint(
+              size: Size(displayW, bottomPad),
+              painter: _DimensionLinePainter(value: frameWidth, isVertical: false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DimensionLinePainter extends CustomPainter {
+  const _DimensionLinePainter({required this.value, required this.isVertical});
+
+  final int value;
+  final bool isVertical;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = const Color(0xFF4A8FD4)
+      ..strokeWidth = 1.4
+      ..style = PaintingStyle.stroke;
+
+    const bracketLen = 6.0;
+    final label = '$value';
+    final tp = TextPainter(
+      text: TextSpan(
+        text: label,
+        style: const TextStyle(color: Color(0xFF4A8FD4), fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    if (isVertical) {
+      final x = size.width - 10;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+      canvas.drawLine(Offset(x - bracketLen, 0), Offset(x + bracketLen, 0), paint);
+      canvas.drawLine(Offset(x - bracketLen, size.height), Offset(x + bracketLen, size.height), paint);
+      tp.paint(canvas, Offset(x - tp.width - 5, size.height / 2 - tp.height / 2));
+    } else {
+      final y = 10.0;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(0, y - bracketLen), Offset(0, y + bracketLen), paint);
+      canvas.drawLine(Offset(size.width, y - bracketLen), Offset(size.width, y + bracketLen), paint);
+      tp.paint(canvas, Offset(size.width / 2 - tp.width / 2, y + 4));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DimensionLinePainter old) =>
+      old.value != value || old.isVertical != isVertical;
+}
+
+// ── Upload instructions card ─────────────────────────────────────────────────
+class _SpriteUploadInstructionsCard extends StatelessWidget {
+  const _SpriteUploadInstructionsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 310,
+      height: 370,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(
+          color: const Color(0xFF465BFF),
+          radius: 7,
+          dash: 2.5,
+          gap: 2.5,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(32, 28, 28, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'ADD A SPRITE',
+                'Important Instructions:',
                 style: TextStyle(
-                  color: Color(0xFF7BAE55),
-                  fontSize: 26,
+                  fontSize: 14,
+                  color: Color(0xFF2A211F),
                   fontWeight: FontWeight.w900,
-                  letterSpacing: .3,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Container(height: 1, color: const Color(0xFF9DCA76)),
-              const SizedBox(height: 36),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 435,
-                    height: 42,
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) => setState(() => _searchText = value),
-                      decoration: InputDecoration(
-                        hintText: 'search...',
-                        hintStyle: const TextStyle(fontSize: 19, color: Color(0xFF6A6A6A)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                        suffixIcon: const Icon(Icons.search, color: Color(0xFF78AD50), size: 26),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(color: Color(0xFFC7C7C7)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(4),
-                          borderSide: const BorderSide(color: Color(0xFF78AD50), width: 1.5),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 51),
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    return _SpriteCategoryChip(
-                      label: category,
-                      selected: _selectedCategory == category,
-                      onTap: () => setState(() => _selectedCategory = category),
-                    );
-                  },
                 ),
               ),
               const SizedBox(height: 16),
-              Expanded(
-                child: Scrollbar(
-                  controller: _scrollController,
-                  thumbVisibility: true,
-                  child: GridView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(58, 16, 38, 18),
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 180,
-                      mainAxisExtent: 158,
-                      crossAxisSpacing: 22,
-                      mainAxisSpacing: 30,
-                    ),
-                    itemCount: _filteredSprites.length + 2,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return const _SpriteDialogActionTile(
-                          icon: Icons.upload,
-                          label: 'UPLOAD SPRITE\nSHEET',
-                        );
-                      }
-                      if (index == 1) {
-                        return const _SpriteDialogActionTile(
-                          icon: Icons.add,
-                          label: 'CREATE A NEW\nSHEET',
-                        );
-                      }
-
-                      final sprite = _filteredSprites[index - 2];
-                      return _SpriteLibraryTile(
-                        sprite: sprite,
-                        selected: _selectedSprite == sprite,
-                        onTap: () => setState(() => _selectedSprite = sprite),
-                      );
-                    },
-                  ),
+              const Text(
+                'Place all states of your sprite in one\n'
+                'horizontal row. Your sprite frames\n'
+                'should be divided into equal widths.\n'
+                'Background should be transparent\n'
+                '(using alpha channel).',
+                style: TextStyle(
+                  color: Color(0xFF3A2A2A),
+                  fontSize: 13,
+                  height: 1.38,
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF3F2016),
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
-                    ),
-                    child: const Text('CANCEL', style: TextStyle(fontSize: 16)),
-                  ),
-                  const SizedBox(width: 64),
-                  SizedBox(
-                    width: 176,
-                    height: 47,
-                    child: ElevatedButton(
-                      onPressed: _selectedSprite == null
-                          ? null
-                          : () => Navigator.pop(context, _selectedSprite),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4D861D),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                children: List.generate(5, (index) {
+                  final frame = index.clamp(0, 3);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 5),
+                    child: SizedBox(
+                      width: 44,
+                      height: 50,
+                      child: _SpriteSheetFrame(
+                        sprite: _SpriteAssetData(
+                          displayName: 'Monkey',
+                          assetPath: 'assets/images/sprites/baseballMonkey.png',
+                          categories: const ['ANIMALS'],
+                          frameCount: 4,
+                          previewFrame: frame,
+                        ),
+                        height: 50,
                       ),
-                      child: const Text('OK', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                     ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 22),
+              const Text.rich(
+                TextSpan(
+                  style: TextStyle(
+                    color: Color(0xFF3A2A2A),
+                    fontSize: 13,
+                    height: 1.38,
                   ),
-                  const SizedBox(width: 7),
-                ],
+                  children: [
+                    TextSpan(text: 'Your file must be saved as '),
+                    TextSpan(text: 'PNG', style: TextStyle(fontWeight: FontWeight.w900)),
+                    TextSpan(text: ',\nand cannot exceed '),
+                    TextSpan(text: '3MB', style: TextStyle(fontWeight: FontWeight.w900)),
+                    TextSpan(text: '.'),
+                  ],
+                ),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+class _SpriteUploadDropArea extends StatelessWidget {
+  const _SpriteUploadDropArea({required this.onBrowse});
+
+  final VoidCallback onBrowse;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 300,
+      height: 320,
+      child: CustomPaint(
+        painter: _DashedBorderPainter(
+          color: const Color(0xFFE2E2E2),
+          radius: 3,
+          dash: 6,
+          gap: 4,
+          strokeWidth: 2,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 120,
+              height: 100,
+              child: Image.asset(
+                CodeMonkeyScratchAssets.uploadMonkey,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.cloud_upload_outlined, size: 64, color: Color(0xFF9EDFED)),
+                      SizedBox(height: 6),
+                    ],
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: onBrowse,
+              style: OutlinedButton.styleFrom(
+                fixedSize: const Size(180, 48),
+                side: const BorderSide(color: Color(0xFFFFB533), width: 1.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                foregroundColor: const Color(0xFF2D1710),
+                backgroundColor: Colors.white,
+              ),
+              child: const Text(
+                'BROWSE FILES',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SpriteUploadPreview extends StatelessWidget {
+  const _SpriteUploadPreview({this.imageBytes, this.fileName = ''});
+
+  final Uint8List? imageBytes;
+  final String fileName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SizedBox(
+        width: 200,
+        child: Column(
+          children: [
+            Container(
+              width: 188,
+              height: 188,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(.28), offset: const Offset(0, 6)),
+                ],
+              ),
+              clipBehavior: Clip.hardEdge,
+              child: imageBytes != null
+                  ? Image.memory(
+                      imageBytes!,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stack) => const Center(
+                        child: Icon(Icons.broken_image_outlined, size: 72, color: Colors.grey),
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Sprite Preview',
+              style: TextStyle(
+                color: Color(0xFF2C1A17),
+                fontSize: 20,
+                height: 1,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              imageBytes != null ? fileName : 'No File Uploaded',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF2C1A17),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadFrameStepper extends StatelessWidget {
+  const _UploadFrameStepper({required this.value, required this.onChanged});
+
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 60,
+      height: 34,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: const Color(0xFFC9C9C9)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Center(
+              child: Text(
+                '$value',
+                style: const TextStyle(fontSize: 15, color: Color(0xFF2D2D2D)),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 18,
+            child: Column(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onChanged(math.min(99, value + 1)),
+                    child: const Icon(Icons.keyboard_arrow_up, size: 17, color: Color(0xFF7BAE55)),
+                  ),
+                ),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => onChanged(math.max(1, value - 1)),
+                    child: const Icon(Icons.keyboard_arrow_down, size: 17, color: Color(0xFF7BAE55)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashedBorderPainter extends CustomPainter {
+  const _DashedBorderPainter({
+    required this.color,
+    this.strokeWidth = 1,
+    this.dash = 4,
+    this.gap = 4,
+    this.radius = 0,
+  });
+
+  final Color color;
+  final double strokeWidth;
+  final double dash;
+  final double gap;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    ).outerRect.deflate(strokeWidth / 2);
+
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = strokeWidth
+      ..style = PaintingStyle.stroke;
+
+    _drawDashedLine(canvas, Offset(rect.left + radius, rect.top), Offset(rect.right - radius, rect.top), paint);
+    _drawDashedLine(canvas, Offset(rect.right, rect.top + radius), Offset(rect.right, rect.bottom - radius), paint);
+    _drawDashedLine(canvas, Offset(rect.right - radius, rect.bottom), Offset(rect.left + radius, rect.bottom), paint);
+    _drawDashedLine(canvas, Offset(rect.left, rect.bottom - radius), Offset(rect.left, rect.top + radius), paint);
+
+    if (radius > 0) {
+      canvas.drawArc(Rect.fromCircle(center: Offset(rect.left + radius, rect.top + radius), radius: radius), math.pi, math.pi / 2, false, paint);
+      canvas.drawArc(Rect.fromCircle(center: Offset(rect.right - radius, rect.top + radius), radius: radius), -math.pi / 2, math.pi / 2, false, paint);
+      canvas.drawArc(Rect.fromCircle(center: Offset(rect.right - radius, rect.bottom - radius), radius: radius), 0, math.pi / 2, false, paint);
+      canvas.drawArc(Rect.fromCircle(center: Offset(rect.left + radius, rect.bottom - radius), radius: radius), math.pi / 2, math.pi / 2, false, paint);
+    }
+  }
+
+  void _drawDashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+    final total = (end - start).distance;
+    if (total <= 0) return;
+    final direction = (end - start) / total;
+    double drawn = 0;
+    while (drawn < total) {
+      final next = math.min(drawn + dash, total);
+      canvas.drawLine(start + direction * drawn, start + direction * next, paint);
+      drawn += dash + gap;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.dash != dash ||
+        oldDelegate.gap != gap ||
+        oldDelegate.radius != radius;
   }
 }
 
@@ -1508,7 +3964,7 @@ class _SpriteCategoryChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? Colors.white : const Color(0xFFFFC82E),
           borderRadius: BorderRadius.circular(999),
@@ -1519,7 +3975,7 @@ class _SpriteCategoryChip extends StatelessWidget {
           label,
           style: const TextStyle(
             color: Color(0xFF596779),
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1529,38 +3985,47 @@ class _SpriteCategoryChip extends StatelessWidget {
 }
 
 class _SpriteDialogActionTile extends StatelessWidget {
-  const _SpriteDialogActionTile({required this.icon, required this.label});
+  const _SpriteDialogActionTile({
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF51C68C),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(.20), offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 57, color: Colors.white),
-          const SizedBox(height: 14),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              height: 1.18,
-              fontWeight: FontWeight.w900,
-              letterSpacing: .4,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF51C68C),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(.20), offset: const Offset(0, 3)),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 42, color: Colors.white),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                height: 1.18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .3,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1595,9 +4060,9 @@ class _SpriteLibraryTile extends StatelessWidget {
             ),
             child: Center(
               child: SizedBox(
-                width: 96,
-                height: 96,
-                child: Center(child: _SpriteSheetFrame(sprite: sprite, height: 74)),
+                width: 78,
+                height: 78,
+                child: Center(child: _SpriteSheetFrame(sprite: sprite, height: 60)),
               ),
             ),
           ),
@@ -1629,14 +4094,23 @@ class _SpriteSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(
-      sprite.assetPath,
-      height: height,
-      fit: BoxFit.fitHeight,
-      errorBuilder: (context, error, stackTrace) {
-        return Icon(Icons.image_not_supported_outlined, size: height * .55, color: Colors.grey.shade500);
-      },
-    );
+    final image = sprite.imageBytes != null
+        ? Image.memory(
+            sprite.imageBytes!,
+            height: height,
+            fit: BoxFit.fitHeight,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(Icons.image_not_supported_outlined, size: height * .55, color: Colors.grey.shade500);
+            },
+          )
+        : Image.asset(
+            sprite.assetPath,
+            height: height,
+            fit: BoxFit.fitHeight,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(Icons.image_not_supported_outlined, size: height * .55, color: Colors.grey.shade500);
+            },
+          );
 
     final frame = sprite.previewFrame.clamp(0, sprite.frameCount - 1);
 
@@ -1664,6 +4138,7 @@ class _SpriteAssetData {
     required this.categories,
     this.frameCount = 1,
     this.previewFrame = 0,
+    this.imageBytes,
   });
 
   final String displayName;
@@ -1671,6 +4146,185 @@ class _SpriteAssetData {
   final List<String> categories;
   final int frameCount;
   final int previewFrame;
+  final Uint8List? imageBytes;
+}
+
+// ── Settings panel helper widgets ─────────────────────────────────────────────
+
+class _SettingsTextField extends StatefulWidget {
+  const _SettingsTextField({required this.value, required this.onChanged});
+
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_SettingsTextField> createState() => _SettingsTextFieldState();
+}
+
+class _SettingsTextFieldState extends State<_SettingsTextField> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_SettingsTextField old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value && _ctrl.text != widget.value) {
+      _ctrl.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: TextField(
+        controller: _ctrl,
+        onChanged: widget.onChanged,
+        style: const TextStyle(fontSize: 14, color: Color(0xFF2D2D2D)),
+        decoration: InputDecoration(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          isDense: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: const BorderSide(color: Color(0xFFC9C9C9)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: const BorderSide(color: Color(0xFF7BAE55), width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsStepper extends StatelessWidget {
+  const _SettingsStepper({
+    required this.label,
+    required this.value,
+    required this.step,
+    required this.decimals,
+    required this.onChanged,
+  });
+
+  final String label;
+  final double value;
+  final double step;
+  final int decimals;
+  final ValueChanged<double> onChanged;
+
+  String _fmt(double v) => decimals == 0 ? v.round().toString() : v.toStringAsFixed(decimals).replaceAll(RegExp(r'\.?0+$'), '');
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF888888), letterSpacing: .5)),
+        const SizedBox(height: 4),
+        Container(
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFFC9C9C9)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Text(_fmt(value), style: const TextStyle(fontSize: 14, color: Color(0xFF2D2D2D))),
+                ),
+              ),
+              Container(width: 1, color: const Color(0xFFE0E0E0), height: 24),
+              SizedBox(
+                width: 22,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => onChanged(value + step),
+                        child: const Icon(Icons.keyboard_arrow_up, size: 17, color: Color(0xFF7BAE55)),
+                      ),
+                    ),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => onChanged(value - step),
+                        child: const Icon(Icons.keyboard_arrow_down, size: 17, color: Color(0xFF7BAE55)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckboxRow extends StatelessWidget {
+  const _CheckboxRow({
+    required this.label1, required this.val1, required this.onChanged1,
+    required this.label2, required this.val2, required this.onChanged2,
+  });
+
+  final String label1;
+  final bool val1;
+  final ValueChanged<bool> onChanged1;
+  final String label2;
+  final bool val2;
+  final ValueChanged<bool> onChanged2;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(String label, bool val, ValueChanged<bool> onChange) {
+      return Expanded(
+        child: Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: val,
+                onChanged: (v) => onChange(v ?? val),
+                activeColor: const Color(0xFF4D861D),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label, style: const TextStyle(fontSize: 13, color: Color(0xFF3D3D3D))),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        item(label1, val1, onChanged1),
+        item(label2, val2, onChanged2),
+      ],
+    );
+  }
 }
 
 const List<_SpriteAssetData> _spriteLibrary = [
@@ -1709,27 +4363,112 @@ const List<_SpriteAssetData> _spriteLibrary = [
   _SpriteAssetData(displayName: 'Turtle', assetPath: 'assets/images/sprites/turtle.png', categories: ['ANIMALS', 'NATURE'], frameCount: 6),
 ];
 
+// ── Paint editor model ────────────────────────────────────────────────────────
+class _DrawStroke {
+  _DrawStroke({
+    required this.tool,
+    required this.color,
+    required this.strokeWidth,
+    this.fillColor,
+  });
+
+  final _DrawTool tool;
+  final Color color;
+  final double strokeWidth;
+  final Color? fillColor;
+  final List<Offset> points = [];
+}
+
+// ── Paint editor canvas painter ───────────────────────────────────────────────
+class _SpriteCanvasPainter extends CustomPainter {
+  const _SpriteCanvasPainter({required this.strokes, this.currentStroke});
+
+  final List<_DrawStroke> strokes;
+  final _DrawStroke? currentStroke;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final all = [...strokes, if (currentStroke != null) currentStroke!];
+    for (final stroke in all) {
+      _paintStroke(canvas, stroke, size);
+    }
+  }
+
+  void _paintStroke(Canvas canvas, _DrawStroke stroke, Size size) {
+    if (stroke.points.isEmpty) return;
+
+    final paint = Paint()
+      ..color = stroke.color
+      ..strokeWidth = stroke.strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    switch (stroke.tool) {
+      case _DrawTool.pencil:
+      case _DrawTool.eraser:
+        if (stroke.points.length == 1) {
+          canvas.drawCircle(stroke.points.first, stroke.strokeWidth / 2, paint..style = PaintingStyle.fill);
+        } else {
+          final path = Path()..moveTo(stroke.points.first.dx, stroke.points.first.dy);
+          for (final pt in stroke.points.skip(1)) {
+            path.lineTo(pt.dx, pt.dy);
+          }
+          canvas.drawPath(path, paint);
+        }
+      case _DrawTool.line:
+        if (stroke.points.length >= 2) {
+          canvas.drawLine(stroke.points.first, stroke.points.last, paint);
+        }
+      case _DrawTool.rect:
+        if (stroke.points.length >= 2) {
+          final rect = Rect.fromPoints(stroke.points.first, stroke.points.last);
+          if (stroke.fillColor != null) {
+            canvas.drawRect(rect, Paint()..color = stroke.fillColor!..style = PaintingStyle.fill);
+          }
+          canvas.drawRect(rect, paint);
+        }
+      case _DrawTool.oval:
+        if (stroke.points.length >= 2) {
+          final rect = Rect.fromPoints(stroke.points.first, stroke.points.last);
+          if (stroke.fillColor != null) {
+            canvas.drawOval(rect, Paint()..color = stroke.fillColor!..style = PaintingStyle.fill);
+          }
+          canvas.drawOval(rect, paint);
+        }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SpriteCanvasPainter old) =>
+      strokes != old.strokes || currentStroke != old.currentStroke;
+}
+
 class _InspectorTab extends StatelessWidget {
-  const _InspectorTab({required this.label, this.selected = false});
+  const _InspectorTab({required this.label, this.selected = false, this.onTap});
 
   final String label;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? Colors.white : const Color(0xFFD1D6D9),
-          borderRadius: selected ? BorderRadius.zero : const BorderRadius.vertical(bottom: Radius.circular(13)),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.black : const Color(0xFF7A8185),
-            fontWeight: FontWeight.w800,
-            fontSize: 19,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? Colors.white : const Color(0xFFD1D6D9),
+            borderRadius: selected ? BorderRadius.zero : const BorderRadius.vertical(bottom: Radius.circular(13)),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? Colors.black : const Color(0xFF7A8185),
+              fontWeight: FontWeight.w800,
+              fontSize: 19,
+            ),
           ),
         ),
       ),
@@ -1791,7 +4530,7 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-enum _ScratchBlockKind { event, movement, variable, control, display, ai }
+enum _ScratchBlockKind { event, movement, variable, control, display, ai, widget }
 
 class _ScratchBlockData {
   const _ScratchBlockData({
@@ -1817,6 +4556,8 @@ class _ScratchBlockData {
   factory _ScratchBlockData.display(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF7156B6), kind: _ScratchBlockKind.display);
 
   factory _ScratchBlockData.ai(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFFACAC4F), kind: _ScratchBlockKind.ai);
+
+  factory _ScratchBlockData.widgetBlock(String label, {String? value}) => _ScratchBlockData(label: label, value: value, color: const Color(0xFF4D82A7), kind: _ScratchBlockKind.widget);
 }
 
 Color _categoryColor(String category) {
