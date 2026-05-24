@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
 import '../models/block_template.dart';
 import '../models/block_type.dart';
 import '../painters/puzzle_block_painter.dart';
@@ -31,20 +32,18 @@ class ScratchBlock extends StatelessWidget {
     };
 
     final height = template.isContainer ? 86.0 : 42.0;
+    final topPadding = switch (template.shape) {
+      BlockShape.hat => 18.0,
+      BlockShape.cBlock => 9.0,
+      _ => 0.0,
+    };
 
     return CustomPaint(
-      painter: PuzzleBlockPainter(
-        color: template.color,
-        isContainer: template.isContainer,
-      ),
+      painter: PuzzleBlockPainter(color: template.color, shape: template.shape),
       child: Container(
         width: width,
-        height: height,
-        padding: EdgeInsets.only(
-          left: 16,
-          right: 14,
-          top: template.isContainer ? 9 : 0,
-        ),
+        height: template.shape == BlockShape.hat ? height + 16 : height,
+        padding: EdgeInsets.only(left: 16, right: 14, top: topPadding),
         alignment: template.isContainer
             ? Alignment.topLeft
             : Alignment.centerLeft,
@@ -61,18 +60,19 @@ class ScratchBlock extends StatelessWidget {
   }
 
   List<Widget> _buildLabelParts(BuildContext context) {
+    final label = _localizedTemplateLabel(context, template.label);
     final widgets = <Widget>[
       Icon(_iconForType(template.type), size: 17, color: Colors.white),
       const SizedBox(width: 7),
     ];
 
     final regex = RegExp(r'\{(.*?)\}');
-    final matches = regex.allMatches(template.label).toList();
+    final matches = regex.allMatches(label).toList();
 
     var currentIndex = 0;
 
     for (final match in matches) {
-      final textBefore = template.label.substring(currentIndex, match.start);
+      final textBefore = label.substring(currentIndex, match.start);
 
       if (textBefore.isNotEmpty) {
         widgets.add(_TextPart(textBefore));
@@ -96,13 +96,35 @@ class ScratchBlock extends StatelessWidget {
       currentIndex = match.end;
     }
 
-    final remaining = template.label.substring(currentIndex);
+    final remaining = label.substring(currentIndex);
 
     if (remaining.isNotEmpty) {
       widgets.add(_TextPart(remaining));
     }
 
     return widgets;
+  }
+
+  String _localizedTemplateLabel(BuildContext context, String label) {
+    final language = AppLanguage.of(context);
+    return switch (label) {
+      'When Start Clicked' => language.t('builder.block.whenStartClicked'),
+      'Move {steps} Steps' => language.t('builder.block.moveSteps'),
+      'Turn {degrees}°' => language.t('builder.block.turnDegrees'),
+      'Go To X: {x} Y: {y}' => language.t('builder.block.goTo'),
+      'Say {message}' => language.t('builder.block.say'),
+      'Think {message}' => language.t('builder.block.think'),
+      'Wait {seconds} Second' => language.t('builder.block.wait'),
+      'Repeat {times} Times' => language.t('builder.block.repeat'),
+      'Key {key} Pressed?' => language.t('builder.block.keyPressed'),
+      '{a} + {b}' => language.t('builder.block.add'),
+      '{a} > {b}' => language.t('builder.block.greaterThan'),
+      'Set {variable} To {value}' => language.t('builder.block.setVariable'),
+      'Change {variable} By {value}' => language.t(
+        'builder.block.changeVariable',
+      ),
+      _ => label,
+    };
   }
 
   IconData _iconForType(BlockType type) {
@@ -163,7 +185,7 @@ class _InputPart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!editable) {
-      return _InputBox(child: Text(value));
+      return _InputBox(child: Text(_displayValue(context, value)));
     }
 
     if (input.type == BlockInputType.dropdown ||
@@ -174,7 +196,10 @@ class _InputPart extends StatelessWidget {
             value: value,
             isDense: true,
             items: input.options.map((option) {
-              return DropdownMenuItem(value: option, child: Text(option));
+              return DropdownMenuItem(
+                value: option,
+                child: Text(_displayValue(context, option)),
+              );
             }).toList(),
             onChanged: (newValue) {
               if (newValue != null) onChanged(newValue);
@@ -202,6 +227,18 @@ class _InputPart extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _displayValue(BuildContext context, String value) {
+    final language = AppLanguage.of(context);
+    return switch (value) {
+      'space' => language.t('builder.key.space'),
+      'up' => language.t('builder.key.up'),
+      'down' => language.t('builder.key.down'),
+      'left' => language.t('builder.key.left'),
+      'right' => language.t('builder.key.right'),
+      _ => value,
+    };
   }
 }
 

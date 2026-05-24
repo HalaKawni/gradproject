@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class TopViewBackground {
   final String id;
   final String label;
@@ -119,4 +121,14 @@ TopViewObstacleStyle topViewObstacleStyleById(String? id) {
   }
 
   return topViewObstacleStyles.first;
+}
+
+String localizedTopViewBackgroundLabel(AppLanguage language, String id) {
+  final background = topViewBackgroundById(id);
+  return language.tr('builder.topViewBackground.$id', background.label);
+}
+
+String localizedTopViewObstacleLabel(AppLanguage language, String id) {
+  final obstacle = topViewObstacleStyleById(id);
+  return language.tr('builder.topViewObstacle.$id', obstacle.label);
 }

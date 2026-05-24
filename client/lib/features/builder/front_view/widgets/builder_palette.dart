@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
+
 class BuilderPalette extends StatelessWidget {
   const BuilderPalette({super.key});
 
@@ -8,7 +10,7 @@ class BuilderPalette extends StatelessWidget {
     return Container(
       width: 120,
       color: Colors.grey.shade200,
-      child: const Center(child: Text('Palette')),
+      child: Center(child: Text(AppLanguage.of(context).t('builder.palette'))),
     );
   }
 }

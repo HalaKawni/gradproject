@@ -1,12 +1,26 @@
+import 'dart:math' as math;
+
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:flame/game.dart';
+import 'package:flutter_code_editor/flutter_code_editor.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:highlight/languages/coffeescript.dart';
 
 import '../../scratch_builder/models/instruction_section.dart';
 import '../../scratch_builder/widgets/instruction_editor_panel.dart';
+import '../../front_view/shared/builder_collectable.dart';
+import '../../front_view/shared/builder_character.dart';
 import '../controllers/fourth_demo_controller.dart';
 import '../flame/fourth_demo_game.dart';
+import '../language/game_code_controller.dart';
+import '../language/game_code_indenter.dart';
+import '../language/game_command.dart';
+import '../language/game_language_spec.dart';
 import '../models/fourth_demo_project.dart';
 
 class FourthDemoBuilderPage extends StatefulWidget {
@@ -21,17 +35,24 @@ class FourthDemoBuilderPage extends StatefulWidget {
 class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   late final FourthDemoController controller;
   late final FourthDemoGame game;
-  late final TextEditingController codeController;
+  late final GameCodeController codeController;
   late final TextEditingController titleController;
   final FocusNode stageFocusNode = FocusNode();
   final List<InstructionSection> instructionSections = <InstructionSection>[];
+  bool _syncingCodeFromController = false;
+  bool _updatingCodeFromEditor = false;
+  bool _controllerRefreshScheduled = false;
 
   @override
   void initState() {
     super.initState();
     controller = FourthDemoController()..addListener(_handleControllerChanged);
     game = FourthDemoGame(controller: controller);
-    codeController = TextEditingController(text: controller.selectedCode);
+    codeController = GameCodeController(
+      text: controller.selectedCode,
+      language: coffeescript,
+      modifiers: const [TabModifier()],
+    );
     titleController = TextEditingController(text: controller.project.title)
       ..addListener(_handleTitleChanged);
     instructionSections.addAll(_defaultInstructionSections());
@@ -51,129 +72,210 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   }
 
   void _handleControllerChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      if (_controllerRefreshScheduled) {
+        return;
+      }
+      _controllerRefreshScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _controllerRefreshScheduled = false;
+        _refreshFromController();
+      });
+      return;
+    }
+
+    _refreshFromController();
+  }
+
+  void _refreshFromController() {
+    if (!mounted) {
+      return;
+    }
+
     if (titleController.text != controller.project.title) {
       titleController.value = titleController.value.copyWith(
         text: controller.project.title,
-        selection: TextSelection.collapsed(offset: controller.project.title.length),
+        selection: TextSelection.collapsed(
+          offset: controller.project.title.length,
+        ),
       );
     }
-    if (codeController.text != controller.selectedCode) {
+    if (!_updatingCodeFromEditor &&
+        codeController.text != controller.selectedCode) {
+      _syncingCodeFromController = true;
       codeController.value = TextEditingValue(
         text: controller.selectedCode,
-        selection: TextSelection.collapsed(offset: controller.selectedCode.length),
+        selection: TextSelection.collapsed(
+          offset: controller.selectedCode.length,
+        ),
       );
+      _syncingCodeFromController = false;
     }
-    if (mounted) {
-      setState(() {});
-    }
+    setState(() {});
   }
 
   void _handleTitleChanged() {
     controller.setTitle(titleController.text);
   }
 
+  void _handleCodeChanged(String value) {
+    if (_syncingCodeFromController) {
+      return;
+    }
+
+    _updatingCodeFromEditor = true;
+    try {
+      controller.updateSelectedCode(value, notify: false);
+    } finally {
+      _updatingCodeFromEditor = false;
+    }
+  }
+
+  void _runCode() {
+    if (!controller.runCode()) {
+      return;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        stageFocusNode.requestFocus();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE8F4EC),
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back),
+    final language = AppLanguage.of(context);
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE8F4EC),
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: TextField(
+            controller: titleController,
+            decoration: InputDecoration(
+              hintText: language.t('builder.newLevel'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            style: Theme.of(context).textTheme.titleLarge,
+            cursorColor: Colors.black,
+            maxLines: 1,
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton(
+                onPressed: controller.saveLocal,
+                child: Text(
+                  language.t('builder.save'),
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton(
+                onPressed: controller.isPlaying ? null : controller.loadLocal,
+                child: Text(
+                  language.t('builder.load'),
+                  style: TextStyle(
+                    color: controller.isPlaying ? Colors.black38 : Colors.black,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton(
+                onPressed: controller.isPlaying ? null : _showImportDialog,
+                child: Text(
+                  language.t('builder.import'),
+                  style: TextStyle(
+                    color: controller.isPlaying ? Colors.black38 : Colors.black,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: FilledButton(
+                onPressed: _showExportDialog,
+                child: Text(language.t('builder.publish')),
+              ),
+            ),
+          ],
         ),
-        title: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(
-            hintText: 'New Level',
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-          ),
-          style: Theme.of(context).textTheme.titleLarge,
-          cursorColor: Colors.black,
-          maxLines: 1,
+        body: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 34,
+              child: InstructionEditorPanel(
+                sections: instructionSections,
+                onAddSection: _addInstructionSection,
+                onRemoveSection: _removeInstructionSection,
+                onReorderSections: _reorderInstructionSections,
+                onTitleChanged: _updateInstructionTitle,
+                onContentChanged: _updateInstructionContent,
+                onAddItem: _addInstructionItem,
+                onItemChanged: _updateInstructionItem,
+                onRemoveItem: _removeInstructionItem,
+              ),
+            ),
+            Expanded(
+              flex: 46,
+              child: _CodeColumn(
+                controller: controller,
+                codeController: codeController,
+                onCodeChanged: _handleCodeChanged,
+                onRun: _runCode,
+              ),
+            ),
+            Expanded(
+              flex: 44,
+              child: _StageColumn(
+                controller: controller,
+                game: game,
+                focusNode: stageFocusNode,
+              ),
+            ),
+          ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextButton(
-              onPressed: controller.saveLocal,
-              child: const Text('Save', style: TextStyle(color: Colors.black)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextButton(
-              onPressed: controller.loadLocal,
-              child: const Text('Load', style: TextStyle(color: Colors.black)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextButton(
-              onPressed: _showImportDialog,
-              child: const Text('Import', style: TextStyle(color: Colors.black)),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: FilledButton(
-              onPressed: _showExportDialog,
-              child: const Text('Publish'),
-            ),
-          ),
-        ],
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 34,
-            child: InstructionEditorPanel(
-              sections: instructionSections,
-              onAddSection: _addInstructionSection,
-              onRemoveSection: _removeInstructionSection,
-              onReorderSections: _reorderInstructionSections,
-              onTitleChanged: _updateInstructionTitle,
-              onContentChanged: _updateInstructionContent,
-              onAddItem: _addInstructionItem,
-              onItemChanged: _updateInstructionItem,
-              onRemoveItem: _removeInstructionItem,
-            ),
-          ),
-          Expanded(
-            flex: 46,
-            child: _CodeColumn(
-              controller: controller,
-              codeController: codeController,
-            ),
-          ),
-          Expanded(
-            flex: 44,
-            child: _StageColumn(
-              controller: controller,
-              game: game,
-              focusNode: stageFocusNode,
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _showExportDialog() async {
-    final exportController = TextEditingController(text: controller.exportJson());
+    final exportController = TextEditingController(
+      text: controller.exportJson(),
+    );
     await showDialog<void>(
       context: context,
       builder: (context) => _CourseDialog(
-        title: 'Export Project JSON',
-        action: TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Done')),
+        title: AppLanguage.of(context).t('builder.exportProjectJson'),
+        action: TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(AppLanguage.of(context).t('builder.done')),
+        ),
         child: TextField(
           controller: exportController,
           maxLines: 18,
           readOnly: true,
           style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          decoration: _fieldDecoration('Project JSON'),
+          decoration: _fieldDecoration(
+            AppLanguage.of(context).t('builder.projectJson'),
+          ),
         ),
       ),
     );
@@ -185,19 +287,21 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     await showDialog<void>(
       context: context,
       builder: (context) => _CourseDialog(
-        title: 'Import Project JSON',
+        title: AppLanguage.of(context).t('builder.importProjectJson'),
         action: FilledButton(
           onPressed: () {
             controller.importJson(importController.text);
             Navigator.of(context).pop();
           },
-          child: const Text('Import'),
+          child: Text(AppLanguage.of(context).t('builder.import')),
         ),
         child: TextField(
           controller: importController,
           maxLines: 18,
           style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          decoration: _fieldDecoration('Paste JSON here'),
+          decoration: _fieldDecoration(
+            AppLanguage.of(context).t('builder.pasteJsonHere'),
+          ),
         ),
       ),
     );
@@ -205,26 +309,25 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   }
 
   List<InstructionSection> _defaultInstructionSections() {
-    return const <InstructionSection>[
+    final language = AppLanguage.instance;
+    return <InstructionSection>[
       InstructionSection(
         id: 'overview',
         type: InstructionSectionType.overview,
-        title: 'Welcome to the Game Builder',
-        content:
-            'Today we will learn how to create a game. The goal of the game is to move the player to get the banana. We will use the onKey function, which is called whenever you press a key on your keyboard. The image of the player character on the screen is called a sprite. The function step moves the sprite. Write inside the onKey function to move the player. Now let us start!',
+        title: language.t('builder.welcomeGameBuilder'),
+        content: language.t('builder.fourthOverviewContent'),
       ),
       InstructionSection(
         id: 'code-example',
         type: InstructionSectionType.codeExample,
-        title: 'Code Example',
+        title: language.t('builder.codeExample'),
         content: '@step 1',
       ),
       InstructionSection(
         id: 'instructions',
         type: InstructionSectionType.instructions,
-        title: 'Instructions',
-        content:
-            'Use @step 1 inside @onKey. Once you are done, click the RUN button.',
+        title: language.t('builder.instructions'),
+        content: language.t('builder.fourthInstructionsContent'),
       ),
     ];
   }
@@ -257,40 +360,52 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
 
   void _updateInstructionTitle(String id, String title) {
     setState(() {
-      final index = instructionSections.indexWhere((section) => section.id == id);
+      final index = instructionSections.indexWhere(
+        (section) => section.id == id,
+      );
       if (index == -1) {
         return;
       }
-      instructionSections[index] = instructionSections[index].copyWith(title: title);
+      instructionSections[index] = instructionSections[index].copyWith(
+        title: title,
+      );
     });
   }
 
   void _updateInstructionContent(String id, String content) {
     setState(() {
-      final index = instructionSections.indexWhere((section) => section.id == id);
+      final index = instructionSections.indexWhere(
+        (section) => section.id == id,
+      );
       if (index == -1) {
         return;
       }
-      instructionSections[index] =
-          instructionSections[index].copyWith(content: content);
+      instructionSections[index] = instructionSections[index].copyWith(
+        content: content,
+      );
     });
   }
 
   void _addInstructionItem(String id) {
     setState(() {
-      final index = instructionSections.indexWhere((section) => section.id == id);
+      final index = instructionSections.indexWhere(
+        (section) => section.id == id,
+      );
       if (index == -1) {
         return;
       }
       final section = instructionSections[index];
-      instructionSections[index] =
-          section.copyWith(items: <String>[...section.items, '']);
+      instructionSections[index] = section.copyWith(
+        items: <String>[...section.items, ''],
+      );
     });
   }
 
   void _updateInstructionItem(String id, int itemIndex, String value) {
     setState(() {
-      final index = instructionSections.indexWhere((section) => section.id == id);
+      final index = instructionSections.indexWhere(
+        (section) => section.id == id,
+      );
       if (index == -1) {
         return;
       }
@@ -305,7 +420,9 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
 
   void _removeInstructionItem(String id, int itemIndex) {
     setState(() {
-      final index = instructionSections.indexWhere((section) => section.id == id);
+      final index = instructionSections.indexWhere(
+        (section) => section.id == id,
+      );
       if (index == -1) {
         return;
       }
@@ -321,22 +438,40 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
 
 class _CodeColumn extends StatelessWidget {
   final FourthDemoController controller;
-  final TextEditingController codeController;
+  final CodeController codeController;
+  final ValueChanged<String> onCodeChanged;
+  final VoidCallback onRun;
 
-  const _CodeColumn({required this.controller, required this.codeController});
+  const _CodeColumn({
+    required this.controller,
+    required this.codeController,
+    required this.onCodeChanged,
+    required this.onRun,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFFF5F8FA),
-        border: Border.symmetric(vertical: BorderSide(color: Color(0xFFC6D2D9), width: 2)),
+        border: Border.symmetric(
+          vertical: BorderSide(color: Color(0xFFC6D2D9), width: 2),
+        ),
       ),
       child: Column(
         children: [
-          _CodeHeader(controller: controller),
-          Expanded(child: _CodeEditor(controller: controller, codeController: codeController)),
-          _FunctionPalette(controller: controller, codeController: codeController),
+          _CodeHeader(controller: controller, onRun: onRun),
+          Expanded(
+            child: _CodeEditor(
+              controller: controller,
+              codeController: codeController,
+              onCodeChanged: onCodeChanged,
+            ),
+          ),
+          _FunctionPalette(
+            controller: controller,
+            codeController: codeController,
+          ),
         ],
       ),
     );
@@ -345,11 +480,13 @@ class _CodeColumn extends StatelessWidget {
 
 class _CodeHeader extends StatelessWidget {
   final FourthDemoController controller;
+  final VoidCallback onRun;
 
-  const _CodeHeader({required this.controller});
+  const _CodeHeader({required this.controller, required this.onRun});
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final sprite = controller.selectedSprite;
     return Container(
       height: 58,
@@ -364,7 +501,7 @@ class _CodeHeader extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              sprite?.name ?? 'No sprite',
+              sprite?.name ?? language.t('builder.noSprite'),
               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
             ),
           ),
@@ -373,22 +510,25 @@ class _CodeHeader extends StatelessWidget {
               child: Text(
                 controller.codeError!,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFFD94836), fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  color: Color(0xFFD94836),
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: controller.stop,
-            icon: const Icon(Icons.stop),
-            label: const Text('STOP'),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFF3A241D)),
-          ),
           FilledButton.icon(
-            onPressed: controller.runCode,
-            icon: const Icon(Icons.play_arrow),
-            label: const Text('RUN'),
+            onPressed: controller.isPlaying ? controller.stop : onRun,
+            icon: Icon(controller.isPlaying ? Icons.stop : Icons.play_arrow),
+            label: Text(
+              controller.isPlaying
+                  ? language.t('builder.stop').toUpperCase()
+                  : language.t('builder.run').toUpperCase(),
+            ),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF66B64A),
+              backgroundColor: controller.isPlaying
+                  ? const Color(0xFFD94836)
+                  : const Color(0xFF66B64A),
               foregroundColor: Colors.white,
               textStyle: const TextStyle(fontWeight: FontWeight.w900),
             ),
@@ -401,62 +541,48 @@ class _CodeHeader extends StatelessWidget {
 
 class _CodeEditor extends StatelessWidget {
   final FourthDemoController controller;
-  final TextEditingController codeController;
+  final CodeController codeController;
+  final ValueChanged<String> onCodeChanged;
 
-  const _CodeEditor({required this.controller, required this.codeController});
+  const _CodeEditor({
+    required this.controller,
+    required this.codeController,
+    required this.onCodeChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final lineCount = codeController.text.split('\n').length.clamp(6, 99);
     return Container(
       color: const Color(0xFFEEF6FA),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
+      child: CodeTheme(
+        data: CodeThemeData(styles: atomOneLightTheme),
+        child: CodeField(
+          controller: codeController,
+          expands: true,
+          minLines: null,
+          maxLines: null,
+          readOnly: controller.isPlaying,
+          wrap: false,
+          background: const Color(0xFFEEF6FA),
+          cursorColor: const Color(0xFF24465A),
+          gutterStyle: const GutterStyle(
             width: 48,
-            padding: const EdgeInsets.only(top: 14),
-            color: const Color(0xFFDDEBF2),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var i = 1; i <= lineCount; i += 1)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 10, bottom: 4),
-                    child: Text(
-                      '$i',
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 14,
-                        color: Color(0xFF6A8291),
-                      ),
-                    ),
-                  ),
-              ],
+            textStyle: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 14,
+              color: Color(0xFF6A8291),
             ),
+            background: Color(0xFFDDEBF2),
           ),
-          Expanded(
-            child: TextField(
-              controller: codeController,
-              expands: true,
-              maxLines: null,
-              minLines: null,
-              inputFormatters: const [_LessonCodeIndentFormatter()],
-              onChanged: controller.updateSelectedCode,
-              textAlignVertical: TextAlignVertical.top,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 16,
-                height: 1.45,
-                color: Color(0xFF24465A),
-              ),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.all(14),
-              ),
-            ),
+          padding: const EdgeInsets.all(14),
+          textStyle: const TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 16,
+            height: 1.45,
+            color: Color(0xFF24465A),
           ),
-        ],
+          onChanged: onCodeChanged,
+        ),
       ),
     );
   }
@@ -464,7 +590,7 @@ class _CodeEditor extends StatelessWidget {
 
 class _FunctionPalette extends StatefulWidget {
   final FourthDemoController controller;
-  final TextEditingController codeController;
+  final CodeController codeController;
 
   const _FunctionPalette({
     required this.controller,
@@ -477,62 +603,17 @@ class _FunctionPalette extends StatefulWidget {
 
 class _FunctionPaletteState extends State<_FunctionPalette> {
   bool _isTyping = false;
-
-  static const snippets = <FourthDemoPaletteTab, Map<String, String>>{
-    FourthDemoPaletteTab.movement: {
-      'step': '@step 1',
-      'jump': '@jump()',
-      'getX': '@getX()',
-      'getY': '@getY()',
-      'setX': '@setX 100',
-      'setY': '@setY 100',
-      'setRotation': '@setRotation 90',
-      'getRotation': '@getRotation()',
-      'setSpeed': '@setSpeed 100',
-      'setAllowGravity': '@setAllowGravity true',
-      'getDistanceFrom': '@getDistanceFrom banana',
-    },
-    FourthDemoPaletteTab.events: {
-      'onKey': '@onKey = (key) =>',
-      'onClick': '@onClick = =>',
-      'onCollide': '@onCollide = (sprite) =>',
-      'onStart': '@onStart = =>',
-      'onUpdate': '@onUpdate = =>',
-    },
-    FourthDemoPaletteTab.display: {
-      'show': '@show()',
-      'hide': '@hide()',
-      'setScale': '@setScale 1',
-      'startAnimation': '@startAnimation run',
-      'stopAnimation': '@stopAnimation()',
-      'say': '@say "Hello"',
-    },
-    FourthDemoPaletteTab.control: {
-      'if': 'if condition\n    ',
-      'if/else': 'if condition\n    \nelse\n    ',
-      'repeat': 'repeat 3',
-      'loop': 'loop',
-      'wait': 'wait 1',
-    },
-    FourthDemoPaletteTab.operators: {
-      '+': '+',
-      '-': '-',
-      '*': '*',
-      '/': '/',
-      '==': '==',
-      '>': '>',
-      '<': '<',
-      'and': 'and',
-      'or': 'or',
-      'not': 'not',
-    },
-  };
+  static const int _typingCharactersPerTick = 3;
+  static const Duration _typingTickDelay = Duration(milliseconds: 8);
+  static const GameCodeIndenter _indenter = GameCodeIndenter();
 
   @override
   Widget build(BuildContext context) {
-    final items = snippets[widget.controller.paletteTab]!;
+    final items = GameLanguageSpec.byCategory(
+      _categoryForTab(widget.controller.paletteTab),
+    );
     return Container(
-      height: 172,
+      height: 230,
       decoration: const BoxDecoration(
         color: Color(0xFFE7ECEF),
         border: Border(top: BorderSide(color: Color(0xFFC6D2D9), width: 2)),
@@ -543,7 +624,7 @@ class _FunctionPaletteState extends State<_FunctionPalette> {
             children: [
               for (final tab in FourthDemoPaletteTab.values)
                 _TabButton(
-                  text: _paletteLabel(tab),
+                  text: _paletteLabel(context, tab),
                   active: widget.controller.paletteTab == tab,
                   onTap: () => widget.controller.setPaletteTab(tab),
                 ),
@@ -556,10 +637,11 @@ class _FunctionPaletteState extends State<_FunctionPalette> {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  for (final entry in items.entries)
+                  for (final command in items)
                     _CommandPill(
-                      label: entry.key,
-                      onTap: () => _typeSnippet(entry.value),
+                      label: _commandLabel(context, command),
+                      enabled: !widget.controller.isPlaying,
+                      onTap: () => _typeSnippet(command),
                     ),
                 ],
               ),
@@ -570,222 +652,92 @@ class _FunctionPaletteState extends State<_FunctionPalette> {
     );
   }
 
-  static String _paletteLabel(FourthDemoPaletteTab tab) {
+  static GameCommandCategory _categoryForTab(FourthDemoPaletteTab tab) {
     return switch (tab) {
-      FourthDemoPaletteTab.movement => 'Movement',
-      FourthDemoPaletteTab.events => 'Events',
-      FourthDemoPaletteTab.display => 'Display',
-      FourthDemoPaletteTab.control => 'Control',
-      FourthDemoPaletteTab.operators => 'Operators',
+      FourthDemoPaletteTab.movement => GameCommandCategory.movement,
+      FourthDemoPaletteTab.events => GameCommandCategory.events,
+      FourthDemoPaletteTab.display => GameCommandCategory.display,
+      FourthDemoPaletteTab.control => GameCommandCategory.control,
+      FourthDemoPaletteTab.operators => GameCommandCategory.operators,
     };
   }
 
-  Future<void> _typeSnippet(String snippet) async {
-    if (_isTyping) {
+  static String _paletteLabel(BuildContext context, FourthDemoPaletteTab tab) {
+    final language = AppLanguage.of(context);
+    return switch (tab) {
+      FourthDemoPaletteTab.movement => language.t('builder.movement'),
+      FourthDemoPaletteTab.events => language.t('builder.events'),
+      FourthDemoPaletteTab.display => language.t('builder.display'),
+      FourthDemoPaletteTab.control => language.t('builder.control'),
+      FourthDemoPaletteTab.operators => language.t('builder.operators'),
+    };
+  }
+
+  static String _commandLabel(BuildContext context, GameCommand command) {
+    return AppLanguage.of(
+      context,
+    ).tr('builder.command.${command.label}', command.label);
+  }
+
+  Future<void> _typeSnippet(GameCommand command) async {
+    if (_isTyping || widget.controller.isPlaying) {
       return;
     }
     _isTyping = true;
-    final text = widget.codeController.text;
-    final selection = widget.codeController.selection;
-    final start = selection.isValid ? selection.start : text.length;
-    final end = selection.isValid ? selection.end : text.length;
-    final insertText = _snippetWithSpacing(text, start, snippet);
-    var next = text.replaceRange(start, end, '');
-    widget.codeController.value = TextEditingValue(
-      text: next,
-      selection: TextSelection.collapsed(offset: start),
-    );
-    widget.controller.updateSelectedCode(next);
 
-    var offset = start;
-    for (final unit in insertText.characters) {
-      if (!mounted) {
-        return;
-      }
-      next = widget.codeController.text.replaceRange(offset, offset, unit);
-      offset += unit.length;
+    try {
+      final text = widget.codeController.text;
+      final selection = widget.codeController.selection;
+      final start = selection.isValid ? selection.start : text.length;
+      final end = selection.isValid ? selection.end : text.length;
+      final insertion = _indenter.insertCommand(
+        code: text,
+        start: start,
+        end: end,
+        command: command,
+      );
+      final insertText = insertion.text.substring(
+        insertion.animationStart,
+        insertion.animationEnd,
+      );
+      var next = text.replaceRange(insertion.animationStart, end, '');
       widget.codeController.value = TextEditingValue(
         text: next,
-        selection: TextSelection.collapsed(offset: offset),
+        selection: TextSelection.collapsed(offset: insertion.animationStart),
       );
-      widget.controller.updateSelectedCode(next);
-      await Future<void>.delayed(const Duration(milliseconds: 6));
-    }
-    _isTyping = false;
-  }
 
-  String _snippetWithSpacing(String text, int offset, String snippet) {
-    final before = text.substring(0, offset);
-    final after = text.substring(offset);
-    final lineStart = before.lastIndexOf('\n') + 1;
-    final currentLineBeforeCursor = before.substring(lineStart);
-    final previousLine = _previousNonEmptyLine(before);
-    final isEventSnippet = snippet.startsWith('@on');
-    final isOperator = _isOperatorSnippet(snippet);
-    final baseIndent = _indentForContext(currentLineBeforeCursor, previousLine);
+      var offset = insertion.animationStart;
+      final units = insertText.characters.toList();
+      for (
+        var index = 0;
+        index < units.length;
+        index += _typingCharactersPerTick
+      ) {
+        if (!mounted) {
+          return;
+        }
 
-    if (isOperator) {
-      return snippet;
-    }
-
-    if (isEventSnippet) {
-      final prefix = before.trim().isEmpty
-          ? ''
-          : before.endsWith('\n')
-              ? ''
-              : '\n';
-      final suffix = after.startsWith('\n') || after.isEmpty ? '\n    ' : '';
-      return '$prefix$snippet$suffix';
-    }
-
-    final formattedSnippet = _indentMultilineSnippet(snippet, baseIndent);
-    if (before.isEmpty || before.endsWith('\n')) {
-      return formattedSnippet;
-    }
-    if (currentLineBeforeCursor.trim().isEmpty) {
-      final currentIndent = _leadingWhitespace(currentLineBeforeCursor);
-      return currentIndent.isEmpty
-          ? formattedSnippet
-          : _indentMultilineSnippet(snippet, currentIndent, includeFirstLine: false);
-    }
-    return '\n$formattedSnippet';
-  }
-
-  String _indentForContext(String currentLineBeforeCursor, String previousLine) {
-    final currentIndent = _leadingWhitespace(currentLineBeforeCursor);
-    if (currentIndent.isNotEmpty) {
-      return currentIndent;
-    }
-    final previousIndent = _leadingWhitespace(previousLine);
-    final trimmedPrevious = previousLine.trim();
-    if (_opensBlock(trimmedPrevious)) {
-      return '$previousIndent    ';
-    }
-    if (previousIndent.isNotEmpty) {
-      return previousIndent;
-    }
-    return _insideEventBlock(previousLine) ? '    ' : '';
-  }
-
-  String _previousNonEmptyLine(String before) {
-    final lines = before.split('\n');
-    for (var i = lines.length - 1; i >= 0; i -= 1) {
-      if (lines[i].trim().isNotEmpty) {
-        return lines[i];
+        final chunk = units.skip(index).take(_typingCharactersPerTick).join();
+        next = widget.codeController.text.replaceRange(offset, offset, chunk);
+        offset += chunk.length;
+        widget.codeController.value = TextEditingValue(
+          text: next,
+          selection: TextSelection.collapsed(offset: offset),
+        );
+        await Future<void>.delayed(_typingTickDelay);
       }
+
+      widget.codeController.value = TextEditingValue(
+        text: widget.codeController.text,
+        selection: TextSelection.collapsed(offset: insertion.cursorOffset),
+      );
+      widget.controller.updateSelectedCode(
+        widget.codeController.text,
+        notify: false,
+      );
+    } finally {
+      _isTyping = false;
     }
-    return '';
-  }
-
-  bool _insideEventBlock(String previousLine) {
-    return previousLine.trim().startsWith('@on');
-  }
-
-  bool _opensBlock(String line) {
-    return line.endsWith('=>') ||
-        line.startsWith('@on') ||
-        line.startsWith('if ') ||
-        line.startsWith('repeat ') ||
-        line == 'loop' ||
-        line == 'else';
-  }
-
-  String _leadingWhitespace(String value) {
-    return RegExp(r'^\s*').firstMatch(value)?.group(0) ?? '';
-  }
-
-  bool _isOperatorSnippet(String snippet) {
-    return const {'+', '-', '*', '/', '==', '>', '<', 'and', 'or', 'not'}.contains(snippet);
-  }
-
-  String _indentMultilineSnippet(
-    String snippet,
-    String indent, {
-    bool includeFirstLine = true,
-  }) {
-    final lines = snippet.split('\n');
-    return lines.asMap().entries.map((entry) {
-      final isFirst = entry.key == 0;
-      if (isFirst && !includeFirstLine) {
-        return entry.value;
-      }
-      return '$indent${entry.value}';
-    }).join('\n');
-  }
-}
-
-class _LessonCodeIndentFormatter extends TextInputFormatter {
-  const _LessonCodeIndentFormatter();
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final oldSelection = oldValue.selection;
-    if (!oldSelection.isValid || newValue.text.length <= oldValue.text.length) {
-      return newValue;
-    }
-
-    final insertedStart = oldSelection.start;
-    final insertedEnd = newValue.selection.end;
-    if (insertedStart < 0 || insertedEnd < insertedStart || insertedEnd > newValue.text.length) {
-      return newValue;
-    }
-
-    final inserted = newValue.text.substring(insertedStart, insertedEnd);
-    if (!inserted.contains('\n')) {
-      return newValue;
-    }
-
-    final before = newValue.text.substring(0, insertedStart);
-    final after = newValue.text.substring(insertedEnd);
-    final replacement = _withSmartIndent(before, inserted);
-    final nextText = '$before$replacement$after';
-    return TextEditingValue(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: before.length + replacement.length),
-      composing: TextRange.empty,
-    );
-  }
-
-  String _withSmartIndent(String before, String inserted) {
-    final buffer = StringBuffer();
-    var context = before;
-    for (final character in inserted.characters) {
-      buffer.write(character);
-      context += character;
-      if (character == '\n') {
-        final indent = _nextLineIndent(context.substring(0, context.length - 1));
-        buffer.write(indent);
-        context += indent;
-      }
-    }
-    return buffer.toString();
-  }
-
-  String _nextLineIndent(String beforeNewLine) {
-    final lineStart = beforeNewLine.lastIndexOf('\n') + 1;
-    final previousLine = beforeNewLine.substring(lineStart);
-    final previousIndent = _leadingWhitespace(previousLine);
-    final trimmed = previousLine.trim();
-    if (_opensBlock(trimmed)) {
-      return '$previousIndent    ';
-    }
-    return previousIndent;
-  }
-
-  bool _opensBlock(String line) {
-    return line.endsWith('=>') ||
-        line.startsWith('@on') ||
-        line.startsWith('if ') ||
-        line.startsWith('repeat ') ||
-        line == 'loop' ||
-        line == 'else';
-  }
-
-  String _leadingWhitespace(String value) {
-    return RegExp(r'^\s*').firstMatch(value)?.group(0) ?? '';
   }
 }
 
@@ -808,19 +760,20 @@ class _StageColumn extends StatelessWidget {
         children: [
           Expanded(
             flex: 11,
-            child: _StagePanel(controller: controller, game: game, focusNode: focusNode),
+            child: _StagePanel(
+              controller: controller,
+              game: game,
+              focusNode: focusNode,
+            ),
           ),
-          Expanded(
-            flex: 9,
-            child: _AssetManager(controller: controller),
-          ),
+          Expanded(flex: 9, child: _AssetManager(controller: controller)),
         ],
       ),
     );
   }
 }
 
-class _StagePanel extends StatelessWidget {
+class _StagePanel extends StatefulWidget {
   final FourthDemoController controller;
   final FourthDemoGame game;
   final FocusNode focusNode;
@@ -832,13 +785,32 @@ class _StagePanel extends StatelessWidget {
   });
 
   @override
+  State<_StagePanel> createState() => _StagePanelState();
+}
+
+class _StagePanelState extends State<_StagePanel> {
+  final ScrollController _horizontalController = ScrollController();
+  final ScrollController _verticalController = ScrollController();
+
+  @override
+  void dispose() {
+    _horizontalController.dispose();
+    _verticalController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final settings = controller.project.settings;
     return KeyboardListener(
-      focusNode: focusNode,
+      focusNode: widget.focusNode,
       autofocus: true,
       onKeyEvent: (event) {
         if (event is KeyDownEvent) {
-          controller.handleKey(event.logicalKey);
+          widget.controller.handleKeyDown(event.logicalKey);
+        } else if (event is KeyUpEvent) {
+          widget.controller.handleKeyUp(event.logicalKey);
         }
       },
       child: Container(
@@ -851,22 +823,70 @@ class _StagePanel extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
-                onTapDown: (details) {
-                  focusNode.requestFocus();
-                  controller.beginDrag(game.worldPositionFromCanvas(details.localPosition));
-                  controller.endDrag();
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final worldWidth = math.max(
+                    settings.worldWidth,
+                    constraints.maxWidth,
+                  );
+                  final worldHeight = math.max(
+                    settings.worldHeight,
+                    constraints.maxHeight,
+                  );
+                  return Scrollbar(
+                    controller: _verticalController,
+                    thumbVisibility:
+                        settings.worldHeight > constraints.maxHeight,
+                    child: SingleChildScrollView(
+                      controller: _verticalController,
+                      child: Scrollbar(
+                        controller: _horizontalController,
+                        thumbVisibility:
+                            settings.worldWidth > constraints.maxWidth,
+                        notificationPredicate: (notification) =>
+                            notification.depth == 1,
+                        child: SingleChildScrollView(
+                          controller: _horizontalController,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: worldWidth,
+                            height: worldHeight,
+                            child: GestureDetector(
+                              onTapDown: (details) {
+                                widget.focusNode.requestFocus();
+                                final worldPosition = widget.game
+                                    .worldPositionFromCanvas(
+                                      details.localPosition,
+                                    );
+                                controller.handleClick(worldPosition);
+                                controller.beginDrag(worldPosition);
+                                controller.endDrag();
+                              },
+                              onPanStart: (details) {
+                                widget.focusNode.requestFocus();
+                                controller.beginDrag(
+                                  widget.game.worldPositionFromCanvas(
+                                    details.localPosition,
+                                  ),
+                                );
+                              },
+                              onPanUpdate: (details) => controller.dragTo(
+                                widget.game.worldPositionFromCanvas(
+                                  details.localPosition,
+                                ),
+                              ),
+                              onPanEnd: (_) => controller.endDrag(),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: GameWidget(game: widget.game),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
                 },
-                onPanStart: (details) {
-                  focusNode.requestFocus();
-                  controller.beginDrag(game.worldPositionFromCanvas(details.localPosition));
-                },
-                onPanUpdate: (details) => controller.dragTo(game.worldPositionFromCanvas(details.localPosition)),
-                onPanEnd: (_) => controller.endDrag(),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: GameWidget(game: game),
-                ),
               ),
             ),
             Positioned(
@@ -874,32 +894,31 @@ class _StagePanel extends StatelessWidget {
               right: 10,
               child: Row(
                 children: [
-                  _ToolButton(icon: Icons.north_west, active: controller.stageTool == FourthDemoStageTool.select, onTap: () => controller.setStageTool(FourthDemoStageTool.select)),
-                  _ToolButton(icon: Icons.open_with, active: controller.stageTool == FourthDemoStageTool.move, onTap: () => controller.setStageTool(FourthDemoStageTool.move)),
-                  _ToolButton(icon: Icons.auto_fix_off, active: controller.stageTool == FourthDemoStageTool.eraser, onTap: () => controller.setStageTool(FourthDemoStageTool.eraser)),
-                  _ToolButton(icon: Icons.brush, active: controller.stageTool == FourthDemoStageTool.brush, onTap: () => controller.setStageTool(FourthDemoStageTool.brush)),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 12,
-              bottom: 12,
-              right: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: controller.exerciseComplete ? const Color(0xFF66B64A) : const Color(0xFFD9DEE2)),
-                ),
-                child: Text(
-                  controller.statusMessage,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: controller.exerciseComplete ? const Color(0xFF2F9F46) : const Color(0xFF3A241D),
-                    fontWeight: FontWeight.w800,
+                  _ToolButton(
+                    icon: Icons.north_west,
+                    active: controller.stageTool == FourthDemoStageTool.select,
+                    onTap: () =>
+                        controller.setStageTool(FourthDemoStageTool.select),
                   ),
-                ),
+                  _ToolButton(
+                    icon: Icons.open_with,
+                    active: controller.stageTool == FourthDemoStageTool.move,
+                    onTap: () =>
+                        controller.setStageTool(FourthDemoStageTool.move),
+                  ),
+                  _ToolButton(
+                    icon: Icons.auto_fix_off,
+                    active: controller.stageTool == FourthDemoStageTool.eraser,
+                    onTap: () =>
+                        controller.setStageTool(FourthDemoStageTool.eraser),
+                  ),
+                  _ToolButton(
+                    icon: Icons.brush,
+                    active: controller.stageTool == FourthDemoStageTool.brush,
+                    onTap: () =>
+                        controller.setStageTool(FourthDemoStageTool.brush),
+                  ),
+                ],
               ),
             ),
           ],
@@ -909,17 +928,28 @@ class _StagePanel extends StatelessWidget {
   }
 }
 
-class _AssetManager extends StatelessWidget {
+class _AssetManager extends StatefulWidget {
   final FourthDemoController controller;
 
   const _AssetManager({required this.controller});
+
+  @override
+  State<_AssetManager> createState() => _AssetManagerState();
+}
+
+class _AssetManagerState extends State<_AssetManager> {
+  String? _editingSpriteId;
+  String? _editingWidgetId;
+  String? _editingSoundId;
+
+  FourthDemoController get controller => widget.controller;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFFE7ECEF),
+        color: Colors.white,
         border: Border.all(color: const Color(0xFFC6D2D9), width: 2),
         borderRadius: BorderRadius.circular(6),
       ),
@@ -929,17 +959,29 @@ class _AssetManager extends StatelessWidget {
             children: [
               for (final tab in FourthDemoAssetTab.values)
                 _TabButton(
-                  text: _assetLabel(tab),
+                  text: _assetLabel(context, tab),
                   active: controller.assetTab == tab,
-                  onTap: () => controller.setAssetTab(tab),
+                  onTap: () {
+                    setState(_clearEditing);
+                    controller.setAssetTab(tab);
+                  },
                 ),
             ],
           ),
           Expanded(
             child: switch (controller.assetTab) {
-              FourthDemoAssetTab.sprites => _SpritesTab(controller: controller),
-              FourthDemoAssetTab.widgets => const _WidgetsTab(),
-              FourthDemoAssetTab.sounds => _SoundsTab(controller: controller),
+              FourthDemoAssetTab.sprites =>
+                _editingSpriteId == null
+                    ? _buildSpritesGrid(context)
+                    : _buildSpriteSettings(context),
+              FourthDemoAssetTab.widgets =>
+                _editingWidgetId == null
+                    ? _buildWidgetsGrid(context)
+                    : _buildWidgetSettings(context),
+              FourthDemoAssetTab.sounds =>
+                _editingSoundId == null
+                    ? _buildSoundsGrid(context)
+                    : _buildSoundSettings(context),
               FourthDemoAssetTab.game => _GameTab(controller: controller),
             },
           ),
@@ -948,39 +990,205 @@ class _AssetManager extends StatelessWidget {
     );
   }
 
-  static String _assetLabel(FourthDemoAssetTab tab) {
+  static String _assetLabel(BuildContext context, FourthDemoAssetTab tab) {
+    final language = AppLanguage.of(context);
     return switch (tab) {
-      FourthDemoAssetTab.sprites => 'Sprites',
-      FourthDemoAssetTab.widgets => 'Widgets',
-      FourthDemoAssetTab.sounds => 'Sounds',
-      FourthDemoAssetTab.game => 'Game',
+      FourthDemoAssetTab.sprites => language.t('builder.sprites'),
+      FourthDemoAssetTab.widgets => language.t('builder.widgets'),
+      FourthDemoAssetTab.sounds => language.t('builder.sounds'),
+      FourthDemoAssetTab.game => language.t('builder.game'),
     };
   }
-}
 
-class _SpritesTab extends StatelessWidget {
-  final FourthDemoController controller;
+  void _clearEditing() {
+    _editingSpriteId = null;
+    _editingWidgetId = null;
+    _editingSoundId = null;
+  }
 
-  const _SpritesTab({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSpritesGrid(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          _AddNewCard(onTap: controller.addPlaceholderSprite),
-          for (final sprite in controller.project.sprites)
-            _SpriteCard(
-              sprite: sprite,
-              selected: sprite.id == controller.project.selectedSpriteId,
-              onTap: () => controller.selectSprite(sprite.id),
-              onSettings: () => _showSpriteSettings(context, controller, sprite),
-            ),
-        ],
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Wrap(
+          alignment: WrapAlignment.start,
+          runAlignment: WrapAlignment.start,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AddNewCard(onTap: () => _handleAddSprite(context)),
+            for (final sprite in controller.project.sprites)
+              _SpriteCard(
+                sprite: sprite,
+                selected: sprite.id == controller.project.selectedSpriteId,
+                onTap: () => controller.selectSprite(sprite.id),
+                onSettings: () => setState(() => _editingSpriteId = sprite.id),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Future<void> _handleAddSprite(BuildContext context) async {
+    final choice = await _showSpriteChoiceDialog(context);
+    if (choice == null || !context.mounted) {
+      return;
+    }
+    final sprite = controller.addSpriteFromAsset(
+      name: choice.label,
+      kind: choice.kind,
+      assetId: choice.id,
+    );
+    setState(() => _editingSpriteId = sprite.id);
+  }
+
+  Widget _buildWidgetsGrid(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Wrap(
+          alignment: WrapAlignment.start,
+          runAlignment: WrapAlignment.start,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AddNewCard(onTap: () => _handleAddWidget(context)),
+            for (final widget in controller.project.widgets)
+              _MiniAssetCard(
+                title: widget.name,
+                icon: _widgetIcon(widget.type),
+                onTap: () => setState(() => _editingWidgetId = widget.id),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleAddWidget(BuildContext context) async {
+    final type = await _showWidgetChoiceDialog(context);
+    if (type == null || !context.mounted) {
+      return;
+    }
+    final widget = controller.addWidget(type);
+    setState(() => _editingWidgetId = widget.id);
+  }
+
+  Widget _buildSoundsGrid(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Wrap(
+          alignment: WrapAlignment.start,
+          runAlignment: WrapAlignment.start,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AddNewCard(onTap: () => _handleAddSound(context)),
+            for (final sound in controller.project.sounds)
+              _MiniAssetCard(
+                title: sound.name,
+                icon: Icons.play_arrow,
+                onTap: () => setState(() => _editingSoundId = sound.id),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleAddSound(BuildContext context) async {
+    final name = await _showSoundChoiceDialog(context);
+    if (name == null || !context.mounted) {
+      return;
+    }
+    final sound = controller.addSound(name);
+    setState(() => _editingSoundId = sound.id);
+  }
+
+  Widget _buildSpriteSettings(BuildContext context) {
+    final sprite = controller.project.sprites
+        .where((sprite) => sprite.id == _editingSpriteId)
+        .firstOrNull;
+    if (sprite == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _editingSpriteId = null);
+        }
+      });
+      return const SizedBox.shrink();
+    }
+    return _SpriteInlineSettings(
+      sprite: sprite,
+      onBack: () => setState(() => _editingSpriteId = null),
+      onChanged: controller.updateSprite,
+      onDelete: () {
+        if (controller.deleteSprite(sprite.id)) {
+          setState(() => _editingSpriteId = null);
+        }
+      },
+      onDuplicate: () {
+        final copy = controller.duplicateSprite(sprite.id);
+        if (copy != null) {
+          setState(() => _editingSpriteId = copy.id);
+        }
+      },
+    );
+  }
+
+  Widget _buildWidgetSettings(BuildContext context) {
+    final widget = controller.project.widgets
+        .where((widget) => widget.id == _editingWidgetId)
+        .firstOrNull;
+    if (widget == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _editingWidgetId = null);
+        }
+      });
+      return const SizedBox.shrink();
+    }
+    return _WidgetInlineSettings(
+      widget: widget,
+      onBack: () => setState(() => _editingWidgetId = null),
+      onChanged: controller.updateWidget,
+      onDelete: () {
+        controller.deleteWidget(widget.id);
+        setState(() => _editingWidgetId = null);
+      },
+      onDuplicate: () {
+        final copy = controller.duplicateWidget(widget.id);
+        if (copy != null) {
+          setState(() => _editingWidgetId = copy.id);
+        }
+      },
+    );
+  }
+
+  Widget _buildSoundSettings(BuildContext context) {
+    final sound = controller.project.sounds
+        .where((sound) => sound.id == _editingSoundId)
+        .firstOrNull;
+    if (sound == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() => _editingSoundId = null);
+        }
+      });
+      return const SizedBox.shrink();
+    }
+    return _SoundInlineSettings(
+      sound: sound,
+      onBack: () => setState(() => _editingSoundId = null),
+      onChanged: controller.updateSound,
+      onDelete: () {
+        controller.deleteSound(sound.id);
+        setState(() => _editingSoundId = null);
+      },
     );
   }
 }
@@ -1008,7 +1216,10 @@ class _SpriteCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? const Color(0xFF66B64A) : const Color(0xFFD9DEE2), width: selected ? 3 : 1),
+          border: Border.all(
+            color: selected ? const Color(0xFF66B64A) : const Color(0xFFD9DEE2),
+            width: selected ? 3 : 1,
+          ),
         ),
         child: Column(
           children: [
@@ -1017,10 +1228,14 @@ class _SpriteCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(sprite.name, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
+                  child: Text(
+                    sprite.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
                 ),
                 IconButton(
-                  tooltip: 'Settings',
+                  tooltip: AppLanguage.of(context).t('builder.settings'),
                   onPressed: onSettings,
                   icon: const Icon(Icons.settings, size: 18),
                 ),
@@ -1028,6 +1243,697 @@ class _SpriteCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SpriteInlineSettings extends StatelessWidget {
+  final FourthDemoSprite sprite;
+  final VoidCallback onBack;
+  final ValueChanged<FourthDemoSprite> onChanged;
+  final VoidCallback onDelete;
+  final VoidCallback onDuplicate;
+
+  const _SpriteInlineSettings({
+    required this.sprite,
+    required this.onBack,
+    required this.onChanged,
+    required this.onDelete,
+    required this.onDuplicate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _InlineSettingsScaffold(
+      title: AppLanguage.of(context).t('builder.spriteSettings'),
+      onBack: onBack,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AssetTextField(
+            label: AppLanguage.of(context).t('builder.name').toUpperCase(),
+            value: sprite.name,
+            onChanged: (value) => onChanged(
+              sprite.copyWith(
+                name: value.trim().isEmpty ? sprite.name : value.trim(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              _NumberStepperField(
+                label: 'X',
+                value: sprite.x,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(x: value, startX: value)),
+              ),
+              _NumberStepperField(
+                label: 'Y',
+                value: sprite.y,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(y: value, startY: value)),
+              ),
+              _NumberStepperField(
+                label: AppLanguage.of(context).t('builder.scale').toUpperCase(),
+                value: sprite.scale,
+                step: 0.1,
+                min: 0.1,
+                decimals: 1,
+                onChanged: (value) => onChanged(sprite.copyWith(scale: value)),
+              ),
+              _NumberStepperField(
+                label: AppLanguage.of(
+                  context,
+                ).t('builder.rotation').toUpperCase(),
+                value: sprite.rotation,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(rotation: value)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _DirectionSelector(
+            value: sprite.facing,
+            onChanged: (value) => onChanged(sprite.copyWith(facing: value)),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 0,
+            children: [
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.allowGravity'),
+                value: sprite.allowGravity,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(allowGravity: value)),
+              ),
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.collideWorldBounds'),
+                value: sprite.collideWorldBounds,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(collideWorldBounds: value)),
+              ),
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.immovable'),
+                value: sprite.immovable,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(immovable: value)),
+              ),
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.show'),
+                value: sprite.visible,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(visible: value)),
+              ),
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.collideOtherSprites'),
+                value: sprite.collideOtherSprites,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(collideOtherSprites: value)),
+              ),
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.draggable'),
+                value: sprite.draggable,
+                onChanged: (value) =>
+                    onChanged(sprite.copyWith(draggable: value)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _SettingsActions(onDelete: onDelete, onDuplicate: onDuplicate),
+        ],
+      ),
+    );
+  }
+}
+
+class _DirectionSelector extends StatelessWidget {
+  final FourthDemoSpriteFacing value;
+  final ValueChanged<FourthDemoSpriteFacing> onChanged;
+
+  const _DirectionSelector({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          AppLanguage.of(context).t('builder.direction').toUpperCase(),
+          style: const TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        SegmentedButton<FourthDemoSpriteFacing>(
+          segments: [
+            ButtonSegment(
+              value: FourthDemoSpriteFacing.left,
+              icon: const Icon(Icons.arrow_back),
+              label: Text(AppLanguage.of(context).t('builder.left')),
+            ),
+            ButtonSegment(
+              value: FourthDemoSpriteFacing.right,
+              icon: const Icon(Icons.arrow_forward),
+              label: Text(AppLanguage.of(context).t('builder.right')),
+            ),
+          ],
+          selected: {value},
+          onSelectionChanged: (selection) => onChanged(selection.first),
+        ),
+      ],
+    );
+  }
+}
+
+class _WidgetInlineSettings extends StatelessWidget {
+  final FourthDemoScreenWidget widget;
+  final VoidCallback onBack;
+  final ValueChanged<FourthDemoScreenWidget> onChanged;
+  final VoidCallback onDelete;
+  final VoidCallback onDuplicate;
+
+  const _WidgetInlineSettings({
+    required this.widget,
+    required this.onBack,
+    required this.onChanged,
+    required this.onDelete,
+    required this.onDuplicate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _InlineSettingsScaffold(
+      title: AppLanguage.of(context).t('builder.widgetSettings'),
+      onBack: onBack,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 92,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  _widgetIcon(widget.type),
+                  color: const Color(0xFF24465A),
+                  size: 44,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  children: [
+                    _AssetTextField(
+                      label: AppLanguage.of(
+                        context,
+                      ).t('builder.name').toUpperCase(),
+                      value: widget.name,
+                      onChanged: (value) => onChanged(
+                        widget.copyWith(
+                          name: value.trim().isEmpty
+                              ? widget.name
+                              : value.trim(),
+                        ),
+                      ),
+                    ),
+                    _AssetTextField(
+                      label: AppLanguage.of(
+                        context,
+                      ).t('builder.text').toUpperCase(),
+                      value: widget.text,
+                      onChanged: (value) =>
+                          onChanged(widget.copyWith(text: value)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              _NumberStepperField(
+                label: 'X',
+                value: widget.x,
+                onChanged: (value) => onChanged(widget.copyWith(x: value)),
+              ),
+              _NumberStepperField(
+                label: 'Y',
+                value: widget.y,
+                onChanged: (value) => onChanged(widget.copyWith(y: value)),
+              ),
+              _NumberStepperField(
+                label: AppLanguage.of(context).t('builder.value').toUpperCase(),
+                value: widget.value,
+                onChanged: (value) => onChanged(widget.copyWith(value: value)),
+              ),
+              _NumberStepperField(
+                label: AppLanguage.of(
+                  context,
+                ).t('builder.opacity').toUpperCase(),
+                value: widget.opacity,
+                step: 0.1,
+                min: 0,
+                max: 1,
+                decimals: 1,
+                onChanged: (value) =>
+                    onChanged(widget.copyWith(opacity: value)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _BoolOption(
+                label: AppLanguage.of(context).t('builder.show'),
+                value: widget.visible,
+                onChanged: (value) =>
+                    onChanged(widget.copyWith(visible: value)),
+              ),
+              const Spacer(),
+              Text(
+                AppLanguage.of(context).t('builder.textColor'),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(width: 8),
+              _ColorPickerButton(
+                color: Color(widget.textColorValue),
+                onChanged: (color) => onChanged(
+                  widget.copyWith(textColorValue: color.toARGB32()),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _SettingsActions(onDelete: onDelete, onDuplicate: onDuplicate),
+        ],
+      ),
+    );
+  }
+}
+
+class _SoundInlineSettings extends StatelessWidget {
+  final FourthDemoSound sound;
+  final VoidCallback onBack;
+  final ValueChanged<FourthDemoSound> onChanged;
+  final VoidCallback onDelete;
+
+  const _SoundInlineSettings({
+    required this.sound,
+    required this.onBack,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _InlineSettingsScaffold(
+      title: AppLanguage.of(context).t('builder.soundSettings'),
+      onBack: onBack,
+      child: Column(
+        children: [
+          _AssetTextField(
+            label: AppLanguage.of(context).t('builder.name').toUpperCase(),
+            value: sound.name,
+            onChanged: (value) => onChanged(
+              sound.copyWith(
+                name: value.trim().isEmpty ? sound.name : value.trim(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              onPressed: onDelete,
+              icon: const Icon(Icons.cancel),
+              label: Text(
+                AppLanguage.of(context).t('builder.delete').toUpperCase(),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF777777),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineSettingsScaffold extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
+  final Widget child;
+
+  const _InlineSettingsScaffold({
+    required this.title,
+    required this.onBack,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Color(0xFFD9DEE2))),
+          ),
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: AppLanguage.of(context).t('builder.back'),
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back),
+              ),
+              Expanded(
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(12),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssetTextField extends StatefulWidget {
+  final String label;
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _AssetTextField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_AssetTextField> createState() => _AssetTextFieldState();
+}
+
+class _AssetTextFieldState extends State<_AssetTextField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AssetTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && widget.value != _controller.text) {
+      _controller.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: _controller,
+        decoration: _fieldDecoration(widget.label),
+        onChanged: widget.onChanged,
+      ),
+    );
+  }
+}
+
+class _NumberStepperField extends StatefulWidget {
+  final String label;
+  final double value;
+  final double step;
+  final double? min;
+  final double? max;
+  final int decimals;
+  final ValueChanged<double> onChanged;
+
+  const _NumberStepperField({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.step = 1,
+    this.min,
+    this.max,
+    this.decimals = 0,
+  });
+
+  @override
+  State<_NumberStepperField> createState() => _NumberStepperFieldState();
+}
+
+class _NumberStepperFieldState extends State<_NumberStepperField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _format(widget.value));
+  }
+
+  @override
+  void didUpdateWidget(covariant _NumberStepperField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _format(widget.value);
+    if (oldWidget.value != widget.value && _controller.text != next) {
+      _controller.text = next;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 92,
+      child: TextField(
+        controller: _controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: _fieldDecoration(widget.label).copyWith(
+          suffixIcon: SizedBox(
+            width: 26,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                InkWell(
+                  onTap: () => _nudge(widget.step),
+                  child: const Icon(
+                    Icons.keyboard_arrow_up,
+                    size: 18,
+                    color: Color(0xFF82B366),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _nudge(-widget.step),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: Color(0xFF82B366),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        onChanged: (raw) {
+          final value = double.tryParse(raw);
+          if (value != null) {
+            widget.onChanged(_clamp(value));
+          }
+        },
+      ),
+    );
+  }
+
+  void _nudge(double amount) {
+    final current = double.tryParse(_controller.text) ?? widget.value;
+    final next = _clamp(current + amount);
+    _controller.text = _format(next);
+    widget.onChanged(next);
+  }
+
+  double _clamp(double value) {
+    final min = widget.min;
+    final max = widget.max;
+    var next = value;
+    if (min != null && next < min) {
+      next = min;
+    }
+    if (max != null && next > max) {
+      next = max;
+    }
+    return next;
+  }
+
+  String _format(double value) => value.toStringAsFixed(widget.decimals);
+}
+
+class _BoolOption extends StatelessWidget {
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _BoolOption({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 150,
+      child: CheckboxListTile(
+        dense: true,
+        visualDensity: VisualDensity.compact,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: value,
+        onChanged: (value) => onChanged(value ?? false),
+        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+}
+
+class _SettingsActions extends StatelessWidget {
+  final VoidCallback onDelete;
+  final VoidCallback onDuplicate;
+
+  const _SettingsActions({required this.onDelete, required this.onDuplicate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        FilledButton.icon(
+          onPressed: onDelete,
+          icon: const Icon(Icons.cancel),
+          label: Text(
+            AppLanguage.of(context).t('builder.delete').toUpperCase(),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF777777),
+          ),
+        ),
+        const SizedBox(width: 12),
+        FilledButton.icon(
+          onPressed: onDuplicate,
+          icon: const Icon(Icons.add_circle),
+          label: Text(
+            AppLanguage.of(context).t('builder.duplicate').toUpperCase(),
+          ),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF57C78A),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ColorPickerButton extends StatelessWidget {
+  final Color color;
+  final ValueChanged<Color> onChanged;
+
+  const _ColorPickerButton({required this.color, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _showColorSelector(context),
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        width: 72,
+        height: 42,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F1F1),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFD0D0D0)),
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: color,
+            border: Border.all(color: const Color(0xFF777777)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showColorSelector(BuildContext context) async {
+    var draft = color;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLanguage.of(context).t('builder.textColor')),
+        content: SizedBox(
+          width: 260,
+          child: ColorPicker(
+            pickerColor: color,
+            onColorChanged: (value) {
+              draft = value;
+              onChanged(value);
+            },
+            enableAlpha: false,
+            displayThumbColor: true,
+            pickerAreaHeightPercent: 0.55,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              onChanged(draft);
+              Navigator.of(context).pop();
+            },
+            child: Text(AppLanguage.of(context).t('builder.ok')),
+          ),
+        ],
       ),
     );
   }
@@ -1050,46 +1956,21 @@ class _AddNewCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFF3E8D41), width: 2),
         ),
-        child: const Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add_circle, color: Colors.white, size: 38),
-            SizedBox(height: 8),
-            Text('ADD NEW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+            const Icon(Icons.add_circle, color: Colors.white, size: 38),
+            const SizedBox(height: 8),
+            Text(
+              AppLanguage.of(context).t('builder.addNew').toUpperCase(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _WidgetsTab extends StatelessWidget {
-  const _WidgetsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    const widgets = ['Counter', 'Text', 'Timer', 'Clock', 'Button', 'Dialog'];
-    return _SimpleCardGrid(items: widgets, leadingIcon: Icons.widgets);
-  }
-}
-
-class _SoundsTab extends StatelessWidget {
-  final FourthDemoController controller;
-
-  const _SoundsTab({required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          const _MiniAssetCard(title: 'Add sound', icon: Icons.add),
-          for (final sound in controller.project.sounds)
-            _MiniAssetCard(title: sound.name, icon: Icons.play_arrow),
-        ],
       ),
     );
   }
@@ -1107,47 +1988,45 @@ class _GameTab extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       child: Column(
         children: [
-          _SettingRow(label: 'Background', value: settings.background),
+          _SettingRow(
+            label: AppLanguage.of(context).t('builder.background'),
+            value: settings.background,
+          ),
           _NumberSetting(
-            label: 'World width',
+            label: AppLanguage.of(context).t('builder.worldWidth'),
             value: settings.worldWidth,
-            onChanged: (value) => controller.updateSettings(settings.copyWith(worldWidth: value)),
+            onChanged: (value) =>
+                controller.updateSettings(settings.copyWith(worldWidth: value)),
           ),
           _NumberSetting(
-            label: 'World height',
+            label: AppLanguage.of(context).t('builder.worldHeight'),
             value: settings.worldHeight,
-            onChanged: (value) => controller.updateSettings(settings.copyWith(worldHeight: value)),
+            onChanged: (value) => controller.updateSettings(
+              settings.copyWith(worldHeight: value),
+            ),
           ),
           _NumberSetting(
-            label: 'Gravity',
+            label: AppLanguage.of(context).t('builder.gravity'),
             value: settings.gravity,
-            onChanged: (value) => controller.updateSettings(settings.copyWith(gravity: value)),
+            onChanged: (value) =>
+                controller.updateSettings(settings.copyWith(gravity: value)),
           ),
-          _SettingRow(label: 'Physics mode', value: settings.physicsMode.name),
-          _SettingRow(label: 'Camera target', value: settings.cameraTargetId),
-          const _SettingRow(label: 'Tilemap', value: 'ground, platform, obstacle'),
-          const _SettingRow(label: 'Sound settings', value: 'enabled'),
-        ],
-      ),
-    );
-  }
-}
-
-class _SimpleCardGrid extends StatelessWidget {
-  final List<String> items;
-  final IconData leadingIcon;
-
-  const _SimpleCardGrid({required this.items, required this.leadingIcon});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(12),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          for (final item in items) _MiniAssetCard(title: item, icon: leadingIcon),
+          _SettingRow(
+            label: AppLanguage.of(context).t('builder.physicsMode'),
+            value: settings.physicsMode.name,
+          ),
+          _SettingRow(
+            label: AppLanguage.of(context).t('builder.cameraTarget'),
+            value: settings.cameraTargetId,
+          ),
+          _SettingRow(
+            label: AppLanguage.of(context).t('builder.tilemap'),
+            value: 'ground, platform, obstacle',
+          ),
+          _SettingRow(
+            label: AppLanguage.of(context).t('builder.soundSettingsLabel'),
+            value: 'enabled',
+          ),
         ],
       ),
     );
@@ -1157,27 +2036,38 @@ class _SimpleCardGrid extends StatelessWidget {
 class _MiniAssetCard extends StatelessWidget {
   final String title;
   final IconData icon;
+  final VoidCallback? onTap;
 
-  const _MiniAssetCard({required this.title, required this.icon});
+  const _MiniAssetCard({required this.title, required this.icon, this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 118,
-      height: 82,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFFD9DEE2)),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF2B78C2)),
-          const SizedBox(height: 8),
-          Text(title, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 128,
+        height: 124,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFD9DEE2)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF2B78C2), size: 38),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1192,6 +2082,13 @@ class _SpriteAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final kind = sprite?.kind;
+    final assetId = sprite?.assetId ?? '';
+    final playerAssetPath = builderCharacterById(
+      assetId.isEmpty ? defaultBuilderCharacterId : assetId,
+    ).idlePreviewAssetPath;
+    final collectableAssetPath = builderCollectableById(
+      assetId.isEmpty ? defaultBuilderCollectableId : assetId,
+    ).flutterAssetPath;
     return Container(
       width: size,
       height: size,
@@ -1200,16 +2097,29 @@ class _SpriteAvatar extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFD9DEE2)),
       ),
-      child: Icon(
-        switch (kind) {
-          FourthDemoSpriteKind.player => Icons.face,
-          FourthDemoSpriteKind.collectible => Icons.eco,
-          FourthDemoSpriteKind.prop => Icons.category,
-          null => Icons.help,
-        },
-        color: Color(sprite?.colorValue ?? 0xFF66B64A),
-        size: size * 0.62,
-      ),
+      child:
+          kind == FourthDemoSpriteKind.player ||
+              kind == FourthDemoSpriteKind.collectible
+          ? Padding(
+              padding: EdgeInsets.all(size * 0.08),
+              child: Image.asset(
+                kind == FourthDemoSpriteKind.player
+                    ? playerAssetPath
+                    : collectableAssetPath,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.none,
+              ),
+            )
+          : Icon(
+              switch (kind) {
+                FourthDemoSpriteKind.collectible => Icons.eco,
+                FourthDemoSpriteKind.prop => Icons.category,
+                null => Icons.help,
+                FourthDemoSpriteKind.player => Icons.face,
+              },
+              color: Color(sprite?.colorValue ?? 0xFF66B64A),
+              size: size * 0.62,
+            ),
     );
   }
 }
@@ -1228,21 +2138,34 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: active ? Colors.white : const Color(0xFFD9DEE2),
-            border: const Border(right: BorderSide(color: Color(0xFFC6D2D9))),
-          ),
-          child: Text(
-            text,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontWeight: FontWeight.w900,
-              color: active ? const Color(0xFF3A241D) : const Color(0xFF66757F),
+      child: Material(
+        color: active ? Colors.white : const Color(0xFFD3D9DD),
+        borderRadius: active
+            ? BorderRadius.zero
+            : const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: active
+            ? const BorderRadius.only(
+                bottomLeft: Radius.circular(14),
+                bottomRight: Radius.circular(14),
+              )
+            : BorderRadius.zero,
+          child: SizedBox(
+            height: 54,
+            child: Center(
+              child: Text(
+                text,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: active ? FontWeight.w900 : FontWeight.w500,
+                  color: active ? Colors.black : const Color(0xFF6C747A),
+                ),
+              ),
             ),
           ),
         ),
@@ -1254,22 +2177,36 @@ class _TabButton extends StatelessWidget {
 class _CommandPill extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
+  final bool enabled;
 
-  const _CommandPill({required this.label, required this.onTap});
+  const _CommandPill({
+    required this.label,
+    required this.onTap,
+    this.enabled = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(18),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: enabled ? const Color(0xFFEAF8EA) : const Color(0xFFE5E7EB),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFF66B64A), width: 2),
+          border: Border.all(
+            color: enabled ? const Color(0xFF66B64A) : const Color(0xFFCBD5E1),
+            width: 2,
+          ),
         ),
-        child: Text(label, style: const TextStyle(color: Color(0xFF2F9F46), fontWeight: FontWeight.w900)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: enabled ? Colors.black : const Color(0xFF94A3B8),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
       ),
     );
   }
@@ -1291,7 +2228,7 @@ class _ToolButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 6),
       child: IconButton.filled(
-        tooltip: 'Stage tool',
+        tooltip: AppLanguage.of(context).t('builder.stageTool'),
         onPressed: onTap,
         icon: Icon(icon, size: 18),
         style: IconButton.styleFrom(
@@ -1321,8 +2258,19 @@ class _SettingRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w800))),
-          Text(value, style: const TextStyle(color: Color(0xFF2B78C2), fontWeight: FontWeight.w800)),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Color(0xFF2B78C2),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
         ],
       ),
     );
@@ -1354,102 +2302,334 @@ class _NumberSetting extends StatelessWidget {
   }
 }
 
-Future<void> _showSpriteSettings(
-  BuildContext context,
-  FourthDemoController controller,
-  FourthDemoSprite sprite,
-) async {
-  var draft = sprite;
-  final nameController = TextEditingController(text: sprite.name);
-  final xController = TextEditingController(text: sprite.x.toStringAsFixed(0));
-  final yController = TextEditingController(text: sprite.y.toStringAsFixed(0));
-  final scaleController = TextEditingController(text: sprite.scale.toStringAsFixed(1));
-  final rotationController = TextEditingController(text: sprite.rotation.toStringAsFixed(0));
+class _SpriteAssetChoice {
+  final String id;
+  final String label;
+  final String assetPath;
+  final FourthDemoSpriteKind kind;
 
-  await showDialog<void>(
+  const _SpriteAssetChoice({
+    required this.id,
+    required this.label,
+    required this.assetPath,
+    required this.kind,
+  });
+}
+
+Future<_SpriteAssetChoice?> _showSpriteChoiceDialog(
+  BuildContext context,
+) async {
+  final choices = <_SpriteAssetChoice>[
+    for (final character in builderCharacters)
+      _SpriteAssetChoice(
+        id: character.id,
+        label: localizedBuilderCharacterLabel(
+          AppLanguage.of(context),
+          character.id,
+        ),
+        assetPath: character.idlePreviewAssetPath,
+        kind: FourthDemoSpriteKind.player,
+      ),
+    for (final collectable in builderCollectables)
+      _SpriteAssetChoice(
+        id: collectable.id,
+        label: localizedBuilderCollectableLabel(
+          AppLanguage.of(context),
+          collectable.id,
+        ),
+        assetPath: collectable.flutterAssetPath,
+        kind: FourthDemoSpriteKind.collectible,
+      ),
+  ];
+  var selected = choices.first;
+
+  return showDialog<_SpriteAssetChoice>(
     context: context,
     builder: (context) {
       return StatefulBuilder(
         builder: (context, setState) => _CourseDialog(
-          title: '${sprite.name} Settings',
+          title: AppLanguage.of(context).t('builder.chooseSprite'),
           action: FilledButton(
-            onPressed: () {
-              draft = draft.copyWith(
-                name: nameController.text.trim().isEmpty ? sprite.name : nameController.text.trim(),
-                x: double.tryParse(xController.text) ?? sprite.x,
-                y: double.tryParse(yController.text) ?? sprite.y,
-                startX: double.tryParse(xController.text) ?? sprite.startX,
-                startY: double.tryParse(yController.text) ?? sprite.startY,
-                scale: double.tryParse(scaleController.text) ?? sprite.scale,
-                rotation: double.tryParse(rotationController.text) ?? sprite.rotation,
-              );
-              controller.updateSprite(draft);
-              Navigator.of(context).pop();
-            },
-            child: const Text('Save'),
+            onPressed: () => Navigator.of(context).pop(selected),
+            child: Text(AppLanguage.of(context).t('builder.ok')),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameController, decoration: _fieldDecoration('Name')),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: xController, decoration: _fieldDecoration('X'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: yController, decoration: _fieldDecoration('Y'))),
-                ],
+          child: SizedBox(
+            width: 520,
+            height: 430,
+            child: GridView.builder(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.86,
               ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: scaleController, decoration: _fieldDecoration('Scale'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: rotationController, decoration: _fieldDecoration('Rotation'))),
-                ],
-              ),
-              SwitchListTile(
-                value: draft.allowGravity,
-                onChanged: (value) => setState(() => draft = draft.copyWith(allowGravity: value)),
-                title: const Text('Allow gravity'),
-              ),
-              SwitchListTile(
-                value: draft.collideWorldBounds,
-                onChanged: (value) => setState(() => draft = draft.copyWith(collideWorldBounds: value)),
-                title: const Text('Collide world bounds'),
-              ),
-              SwitchListTile(
-                value: draft.collideOtherSprites,
-                onChanged: (value) => setState(() => draft = draft.copyWith(collideOtherSprites: value)),
-                title: const Text('Collide other sprites'),
-              ),
-              SwitchListTile(
-                value: draft.visible,
-                onChanged: (value) => setState(() => draft = draft.copyWith(visible: value)),
-                title: const Text('Visible'),
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () {
-                    controller.deleteSprite(sprite.id);
-                    Navigator.of(context).pop();
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Delete sprite'),
-                ),
-              ),
-            ],
+              itemCount: choices.length,
+              itemBuilder: (context, index) {
+                final choice = choices[index];
+                return _ImageChoiceTile(
+                  label: _localizedSpriteChoiceLabel(context, choice),
+                  assetPath: choice.assetPath,
+                  selected:
+                      selected.id == choice.id && selected.kind == choice.kind,
+                  onTap: () => setState(() => selected = choice),
+                );
+              },
+            ),
           ),
         ),
       );
     },
   );
-  nameController.dispose();
-  xController.dispose();
-  yController.dispose();
-  scaleController.dispose();
-  rotationController.dispose();
+}
+
+Future<FourthDemoWidgetKind?> _showWidgetChoiceDialog(
+  BuildContext context,
+) async {
+  var selected = FourthDemoWidgetKind.counter;
+
+  return showDialog<FourthDemoWidgetKind>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) => _CourseDialog(
+          title: AppLanguage.of(context).t('builder.chooseWidget'),
+          action: FilledButton(
+            onPressed: () => Navigator.of(context).pop(selected),
+            child: Text(AppLanguage.of(context).t('builder.ok')),
+          ),
+          child: SizedBox(
+            width: 430,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final type in FourthDemoWidgetKind.values)
+                  _IconChoiceTile(
+                    label: _widgetLabel(context, type),
+                    icon: _widgetIcon(type),
+                    selected: selected == type,
+                    onTap: () => setState(() => selected = type),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<String?> _showSoundChoiceDialog(BuildContext context) async {
+  const sounds = <String>[
+    'collectSparkle',
+    'jumpPop',
+    'buttonClick',
+    'successChime',
+    'timerTick',
+    'warningBeep',
+  ];
+  var selected = sounds.first;
+
+  return showDialog<String>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) => _CourseDialog(
+          title: AppLanguage.of(context).t('builder.chooseSound'),
+          action: FilledButton(
+            onPressed: () => Navigator.of(context).pop(selected),
+            child: Text(AppLanguage.of(context).t('builder.ok')),
+          ),
+          child: SizedBox(
+            width: 430,
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final sound in sounds)
+                  _IconChoiceTile(
+                    label: AppLanguage.of(
+                      context,
+                    ).tr('builder.sound.$sound', sound),
+                    icon: Icons.music_note,
+                    selected: selected == sound,
+                    onTap: () => setState(() => selected = sound),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _ImageChoiceTile extends StatelessWidget {
+  final String label;
+  final String assetPath;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ImageChoiceTile({
+    required this.label,
+    required this.assetPath,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChoiceShell(
+      label: label,
+      selected: selected,
+      onTap: onTap,
+      child: Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.none,
+      ),
+    );
+  }
+}
+
+class _IconChoiceTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _IconChoiceTile({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChoiceShell(
+      label: label,
+      selected: selected,
+      onTap: onTap,
+      child: Icon(icon, color: const Color(0xFF2B78C2), size: 38),
+    );
+  }
+}
+
+class _ChoiceShell extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Widget child;
+
+  const _ChoiceShell({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 96,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 96,
+                  height: 96,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: selected
+                          ? const Color(0xFF66B64A)
+                          : const Color(0xFFD9DEE2),
+                      width: selected ? 3 : 1,
+                    ),
+                  ),
+                  child: child,
+                ),
+                if (selected)
+                  const Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Icon(
+                      Icons.check_circle,
+                      color: Color(0xFF2F9F46),
+                      size: 24,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _widgetIcon(FourthDemoWidgetKind type) {
+  return switch (type) {
+    FourthDemoWidgetKind.counter => Icons.exposure_plus_1,
+    FourthDemoWidgetKind.text => Icons.text_fields,
+    FourthDemoWidgetKind.timer => Icons.timer,
+    FourthDemoWidgetKind.clock => Icons.schedule,
+    FourthDemoWidgetKind.button => Icons.smart_button,
+    FourthDemoWidgetKind.dialog => Icons.chat_bubble_outline,
+  };
+}
+
+String _localizedSpriteChoiceLabel(
+  BuildContext context,
+  _SpriteAssetChoice choice,
+) {
+  return switch (choice.kind) {
+    FourthDemoSpriteKind.player => localizedBuilderCharacterLabel(
+      AppLanguage.of(context),
+      choice.id,
+    ),
+    FourthDemoSpriteKind.collectible => localizedBuilderCollectableLabel(
+      AppLanguage.of(context),
+      choice.id,
+    ),
+    FourthDemoSpriteKind.prop => choice.label,
+  };
+}
+
+String _widgetLabel(BuildContext context, FourthDemoWidgetKind type) {
+  final language = AppLanguage.of(context);
+  return switch (type) {
+    FourthDemoWidgetKind.counter => language.tr(
+      'builder.widget.counter',
+      'Counter',
+    ),
+    FourthDemoWidgetKind.text => language.t('builder.text'),
+    FourthDemoWidgetKind.timer => language.tr('builder.widget.timer', 'Timer'),
+    FourthDemoWidgetKind.clock => language.tr('builder.widget.clock', 'Clock'),
+    FourthDemoWidgetKind.button => language.tr(
+      'builder.widget.button',
+      'Button',
+    ),
+    FourthDemoWidgetKind.dialog => language.tr(
+      'builder.widget.dialog',
+      'Dialog',
+    ),
+  };
 }
 
 class _CourseDialog extends StatelessWidget {
@@ -1468,10 +2648,19 @@ class _CourseDialog extends StatelessWidget {
     return AlertDialog(
       backgroundColor: const Color(0xFFFFFCF2),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w900, color: Color(0xFF3A241D))),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF3A241D),
+        ),
+      ),
       content: SizedBox(width: 520, child: child),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(AppLanguage.of(context).t('builder.cancel')),
+        ),
         action,
       ],
     );

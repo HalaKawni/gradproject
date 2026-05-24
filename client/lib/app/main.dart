@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:client/app/navigation/app_router.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/features/auth/pages/login_page.dart';
 import 'package:client/features/auth/pages/signup_page.dart';
 import 'package:client/features/auth/pages/codejr.dart';
@@ -10,14 +11,19 @@ import 'package:flutter_quill/flutter_quill.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  EasyLocalization.logger.enableLevels.removeWhere(
+    (level) => level.name == 'debug',
+  );
   await EasyLocalization.ensureInitialized();
+  await AppLanguage.instance.load();
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('en'), Locale('ar')],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
+      startLocale: AppLanguage.instance.locale,
       useOnlyLangCode: true,
-      child: const MyApp(),
+      child: const LanguageScope(child: MyApp()),
     ),
   );
 }
@@ -70,186 +76,23 @@ class WelcomePage extends StatelessWidget {
 
   // ── NAVBAR ──
   Widget _buildNavbar(BuildContext context) {
-  return Container(
-    //color: const Color(0xFF3B2008),
-    color: const Color.fromARGB(255,50, 136, 189),
-    height: 52,
-    padding: const EdgeInsets.symmetric(horizontal: 32),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        // Logo
-        Text(
-          'nameofweb',
-          style: const TextStyle(
-            fontFamily: 'Arial',
-            color: Color.fromARGB(255,220, 202, 233),
-            //color: Color.fromARGB(255,219, 161, 157),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-
-        // Nav links
-        Row(
-          children: [
-            const _CourseDropdown(),
-            const SizedBox(width: 28),
-           Text('nav.plans'.tr(),
-           style: GoogleFonts.montserrat(
-           color: const Color.fromARGB(255, 255, 255, 255),
-           fontSize: 14,
-          fontWeight: FontWeight.w500,
-  ),
-),
-            const SizedBox(width: 28),
-            Text(
-              'nav.resources'.tr(),
-              style: GoogleFonts.montserrat(
-                color: Color.fromARGB(255, 255, 255, 255),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-
-        // Buttons
-        Row(
-          children: [
-    _HoverButton(label: 'nav.kids_signup'.tr(), onPressed: () {}),
-   _HoverButton(
-  label: 'nav.signup'.tr(),
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SignupPage()),
-    );
-  },
-  filled: true,
-),
-    _HoverButton(
-  label: 'nav.login'.tr(),
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-    );
-  },
-),
-    _NavLanguageDropdown(),
-  ],
-
-
-              ),
-
-          ],
-        ),
-  );
-}
-
-
-// ignore: unused_element
-Widget _unusedBrokenHero(BuildContext context) {
-  return ClipPath(
-    clipper: _BottomCurveClipper(),
-    child: SizedBox(
-      width: double.infinity,
-      height: 600,
-      child: Stack(
-        clipBehavior: Clip.none,
+    return Container(
+      //color: const Color(0xFF3B2008),
+      color: const Color.fromARGB(255, 50, 136, 189),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // ── BACKGROUND IMAGE ──
-
-          Positioned.fill(
-
-            child: Image.asset(
-              'assets/images/background1.jpg',
-              fit: BoxFit.cover,
-
-            ),
-
-          ),
-       Positioned.fill(
-      child: Container(
-        //color: const Color(0xFF6DB33F).withOpacity(0.55)
-        color: const Color.fromARGB(255, 186, 236, 245).withValues(alpha: 0.22),
-      ),
-    ),
-          // ── TEXT + BUTTON ──
-          Positioned(
-            top: 40,
-            left: 32,
-            right: 32,
-            child: Column(
-              children: [
-                Text(
-                  'home.title'.tr(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.amaticSc(
-                    //color: const Color.fromARGB(255, 153, 206, 138),
-                    color: const Color.fromARGB(255, 255, 255, 255),
-                    fontSize: 90,
-                    fontWeight: FontWeight.w600,
-                    shadows: const [
-                      Shadow(
-                        offset: Offset(3, 3),
-                        color: Color.fromARGB(255,50, 136, 189),
-                        blurRadius: 0,
-                      )
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'home.subtitle'.tr(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.nunito(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 28),
-
-                 DecoratedBox(
-  decoration: BoxDecoration(
-    //color: const Color.fromARGB(255,219, 161, 157),
-        color: const Color.fromARGB(255,195, 158, 222),
-
-    borderRadius: BorderRadius.circular(12),
-  ),
-  child: Padding(
-    padding: const EdgeInsets.only(bottom: 5),
-    child: ElevatedButton(
-      onPressed: () {},
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color.fromARGB(255,220, 202, 233),
-               // backgroundColor: const Color.fromARGB(255, 237, 209, 205),
-
-        foregroundColor: const Color(0xFF3A2A00),
-        elevation: 0,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 60,
-          vertical: 20,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(5),
-        ),
-      ),
-      child: Text(
-        'home.start_for_free'.tr(),
-        style: GoogleFonts.montserrat(
-          fontSize: 16,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 1.5,
-        ),
-      ),
-    ),
-  ),
-),
-              ],
+          // Logo
+          Text(
+            'nameofweb',
+            style: const TextStyle(
+              fontFamily: 'Arial',
+              color: Color.fromARGB(255, 220, 202, 233),
+              //color: Color.fromARGB(255,219, 161, 157),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
           ),
 
@@ -259,7 +102,7 @@ Widget _unusedBrokenHero(BuildContext context) {
               const _CourseDropdown(),
               const SizedBox(width: 28),
               Text(
-                'PLANS',
+                'nav.plans'.tr(),
                 style: GoogleFonts.montserrat(
                   color: const Color.fromARGB(255, 255, 255, 255),
                   fontSize: 14,
@@ -268,7 +111,7 @@ Widget _unusedBrokenHero(BuildContext context) {
               ),
               const SizedBox(width: 28),
               Text(
-                'RESOURCES',
+                'nav.resources'.tr(),
                 style: GoogleFonts.montserrat(
                   color: Color.fromARGB(255, 255, 255, 255),
                   fontSize: 14,
@@ -281,9 +124,9 @@ Widget _unusedBrokenHero(BuildContext context) {
           // Buttons
           Row(
             children: [
-              _HoverButton(label: 'KIDS SIGN UP', onPressed: () {}),
+              _HoverButton(label: 'nav.kids_signup'.tr(), onPressed: () {}),
               _HoverButton(
-                label: 'SIGN UP',
+                label: 'nav.signup'.tr(),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -293,7 +136,7 @@ Widget _unusedBrokenHero(BuildContext context) {
                 filled: true,
               ),
               _HoverButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -306,8 +149,174 @@ Widget _unusedBrokenHero(BuildContext context) {
           ),
         ],
       ),
-    ),
-  );
+    );
+  }
+
+  // ignore: unused_element
+  Widget _unusedBrokenHero(BuildContext context) {
+    return ClipPath(
+      clipper: _BottomCurveClipper(),
+      child: SizedBox(
+        width: double.infinity,
+        height: 600,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // ── BACKGROUND IMAGE ──
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/background1.jpg',
+                fit: BoxFit.cover,
+              ),
+            ),
+            Positioned.fill(
+              child: Container(
+                //color: const Color(0xFF6DB33F).withOpacity(0.55)
+                color: const Color.fromARGB(
+                  255,
+                  186,
+                  236,
+                  245,
+                ).withValues(alpha: 0.22),
+              ),
+            ),
+            // ── TEXT + BUTTON ──
+            Positioned(
+              top: 40,
+              left: 32,
+              right: 32,
+              child: Column(
+                children: [
+                  Text(
+                    'home.title'.tr(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.amaticSc(
+                      //color: const Color.fromARGB(255, 153, 206, 138),
+                      color: const Color.fromARGB(255, 255, 255, 255),
+                      fontSize: 90,
+                      fontWeight: FontWeight.w600,
+                      shadows: const [
+                        Shadow(
+                          offset: Offset(3, 3),
+                          color: Color.fromARGB(255, 50, 136, 189),
+                          blurRadius: 0,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'home.subtitle'.tr(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.nunito(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      //color: const Color.fromARGB(255,219, 161, 157),
+                      color: const Color.fromARGB(255, 195, 158, 222),
+
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: ElevatedButton(
+                        onPressed: () {},
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            220,
+                            202,
+                            233,
+                          ),
+
+                          // backgroundColor: const Color.fromARGB(255, 237, 209, 205),
+                          foregroundColor: const Color(0xFF3A2A00),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 60,
+                            vertical: 20,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(5),
+                          ),
+                        ),
+                        child: Text(
+                          'home.start_for_free'.tr(),
+                          style: GoogleFonts.montserrat(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Nav links
+            Row(
+              children: [
+                const _CourseDropdown(),
+                const SizedBox(width: 28),
+                Text(
+                  'PLANS',
+                  style: GoogleFonts.montserrat(
+                    color: const Color.fromARGB(255, 255, 255, 255),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 28),
+                Text(
+                  'RESOURCES',
+                  style: GoogleFonts.montserrat(
+                    color: Color.fromARGB(255, 255, 255, 255),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+
+            // Buttons
+            Row(
+              children: [
+                _HoverButton(label: 'KIDS SIGN UP', onPressed: () {}),
+                _HoverButton(
+                  label: 'SIGN UP',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SignupPage()),
+                    );
+                  },
+                  filled: true,
+                ),
+                _HoverButton(
+                  label: 'LOG IN',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                    );
+                  },
+                ),
+                _NavLanguageDropdown(),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildHero() {
@@ -462,49 +471,49 @@ Widget _unusedBrokenHero(BuildContext context) {
     ];
 
     return Padding(
-        padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
-        child: Row(
-          children: features
-              .map(
-                (f) => Expanded(
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE0DDD5)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(f.$1, style: const TextStyle(fontSize: 40)),
-                        const SizedBox(height: 12),
-                        Text(
-                          f.$2,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.pacifico(
-                            color: const Color(0xFF3B2008),
-                            fontSize: 15,
-                          ),
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
+      child: Row(
+        children: features
+            .map(
+              (f) => Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(right: 16),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFFE0DDD5)),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(f.$1, style: const TextStyle(fontSize: 40)),
+                      const SizedBox(height: 12),
+                      Text(
+                        f.$2,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.pacifico(
+                          color: const Color(0xFF3B2008),
+                          fontSize: 15,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          f.$3,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.nunito(
-                            color: const Color(0xFF777777),
-                            fontSize: 13,
-                            height: 1.6,
-                          ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        f.$3,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.nunito(
+                          color: const Color(0xFF777777),
+                          fontSize: 13,
+                          height: 1.6,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              )
-              .toList(),
-        ),
-      );
+              ),
+            )
+            .toList(),
+      ),
+    );
   }
 
   // ── STATS BAR ──
@@ -517,109 +526,103 @@ Widget _unusedBrokenHero(BuildContext context) {
     ];
 
     return Container(
-        color: const Color(0xFF3B2008),
-        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 32),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: stats
-              .map(
-                (s) => Column(
-                  children: [
-                    Text(
-                      s.$1,
-                      style: GoogleFonts.pacifico(
-                        color: const Color.fromARGB(255, 164, 219, 168),
-                        fontSize: 28,
-                      ),
+      color: const Color(0xFF3B2008),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 32),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: stats
+            .map(
+              (s) => Column(
+                children: [
+                  Text(
+                    s.$1,
+                    style: GoogleFonts.pacifico(
+                      color: const Color.fromARGB(255, 164, 219, 168),
+                      fontSize: 28,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      s.$2,
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFFE8D8B0),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    s.$2,
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFFE8D8B0),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
                     ),
-                  ],
-                ),
-              )
-              .toList(),
-        ),
-      );
+                  ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
   }
 
   // ── CTA SECTION ──
   Widget _buildCTASection() {
     return Container(
-        color: const Color(0xFF6DB33F),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 52, horizontal: 32),
-        child: Column(
-          children: [
-            Text(
-              'home.cta_title'.tr(),
-              textAlign: TextAlign.center,
-              style: GoogleFonts.pacifico(
-                color: Colors.white,
-                fontSize: 28,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'home.cta_subtitle'.tr(),
-              style: GoogleFonts.nunito(
-                color: Colors.white70,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 28),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF5C518),
-                    foregroundColor: const Color(0xFF3A2A00),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+      color: const Color(0xFF6DB33F),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 52, horizontal: 32),
+      child: Column(
+        children: [
+          Text(
+            'home.cta_title'.tr(),
+            textAlign: TextAlign.center,
+            style: GoogleFonts.pacifico(color: Colors.white, fontSize: 28),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'home.cta_subtitle'.tr(),
+            style: GoogleFonts.nunito(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF5C518),
+                  foregroundColor: const Color(0xFF3A2A00),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
                   ),
-                  child: Text(
-                    'home.kids_signup_btn'.tr(),
-                    style: GoogleFonts.pacifico(fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                const SizedBox(width: 12),
-                OutlinedButton(
-                  onPressed: () {},
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.white, width: 2),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                child: Text(
+                  'home.kids_signup_btn'.tr(),
+                  style: GoogleFonts.pacifico(fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: () {},
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white, width: 2),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 14,
                   ),
-                  child: Text(
-                    'home.teacher_signup_btn'.tr(),
-                    style: GoogleFonts.pacifico(fontSize: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
-      );
+                child: Text(
+                  'home.teacher_signup_btn'.tr(),
+                  style: GoogleFonts.pacifico(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   // ── FOOTER ──
@@ -638,25 +641,26 @@ Widget _unusedBrokenHero(BuildContext context) {
             ),
           ),
           Row(
-            children: [
-              'footer.privacy_policy'.tr(),
-              'footer.terms_of_use'.tr(),
-              'footer.contact_us'.tr(),
-            ]
-                .map(
-                  (l) => Padding(
-                    padding: const EdgeInsets.only(left: 20),
-                    child: Text(
-                      l,
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFFE8D8B0),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
+            children:
+                [
+                      'footer.privacy_policy'.tr(),
+                      'footer.terms_of_use'.tr(),
+                      'footer.contact_us'.tr(),
+                    ]
+                    .map(
+                      (l) => Padding(
+                        padding: const EdgeInsets.only(left: 20),
+                        child: Text(
+                          l,
+                          style: GoogleFonts.nunito(
+                            color: const Color(0xFFE8D8B0),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                )
-                .toList(),
+                    )
+                    .toList(),
           ),
         ],
       ),
@@ -745,7 +749,9 @@ class _CourseDropdownState extends State<_CourseDropdown> {
                         if (idx == 1) {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const CodemonkeyJrPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const CodemonkeyJrPage(),
+                            ),
                           );
                         }
                       },
@@ -831,7 +837,7 @@ class _CourseDropdownState extends State<_CourseDropdown> {
           border: Border(
             bottom: BorderSide(
               color: _hovered
-                  ? const Color.fromARGB(255,195, 158, 222)
+                  ? const Color.fromARGB(255, 195, 158, 222)
                   : Colors.transparent,
               width: 3,
             ),
@@ -845,7 +851,7 @@ class _CourseDropdownState extends State<_CourseDropdown> {
               style: GoogleFonts.montserrat(
                 fontSize: 14,
                 color: _hovered
-                    ? const Color.fromARGB(255,195, 158, 222)
+                    ? const Color.fromARGB(255, 195, 158, 222)
                     : Colors.white,
                 fontWeight: FontWeight.w500,
               ),
@@ -863,6 +869,7 @@ class _CourseDropdownState extends State<_CourseDropdown> {
     );
   }
 }
+
 ////////////
 class _HoverButton extends StatefulWidget {
   final String label;
@@ -941,12 +948,18 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
         color: const Color(0xFF2A1505),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         offset: const Offset(0, 52),
-        onSelected: (value) {
+        onSelected: (value) async {
           setState(() => _selected = value);
           if (value == '🇸🇦 AR') {
-            context.setLocale(const Locale('ar'));
+            await AppLanguage.instance.setLanguage('ar');
+            if (context.mounted) {
+              await context.setLocale(const Locale('ar'));
+            }
           } else {
-            context.setLocale(const Locale('en'));
+            await AppLanguage.instance.setLanguage('en');
+            if (context.mounted) {
+              await context.setLocale(const Locale('en'));
+            }
           }
         },
         itemBuilder: (_) => [

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/shared/solver/grid_position.dart';
 import 'package:client/features/builder/top_view/flame/top_view_builder_game.dart';
@@ -141,7 +142,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: 'New Level');
+    _titleController = TextEditingController(
+      text: AppLanguage.instance.t('builder.newLevel'),
+    );
     _codeController = TextEditingController();
     _codeScrollController = ScrollController()..addListener(_handleCodeScroll);
     _lineNumberScrollController = ScrollController();
@@ -597,8 +600,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         if (showFeedback) {
           _showSnackBar(
             status == 'published'
-                ? 'Top view game published successfully.'
-                : 'Top view game saved successfully.',
+                ? AppLanguage.instance.t('builder.topViewPublishedSuccessfully')
+                : AppLanguage.instance.t('builder.topViewSavedSuccessfully'),
             backgroundColor: Colors.green.shade600,
           );
         }
@@ -606,7 +609,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         final errors = response['errors'];
         final message = errors is List && errors.isNotEmpty
             ? errors.join('\n')
-            : response['message']?.toString() ?? 'Failed to save game.';
+            : response['message']?.toString() ??
+                  AppLanguage.instance.t('builder.saveFailedGeneric');
         if (showFeedback) {
           _showSnackBar(message, backgroundColor: Colors.red.shade600);
         }
@@ -616,7 +620,13 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         return;
       }
       if (showFeedback) {
-        _showSnackBar('Save failed: $e', backgroundColor: Colors.red.shade600);
+        _showSnackBar(
+          AppLanguage.instance.t(
+            'builder.saveFailed',
+            params: {'error': e.toString()},
+          ),
+          backgroundColor: Colors.red.shade600,
+        );
       }
     } finally {
       if (mounted) {
@@ -654,7 +664,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
       if (response['success'] != true) {
         _showSnackBar(
-          response['message']?.toString() ?? 'Failed to load top view game.',
+          response['message']?.toString() ??
+              AppLanguage.instance.t('builder.loadTopViewFailedGeneric'),
           backgroundColor: Colors.red.shade600,
         );
         return;
@@ -670,7 +681,13 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       if (!mounted) {
         return;
       }
-      _showSnackBar('Load failed: $e', backgroundColor: Colors.red.shade600);
+      _showSnackBar(
+        AppLanguage.instance.t(
+          'builder.loadFailed',
+          params: {'error': e.toString()},
+        ),
+        backgroundColor: Colors.red.shade600,
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -751,7 +768,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           data['title']?.toString() ??
           draftData['title']?.toString() ??
           widget.initialTitle ??
-          'New Level';
+          AppLanguage.instance.t('builder.newLevel');
       _items
         ..clear()
         ..addAll(items);
@@ -777,7 +794,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     return {
       'builderType': 'topView',
       'title': _titleController.text.trim().isEmpty
-          ? 'New Level'
+          ? AppLanguage.instance.t('builder.newLevel')
           : _titleController.text.trim(),
       'description': '',
       'status': status,
@@ -876,7 +893,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Choose Difficulty'),
+              title: Text(
+                AppLanguage.of(context).t('builder.chooseDifficulty'),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -889,7 +908,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                           fontWeight: FontWeight.w700,
                         ),
                         children: [
-                          const TextSpan(text: 'Suggested: '),
+                          TextSpan(
+                            text: AppLanguage.of(
+                              context,
+                            ).t('builder.suggested'),
+                          ),
                           TextSpan(
                             text: _difficultyLabel(suggestedDifficulty),
                             style: TextStyle(
@@ -925,12 +948,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(AppLanguage.of(context).t('builder.cancel')),
                 ),
                 FilledButton(
                   onPressed: () =>
                       Navigator.of(dialogContext).pop(selectedDifficulty),
-                  child: const Text('Publish'),
+                  child: Text(AppLanguage.of(context).t('builder.publish')),
                 ),
               ],
             );
@@ -978,12 +1001,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   String _difficultyLabel(String difficulty) {
     switch (difficulty) {
       case 'easy':
-        return 'Easy';
+        return AppLanguage.instance.t('builder.easy');
       case 'hard':
-        return 'Hard';
+        return AppLanguage.instance.t('builder.hard');
       case 'medium':
       default:
-        return 'Medium';
+        return AppLanguage.instance.t('builder.medium');
     }
   }
 
@@ -1014,21 +1037,21 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   String? _validatePublishableLevel() {
     final playerCell = _playerCell;
     if (playerCell == null) {
-      return 'Add a player before publishing.';
+      return AppLanguage.instance.t('builder.validation.addPlayer');
     }
 
     final goalCell = _goalCell;
     if (goalCell == null) {
-      return 'Add a goal before publishing.';
+      return AppLanguage.instance.t('builder.validation.addGoal');
     }
 
     if (_allowedBlocks.isEmpty) {
-      return 'Add solution blocks before publishing.';
+      return AppLanguage.instance.t('builder.validation.addSolutionBlocks');
     }
 
     final steps = _parseCodeSteps();
     if (steps.isEmpty) {
-      return 'Write a possible solution before publishing.';
+      return AppLanguage.instance.t('builder.validation.writeSolution');
     }
 
     final result = _simulateTopViewSolution(
@@ -1079,9 +1102,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         position += direction * (tileDistance * stepDirection);
 
         if (!_isPlayerPositionInBounds(position)) {
-          return const _TopViewSolutionResult(
+          return _TopViewSolutionResult(
             success: false,
-            message: 'The possible solution moves the player out of bounds.',
+            message: AppLanguage.instance.t(
+              'builder.validation.solutionOutOfBounds',
+            ),
           );
         }
 
@@ -1091,16 +1116,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     }
 
     if (collected.length != collectableCells.length) {
-      return const _TopViewSolutionResult(
+      return _TopViewSolutionResult(
         success: false,
-        message: 'The possible solution must collect all collectables.',
+        message: AppLanguage.instance.t(
+          'builder.validation.solutionCollectAll',
+        ),
       );
     }
 
     if (!_positionMatchesCell(position, goalCell)) {
-      return const _TopViewSolutionResult(
+      return _TopViewSolutionResult(
         success: false,
-        message: 'The possible solution must finish on the goal.',
+        message: AppLanguage.instance.t('builder.validation.solutionOnGoal'),
       );
     }
 
@@ -1365,21 +1392,19 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Clear Level?'),
-          content: const Text(
-            'This will remove all placed pieces, solution blocks, and editor code.',
-          ),
+          title: Text(AppLanguage.of(context).t('builder.clearLevel')),
+          content: Text(AppLanguage.of(context).t('builder.clearLevelBody')),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(AppLanguage.of(context).t('builder.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red.shade600,
               ),
-              child: const Text('Clear'),
+              child: Text(AppLanguage.of(context).t('builder.clear')),
             ),
           ],
         );
@@ -1506,130 +1531,141 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          onPressed: () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.arrow_back),
-        ),
-        title: widget.playMode
-            ? Text(widget.initialTitle ?? _titleController.text)
-            : TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  hintText: 'New Level',
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
+    final language = AppLanguage.of(context);
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: widget.playMode
+              ? Text(widget.initialTitle ?? _titleController.text)
+              : TextField(
+                  controller: _titleController,
+                  decoration: InputDecoration(
+                    hintText: language.t('builder.newLevel'),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
+                  cursorColor: Colors.black,
+                  maxLines: 1,
                 ),
-                style: Theme.of(context).textTheme.titleLarge,
-                cursorColor: Colors.black,
-                maxLines: 1,
-              ),
-        actions: widget.playMode
-            ? null
-            : [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: TextButton(
-                    onPressed: _isSavingProject ? null : _handleSavePressed,
-                    child: const Text(
-                      'Save',
-                      style: TextStyle(color: Colors.black),
+          actions: widget.playMode
+              ? null
+              : [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: TextButton(
+                      onPressed: _isSavingProject ? null : _handleSavePressed,
+                      child: Text(
+                        language.t('builder.save'),
+                        style: TextStyle(color: Colors.black),
+                      ),
                     ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: FilledButton(
-                    onPressed: _isSavingProject ? null : _handlePublishPressed,
-                    child: Text(_isSavingProject ? 'Saving...' : 'Publish'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: FilledButton(
+                      onPressed: _isSavingProject
+                          ? null
+                          : _handlePublishPressed,
+                      child: Text(
+                        _isSavingProject
+                            ? language.t('builder.saving')
+                            : language.t('builder.publish'),
+                      ),
+                    ),
                   ),
-                ),
-              ],
-      ),
-      body: _isLoadingProject
-          ? const Center(child: CircularProgressIndicator())
-          : Container(
-              color: const Color(0xFFEAF6FF),
-              child: Stack(
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final compact = constraints.maxWidth < 1280;
-                      final tools = _buildToolsSidebar();
-                      final grid = _buildGridPanel();
-                      final editor = _buildCodeWorkspace();
+                ],
+        ),
+        body: _isLoadingProject
+            ? const Center(child: CircularProgressIndicator())
+            : Container(
+                color: const Color(0xFFEAF6FF),
+                child: Stack(
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final compact = constraints.maxWidth < 1280;
+                        final tools = _buildToolsSidebar();
+                        final grid = _buildGridPanel();
+                        final editor = _buildCodeWorkspace();
 
-                      if (compact) {
-                        return SingleChildScrollView(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              if (!widget.playMode) ...[
-                                SizedBox(height: 520, child: tools),
+                        if (compact) {
+                          return SingleChildScrollView(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (!widget.playMode) ...[
+                                  SizedBox(height: 520, child: tools),
+                                  const SizedBox(height: 20),
+                                ],
+                                SizedBox(height: 700, child: grid),
                                 const SizedBox(height: 20),
+                                SizedBox(
+                                  height: widget.playMode ? 920 : 760,
+                                  child: editor,
+                                ),
                               ],
-                              SizedBox(height: 700, child: grid),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                height: widget.playMode ? 920 : 760,
-                                child: editor,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
+                            ),
+                          );
+                        }
 
-                      return Row(
-                        children: [
-                          if (!widget.playMode)
-                            Container(
-                              width: _leftPanelWidth,
-                              padding: const EdgeInsets.fromLTRB(
-                                16,
-                                16,
-                                12,
-                                16,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.92),
-                                border: Border(
-                                  right: BorderSide(
-                                    color: Colors.blueGrey.shade100,
+                        return Row(
+                          children: [
+                            if (!widget.playMode)
+                              Container(
+                                width: _leftPanelWidth,
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  12,
+                                  16,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  border: Border(
+                                    right: BorderSide(
+                                      color: Colors.blueGrey.shade100,
+                                    ),
                                   ),
                                 ),
+                                child: tools,
                               ),
-                              child: tools,
-                            ),
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(flex: 13, child: grid),
-                                  const SizedBox(width: 20),
-                                  Expanded(flex: 7, child: editor),
-                                ],
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(flex: 13, child: grid),
+                                    const SizedBox(width: 20),
+                                    Expanded(flex: 7, child: editor),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (!widget.playMode)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 18,
-                      child: Center(child: _buildTrash()),
+                          ],
+                        );
+                      },
                     ),
-                ],
+                    if (!widget.playMode)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 18,
+                        child: Center(child: _buildTrash()),
+                      ),
+                  ],
+                ),
               ),
-            ),
+      ),
     );
   }
 
@@ -1637,7 +1673,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     return ListView(
       children: [
         _buildSidebarSection(
-          title: 'Tools',
+          title: AppLanguage.of(context).t('builder.tools'),
           child: Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -1648,7 +1684,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
-          title: 'Board Style',
+          title: AppLanguage.of(context).t('builder.boardStyle'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1660,7 +1696,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
-          title: 'Instructions',
+          title: AppLanguage.of(context).t('builder.instructions'),
           child: Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -1669,7 +1705,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
-          title: 'Player Direction',
+          title: AppLanguage.of(context).t('builder.playerDirection'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1681,7 +1717,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
-          title: 'Level Actions',
+          title: AppLanguage.of(context).t('builder.levelActions'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1695,7 +1731,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 contentPadding: EdgeInsets.zero,
                 dense: true,
                 title: Text(
-                  'Use Turn Angles',
+                  AppLanguage.of(context).t('builder.useTurnAngles'),
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Colors.blueGrey.shade800,
                     fontWeight: FontWeight.w700,
@@ -1712,8 +1748,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                   ),
                 ),
                 icon: const Icon(Icons.route_rounded, size: 18),
-                label: const Text(
-                  'Print Solution',
+                label: Text(
+                  AppLanguage.of(context).t('builder.printSolution'),
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -1729,8 +1765,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                   ),
                 ),
                 icon: const Icon(Icons.layers_clear_outlined, size: 18),
-                label: const Text(
-                  'Clear Level',
+                label: Text(
+                  AppLanguage.of(context).t('builder.clearLevel'),
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
@@ -1739,12 +1775,15 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
-          title: 'Level Info',
+          title: AppLanguage.of(context).t('builder.levelInfo'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Grid: $_cols columns x $_rows rows',
+                AppLanguage.of(context).t(
+                  'builder.gridSummary',
+                  params: {'columns': '$_cols', 'rows': '$_rows'},
+                ),
                 style: Theme.of(
                   context,
                 ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
@@ -1752,8 +1791,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               const SizedBox(height: 8),
               Text(
                 _rulerActive
-                    ? 'Ruler mode is active. Press a tile to start measuring, then press again to clear.'
-                    : 'Drag pieces into the board, then write the path in the code panel.',
+                    ? AppLanguage.of(context).t('builder.rulerActiveHelp')
+                    : AppLanguage.of(context).t('builder.topViewHelp'),
                 style: TextStyle(color: Colors.blueGrey.shade700, height: 1.35),
               ),
             ],
@@ -2002,7 +2041,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     _isRunningCode ? Icons.stop_rounded : Icons.play_arrow,
                     size: 18,
                   ),
-                  label: Text(_isRunningCode ? 'Stop' : 'Run'),
+                  label: Text(
+                    _isRunningCode
+                        ? AppLanguage.of(context).t('builder.stop')
+                        : AppLanguage.of(context).t('builder.run'),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 OutlinedButton.icon(
@@ -2012,13 +2055,13 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     visualDensity: VisualDensity.compact,
                   ),
                   icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                  label: const Text('Reset'),
+                  label: Text(AppLanguage.of(context).t('builder.reset')),
                 ),
                 const SizedBox(width: 8),
                 TextButton(
                   onPressed: _clearCode,
                   child: Text(
-                    'Clear',
+                    AppLanguage.of(context).t('builder.clear'),
                     style: TextStyle(color: Colors.blueGrey.shade900),
                   ),
                 ),
@@ -2135,7 +2178,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Solution Blocks',
+              AppLanguage.of(context).t('builder.solutionBlocks'),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Colors.blueGrey.shade900,
@@ -2169,7 +2212,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Possible Solution',
+            AppLanguage.of(context).t('builder.possibleSolution'),
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               color: Colors.blueGrey.shade900,
               fontWeight: FontWeight.w800,
@@ -2227,8 +2270,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               ? Center(
                   child: Text(
                     widget.playMode
-                        ? 'No solution blocks were provided'
-                        : 'Drop instruction blocks here',
+                        ? AppLanguage.of(context).t('builder.noSolutionBlocks')
+                        : AppLanguage.of(
+                            context,
+                          ).t('builder.dropInstructionBlocks'),
                     style: TextStyle(
                       color: Colors.blueGrey.shade600,
                       fontWeight: FontWeight.w600,
@@ -2247,7 +2292,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   Widget _buildBoardPaletteItem(_BoardItemType item) {
     final tile = _toolTile(
-      label: item.label,
+      label: _localizedBoardItemLabel(item),
       icon: item.icon,
       color: item.color,
     );
@@ -2258,7 +2303,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         child: SizedBox(
           width: 96,
           child: _toolTile(
-            label: item.label,
+            label: _localizedBoardItemLabel(item),
             icon: item.icon,
             color: item.color,
           ),
@@ -2275,26 +2320,26 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       child: SegmentedButton<double>(
         showSelectedIcon: false,
         selected: <double>{_initialPlayerHeadingDegrees},
-        segments: const [
+        segments: [
           ButtonSegment<double>(
             value: 90,
-            icon: Icon(Icons.keyboard_arrow_up_rounded),
-            tooltip: 'Start facing up',
+            icon: const Icon(Icons.keyboard_arrow_up_rounded),
+            tooltip: AppLanguage.of(context).t('builder.startFacingUp'),
           ),
           ButtonSegment<double>(
             value: 0,
-            icon: Icon(Icons.keyboard_arrow_right_rounded),
-            tooltip: 'Start facing right',
+            icon: const Icon(Icons.keyboard_arrow_right_rounded),
+            tooltip: AppLanguage.of(context).t('builder.startFacingRight'),
           ),
           ButtonSegment<double>(
             value: 270,
-            icon: Icon(Icons.keyboard_arrow_down_rounded),
-            tooltip: 'Start facing down',
+            icon: const Icon(Icons.keyboard_arrow_down_rounded),
+            tooltip: AppLanguage.of(context).t('builder.startFacingDown'),
           ),
           ButtonSegment<double>(
             value: 180,
-            icon: Icon(Icons.keyboard_arrow_left_rounded),
-            tooltip: 'Start facing left',
+            icon: const Icon(Icons.keyboard_arrow_left_rounded),
+            tooltip: AppLanguage.of(context).t('builder.startFacingLeft'),
           ),
         ],
         onSelectionChanged: (selection) {
@@ -2326,7 +2371,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Character',
+          AppLanguage.of(context).t('builder.character'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2393,7 +2438,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  selectedCharacter.label,
+                  localizedTopViewCharacterLabel(
+                    AppLanguage.of(context),
+                    selectedCharacter.id,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -2416,7 +2464,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Background',
+          AppLanguage.of(context).t('builder.background'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2459,7 +2507,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(height: 10),
         _buildAssetPreviewCard(
           assetPath: selectedBackground.assetPath,
-          label: selectedBackground.label,
+          label: localizedTopViewBackgroundLabel(
+            AppLanguage.of(context),
+            selectedBackground.id,
+          ),
           fallbackIcon: Icons.landscape_rounded,
           imageFit: BoxFit.cover,
         ),
@@ -2474,7 +2525,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Obstacle',
+          AppLanguage.of(context).t('builder.obstacle'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2517,7 +2568,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(height: 10),
         _buildAssetPreviewCard(
           assetPath: selectedObstacle.assetPath,
-          label: selectedObstacle.label,
+          label: localizedTopViewObstacleLabel(
+            AppLanguage.of(context),
+            selectedObstacle.id,
+          ),
           fallbackIcon: Icons.terrain_rounded,
           imageFit: BoxFit.contain,
         ),
@@ -2586,7 +2640,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            character.label,
+            localizedTopViewCharacterLabel(
+              AppLanguage.of(context),
+              character.id,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2613,7 +2670,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            background.label,
+            localizedTopViewBackgroundLabel(
+              AppLanguage.of(context),
+              background.id,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2637,7 +2697,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            obstacle.label,
+            localizedTopViewObstacleLabel(AppLanguage.of(context), obstacle.id),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2648,7 +2708,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   Widget _buildInstructionTool(_CodeBlock block) {
     final tile = _toolTile(
-      label: block.label,
+      label: _localizedCodeBlockLabel(block),
       color: block.color,
       icon: Icons.code_rounded,
       isInstruction: true,
@@ -2661,7 +2721,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         child: SizedBox(
           width: 118,
           child: _toolTile(
-            label: block.label,
+            label: _localizedCodeBlockLabel(block),
             color: block.color,
             icon: Icons.code_rounded,
             isInstruction: true,
@@ -2731,7 +2791,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           Icon(Icons.code_rounded, size: 16, color: block.color),
           const SizedBox(width: 8),
           Text(
-            block.label,
+            _localizedCodeBlockLabel(block),
             style: TextStyle(color: block.color, fontWeight: FontWeight.w700),
           ),
           const SizedBox(width: 8),
@@ -2792,7 +2852,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   Widget _buildRulerHandle() {
     return Tooltip(
-      message: _rulerActive ? 'Deselect ruler' : 'Select ruler',
+      message: _rulerActive
+          ? AppLanguage.of(context).t('builder.deselectRuler')
+          : AppLanguage.of(context).t('builder.selectRuler'),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
@@ -2867,7 +2929,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ],
           ),
           child: Text(
-            '$distance tiles',
+            AppLanguage.of(
+              context,
+            ).t('builder.tiles', params: {'count': '$distance'}),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
@@ -2948,7 +3012,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      'Drop to delete',
+                      AppLanguage.of(context).t('builder.dropToDelete'),
                       style: TextStyle(
                         color: highlight ? Colors.white : Colors.red.shade600,
                         fontWeight: FontWeight.w700,
@@ -3098,6 +3162,21 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       ),
       child: child,
     );
+  }
+
+  String _localizedBoardItemLabel(_BoardItemType item) {
+    final language = AppLanguage.of(context);
+    return switch (item) {
+      _BoardItemType.obstacle => language.t('builder.obstacle'),
+      _BoardItemType.player => language.t('builder.player'),
+      _BoardItemType.collectable => language.t('builder.collectable'),
+      _BoardItemType.goal => language.t('builder.goal'),
+    };
+  }
+
+  String _localizedCodeBlockLabel(_CodeBlock block) {
+    final language = AppLanguage.of(context);
+    return language.tr('builder.codeBlock.${block.id}', block.label);
   }
 }
 

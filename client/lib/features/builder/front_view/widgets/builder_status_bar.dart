@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
 import '../controllers/builder_controller.dart';
 import '../models/level_settings.dart';
 
@@ -15,10 +16,11 @@ class BuilderStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final selectedCell =
         controller.selectedX != null && controller.selectedY != null
         ? '(${controller.selectedX}, ${controller.selectedY})'
-        : 'None';
+        : language.t('builder.none');
     final collectableCount = controller.project.entities
         .where((entity) => entity.type == 'collectable')
         .length;
@@ -27,8 +29,8 @@ class BuilderStatusBar extends StatelessWidget {
     );
     final logicStepCount = controller.logicCommandBlockCount;
     final runStatus = controller.isPlaybackRunning
-        ? 'Playing'
-        : controller.logicStatusMessage ?? 'Ready';
+        ? language.t('builder.playing')
+        : controller.logicStatusMessage ?? language.t('builder.ready');
 
     return Container(
       width: double.infinity,
@@ -40,25 +42,25 @@ class BuilderStatusBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _infoRow('Tool', controller.currentTool.name),
-          _infoRow('Selected', selectedCell),
+          _infoRow(language.t('builder.tool'), controller.currentTool.name),
+          _infoRow(language.t('builder.selected'), selectedCell),
           _infoRow(
-            'Grid',
+            language.t('builder.grid'),
             '${controller.project.settings.columns} x ${controller.project.settings.rows}',
           ),
-          _infoRow('Size Preset', gridPreset.shortLabel),
+          _infoRow(language.t('builder.sizePreset'), gridPreset.shortLabel),
           _infoRow(
-            'Tile Size',
+            language.t('builder.tileSize'),
             '${controller.project.settings.tileSize.round()} px',
           ),
-          _infoRow('Collectables', '$collectableCount'),
-          _infoRow('Logic Blocks', '$logicStepCount'),
-          _infoRow('Run Status', runStatus),
+          _infoRow(language.t('builder.collectables'), '$collectableCount'),
+          _infoRow(language.t('builder.logicBlocks'), '$logicStepCount'),
+          _infoRow(language.t('builder.runStatus'), runStatus),
           if (showValidation)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                'Draft saves without publish checks.',
+                language.t('builder.draftPublishChecks'),
                 style: TextStyle(color: Colors.blueGrey.shade700),
               ),
             ),

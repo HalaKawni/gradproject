@@ -58,7 +58,10 @@ class AppRouter {
         if (data is DashboardRouteData) {
           return _pageRoute(
             settings: settings,
-            builder: (_) => DashboardPage(username: data.session.user.name),
+            builder: (_) => DashboardPage(
+              session: data.session,
+              username: data.session.user.name,
+            ),
           );
         }
         return _errorRoute(

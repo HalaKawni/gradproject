@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -384,82 +385,94 @@ class _BuilderPageState extends State<BuilderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final project = controller.project;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: TextField(
-          controller: titleController,
-          decoration: const InputDecoration(
-            hintText: 'Game Name',
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          title: TextField(
+            controller: titleController,
+            decoration: InputDecoration(
+              hintText: language.t('builder.gameName'),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+            ),
+            style: Theme.of(context).textTheme.titleLarge,
+            cursorColor: Colors.black,
+            maxLines: 1,
+            onChanged: _handleTitleChanged,
           ),
-          style: Theme.of(context).textTheme.titleLarge,
-          cursorColor: Colors.black,
-          maxLines: 1,
-          onChanged: _handleTitleChanged,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: TextButton(
+                onPressed: controller.isSaving ? null : _handlePublishPressed,
+                child: Text(
+                  controller.isSaving
+                      ? language.t('builder.saving')
+                      : language.t('builder.publish'),
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: TextButton(
+                onPressed: controller.isSaving ? null : _handleSavePressed,
+                child: Text(
+                  controller.isSaving
+                      ? language.t('builder.saving')
+                      : language.t('builder.save'),
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
+            ),
+          ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: TextButton(
-              onPressed: controller.isSaving ? null : _handlePublishPressed,
-              child: Text(
-                controller.isSaving ? 'Publishing...' : 'Publish',
-                style: const TextStyle(color: Colors.black),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: TextButton(
-              onPressed: controller.isSaving ? null : _handleSavePressed,
-              child: Text(
-                controller.isSaving ? 'Saving...' : 'Save',
-                style: const TextStyle(color: Colors.black),
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: controller.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Stack(
-              children: [
-                Container(
-                  color: const Color(0xFFEAF6FF),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: _leftPanelWidth,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.92),
-                          border: Border(
-                            right: BorderSide(color: Colors.blueGrey.shade100),
+        body: controller.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Stack(
+                children: [
+                  Container(
+                    color: const Color(0xFFEAF6FF),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: _leftPanelWidth,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            border: Border(
+                              right: BorderSide(
+                                color: Colors.blueGrey.shade100,
+                              ),
+                            ),
+                          ),
+                          child: _buildLeftPanel(),
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Center(
+                              child: _buildFixedGameWindow(project),
+                            ),
                           ),
                         ),
-                        child: _buildLeftPanel(),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Center(child: _buildFixedGameWindow(project)),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 18,
-                  child: Center(child: _buildTrashBin()),
-                ),
-              ],
-            ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 18,
+                    child: Center(child: _buildTrashBin()),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 
@@ -476,7 +489,9 @@ class _BuilderPageState extends State<BuilderPage> {
 
     if (saveSucceeded) {
       _showNotification(
-        message: controller.lastMessage ?? 'Game saved successfully.',
+        message:
+            controller.lastMessage ??
+            AppLanguage.instance.t('builder.savedSuccessfully'),
         backgroundColor: Colors.green.shade600,
       );
       return;
@@ -491,7 +506,9 @@ class _BuilderPageState extends State<BuilderPage> {
     }
 
     _showNotification(
-      message: controller.lastMessage ?? 'Failed to save game.',
+      message:
+          controller.lastMessage ??
+          AppLanguage.instance.t('builder.saveFailedGeneric'),
       backgroundColor: Colors.red.shade600,
     );
   }
@@ -526,7 +543,9 @@ class _BuilderPageState extends State<BuilderPage> {
 
     if (publishSucceeded) {
       _showNotification(
-        message: controller.lastMessage ?? 'Game published successfully.',
+        message:
+            controller.lastMessage ??
+            AppLanguage.instance.t('builder.publishedSuccessfully'),
         backgroundColor: Colors.green.shade600,
       );
       return;
@@ -541,7 +560,9 @@ class _BuilderPageState extends State<BuilderPage> {
     }
 
     _showNotification(
-      message: controller.lastMessage ?? 'Failed to publish game.',
+      message:
+          controller.lastMessage ??
+          AppLanguage.instance.t('builder.publishFailedGeneric'),
       backgroundColor: Colors.red.shade600,
     );
   }
@@ -557,7 +578,9 @@ class _BuilderPageState extends State<BuilderPage> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Choose Difficulty'),
+              title: Text(
+                AppLanguage.of(context).t('builder.chooseDifficulty'),
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -570,7 +593,11 @@ class _BuilderPageState extends State<BuilderPage> {
                           fontWeight: FontWeight.w700,
                         ),
                         children: [
-                          const TextSpan(text: 'Suggested: '),
+                          TextSpan(
+                            text: AppLanguage.of(
+                              context,
+                            ).t('builder.suggested'),
+                          ),
                           TextSpan(
                             text: _difficultyLabel(suggestedDifficulty),
                             style: TextStyle(
@@ -606,12 +633,12 @@ class _BuilderPageState extends State<BuilderPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(AppLanguage.of(context).t('builder.cancel')),
                 ),
                 FilledButton(
                   onPressed: () =>
                       Navigator.of(dialogContext).pop(selectedDifficulty),
-                  child: const Text('Publish'),
+                  child: Text(AppLanguage.of(context).t('builder.publish')),
                 ),
               ],
             );
@@ -659,12 +686,12 @@ class _BuilderPageState extends State<BuilderPage> {
   String _difficultyLabel(String difficulty) {
     switch (difficulty) {
       case 'easy':
-        return 'Easy';
+        return AppLanguage.instance.t('builder.easy');
       case 'hard':
-        return 'Hard';
+        return AppLanguage.instance.t('builder.hard');
       case 'medium':
       default:
-        return 'Medium';
+        return AppLanguage.instance.t('builder.medium');
     }
   }
 
@@ -685,21 +712,19 @@ class _BuilderPageState extends State<BuilderPage> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Clear Level?'),
-          content: const Text(
-            'This will remove all placed items and logic steps, then rebuild the protected ground rows at the bottom.',
-          ),
+          title: Text(AppLanguage.of(context).t('builder.clearLevel')),
+          content: Text(AppLanguage.of(context).t('builder.clearLevelBody')),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Cancel'),
+              child: Text(AppLanguage.of(context).t('builder.cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red.shade600,
               ),
-              child: const Text('Clear'),
+              child: Text(AppLanguage.of(context).t('builder.clear')),
             ),
           ],
         );
@@ -722,7 +747,7 @@ class _BuilderPageState extends State<BuilderPage> {
     }
 
     _showNotification(
-      message: 'Level cleared.',
+      message: AppLanguage.instance.t('builder.levelCleared'),
       backgroundColor: Colors.blueGrey.shade700,
     );
   }
@@ -794,17 +819,21 @@ class _BuilderPageState extends State<BuilderPage> {
     ];
 
     if (issues.isEmpty) {
-      return controller.lastMessage ?? 'Add the required items before saving.';
+      return controller.lastMessage ??
+          AppLanguage.instance.t('builder.addRequiredItems');
     }
 
-    return 'Add the required items before saving: ${issues.join(' ')}';
+    return AppLanguage.instance.t(
+      'builder.addRequiredItemsPrefix',
+      params: {'issues': issues.join(' ')},
+    );
   }
 
   Widget _buildLeftPanel() {
     return ListView(
       children: [
         _buildPanelSection(
-          title: 'Tools',
+          title: AppLanguage.of(context).t('builder.tools'),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -819,12 +848,18 @@ class _BuilderPageState extends State<BuilderPage> {
           ),
         ),
         const SizedBox(height: 14),
-        _buildPanelSection(title: 'Grid', child: _buildTileSizeControls()),
-        const SizedBox(height: 14),
-        _buildPanelSection(title: 'Level Actions', child: _buildLevelActions()),
+        _buildPanelSection(
+          title: AppLanguage.of(context).t('builder.grid'),
+          child: _buildTileSizeControls(),
+        ),
         const SizedBox(height: 14),
         _buildPanelSection(
-          title: 'Level Info',
+          title: AppLanguage.of(context).t('builder.levelActions'),
+          child: _buildLevelActions(),
+        ),
+        const SizedBox(height: 14),
+        _buildPanelSection(
+          title: AppLanguage.of(context).t('builder.levelInfo'),
           child: BuilderStatusBar(
             controller: controller,
             showValidation: hasAttemptedSave,
@@ -1020,7 +1055,7 @@ class _BuilderPageState extends State<BuilderPage> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Drop to delete',
+                        AppLanguage.of(context).t('builder.dropToDelete'),
                         style: TextStyle(
                           color: isHighlighted
                               ? Colors.white
@@ -1108,7 +1143,9 @@ class _BuilderPageState extends State<BuilderPage> {
                       : () {
                           controller.playSolution();
                         },
-                  tooltip: controller.isPlaybackRunning ? 'Stop' : 'Play',
+                  tooltip: controller.isPlaybackRunning
+                      ? AppLanguage.of(context).t('builder.stop')
+                      : AppLanguage.of(context).t('builder.play'),
                   style: IconButton.styleFrom(
                     backgroundColor: controller.isPlaybackRunning
                         ? Colors.red.shade50
@@ -1139,7 +1176,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           controller.resetPlaybackPreview();
                         }
                       : null,
-                  tooltip: 'Reset',
+                  tooltip: AppLanguage.of(context).t('builder.reset'),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.amber.shade50,
                     side: BorderSide(color: Colors.amber.shade200),
@@ -1163,7 +1200,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           controller.clearSolutionCommands();
                         }
                       : null,
-                  tooltip: 'Clear',
+                  tooltip: AppLanguage.of(context).t('builder.clear'),
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.blueGrey.shade50,
                     side: BorderSide(color: Colors.blueGrey.shade100),
@@ -1201,8 +1238,10 @@ class _BuilderPageState extends State<BuilderPage> {
                   child: Text(
                     controller.logicStatusMessage ??
                         (selectedLoopTargetId == null
-                            ? 'Add blocks, drag them into place, or tap a loop then add commands directly inside it.'
-                            : 'The selected loop is ready. New blocks will be added inside it, or you can drag commands into any gap.'),
+                            ? AppLanguage.of(context).t('builder.logicHelp')
+                            : AppLanguage.of(
+                                context,
+                              ).t('builder.logicLoopHelp')),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.blueGrey.shade800,
                       fontWeight: FontWeight.w600,
@@ -1228,7 +1267,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           );
                         }
                       : null,
-                  tooltip: 'Move Left',
+                  tooltip: AppLanguage.of(context).t('builder.moveLeft'),
                   style: IconButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1253,7 +1292,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           controller.removeSolutionCommand(commandId);
                         }
                       : null,
-                  tooltip: 'Remove',
+                  tooltip: AppLanguage.of(context).t('builder.remove'),
                   style: IconButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1276,7 +1315,7 @@ class _BuilderPageState extends State<BuilderPage> {
                           );
                         }
                       : null,
-                  tooltip: 'Move Right',
+                  tooltip: AppLanguage.of(context).t('builder.moveRight'),
                   style: IconButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1427,7 +1466,7 @@ class _BuilderPageState extends State<BuilderPage> {
               ),
               const SizedBox(width: 4),
               Text(
-                'Loop',
+                AppLanguage.of(context).t('builder.loop'),
                 style: TextStyle(
                   color: enabled
                       ? loopColor
@@ -1826,7 +1865,9 @@ class _BuilderPageState extends State<BuilderPage> {
               (showIdlePlaceholder && isRoot);
           final showWideLabel =
               isRoot && (isEmptySequence || showIdlePlaceholder);
-          final labelText = isEmptySequence ? 'Drop here' : 'Drop here to add';
+          final labelText = isEmptySequence
+              ? AppLanguage.of(context).t('builder.dropHere')
+              : AppLanguage.of(context).t('builder.dropHereToAdd');
           final isIdleRootPlaceholder =
               showIdlePlaceholder &&
               isRoot &&
@@ -2046,30 +2087,30 @@ class _BuilderPageState extends State<BuilderPage> {
   String _logicCommandChipLabel(LogicCommandType command) {
     switch (command) {
       case LogicCommandType.moveLeft:
-        return 'Left';
+        return AppLanguage.instance.t('builder.left');
       case LogicCommandType.moveRight:
-        return 'Right';
+        return AppLanguage.instance.t('builder.right');
       case LogicCommandType.jumpUp:
-        return 'Jump';
+        return AppLanguage.instance.t('builder.jump');
       case LogicCommandType.climbUpLeft:
-        return 'Up-L';
+        return AppLanguage.instance.t('builder.upLeftShort');
       case LogicCommandType.climbUpRight:
-        return 'Up-R';
+        return AppLanguage.instance.t('builder.upRightShort');
     }
   }
 
   String _logicCommandTokenLabel(LogicCommandType command) {
     switch (command) {
       case LogicCommandType.moveLeft:
-        return 'L';
+        return AppLanguage.instance.t('builder.leftShort');
       case LogicCommandType.moveRight:
-        return 'R';
+        return AppLanguage.instance.t('builder.rightShort');
       case LogicCommandType.jumpUp:
-        return 'UP';
+        return AppLanguage.instance.t('builder.upShort');
       case LogicCommandType.climbUpLeft:
-        return 'UL';
+        return AppLanguage.instance.t('builder.upLeftToken');
       case LogicCommandType.climbUpRight:
-        return 'UR';
+        return AppLanguage.instance.t('builder.upRightToken');
     }
   }
 
@@ -2107,7 +2148,7 @@ class _BuilderPageState extends State<BuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Grid Square Size',
+          AppLanguage.of(context).t('builder.gridSquareSize'),
           style: Theme.of(
             context,
           ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
@@ -2165,14 +2206,22 @@ class _BuilderPageState extends State<BuilderPage> {
         ),
         const SizedBox(height: 12),
         Text(
-          '${selectedPreset.label}: ${settings.tileSize.round()} px squares, ${settings.columns} columns, ${settings.rows} rows.',
+          AppLanguage.of(context).t(
+            'builder.tileSizeDescription',
+            params: {
+              'label': selectedPreset.label,
+              'tileSize': settings.tileSize.round().toString(),
+              'columns': settings.columns.toString(),
+              'rows': settings.rows.toString(),
+            },
+          ),
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
         ),
         const SizedBox(height: 6),
         Text(
-          'Each preset refits the grid so it still fills the entire outer game rectangle.',
+          AppLanguage.of(context).t('builder.gridPresetDescription'),
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
@@ -2199,8 +2248,8 @@ class _BuilderPageState extends State<BuilderPage> {
             ),
           ),
           icon: const Icon(Icons.route_rounded, size: 18),
-          label: const Text(
-            'Print Solution',
+          label: Text(
+            AppLanguage.of(context).t('builder.printSolution'),
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
@@ -2216,14 +2265,20 @@ class _BuilderPageState extends State<BuilderPage> {
             ),
           ),
           icon: const Icon(Icons.layers_clear_outlined, size: 18),
-          label: const Text(
-            'Clear Level',
+          label: Text(
+            AppLanguage.of(context).t('builder.clearLevel'),
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
         ),
         const SizedBox(height: 10),
         Text(
-          'Reset the level layout and logic. The bottom $protectedGroundRows rows will stay ground in ${selectedPreset.label.toLowerCase()} mode.',
+          AppLanguage.of(context).t(
+            'builder.clearLevelDescription',
+            params: {
+              'rows': protectedGroundRows.toString(),
+              'label': selectedPreset.label.toLowerCase(),
+            },
+          ),
           style: Theme.of(
             context,
           ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade700),
@@ -2237,7 +2292,7 @@ class _BuilderPageState extends State<BuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Initial Direction',
+          AppLanguage.of(context).t('builder.direction'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2249,16 +2304,16 @@ class _BuilderPageState extends State<BuilderPage> {
           child: SegmentedButton<String>(
             showSelectedIcon: false,
             selected: <String>{controller.playerInitialDirection},
-            segments: const [
+            segments: [
               ButtonSegment<String>(
                 value: BuilderController.playerFacingLeft,
-                icon: Icon(Icons.arrow_back_rounded),
-                tooltip: 'Face left',
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: AppLanguage.of(context).t('builder.faceLeft'),
               ),
               ButtonSegment<String>(
                 value: BuilderController.playerFacingRight,
-                icon: Icon(Icons.arrow_forward_rounded),
-                tooltip: 'Face right',
+                icon: const Icon(Icons.arrow_forward_rounded),
+                tooltip: AppLanguage.of(context).t('builder.faceRight'),
               ),
             ],
             onSelectionChanged: controller.isPlaybackRunning
@@ -2284,7 +2339,7 @@ class _BuilderPageState extends State<BuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Character',
+          AppLanguage.of(context).t('builder.character'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2339,7 +2394,10 @@ class _BuilderPageState extends State<BuilderPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            character.label,
+            localizedBuilderCharacterLabel(
+              AppLanguage.of(context),
+              character.id,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2353,7 +2411,7 @@ class _BuilderPageState extends State<BuilderPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Collectable',
+          AppLanguage.of(context).t('builder.collectable'),
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: Colors.blueGrey.shade700,
             fontWeight: FontWeight.w700,
@@ -2408,7 +2466,10 @@ class _BuilderPageState extends State<BuilderPage> {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            collectable.label,
+            localizedBuilderCollectableLabel(
+              AppLanguage.of(context),
+              collectable.id,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2444,9 +2505,14 @@ class _BuilderPageState extends State<BuilderPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Add the required items before saving:',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700),
+          Text(
+            AppLanguage.of(context)
+                .t('builder.addRequiredItemsPrefix', params: {'issues': ''})
+                .trim(),
+            style: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 8),
           ...controller.validation.errors.map(

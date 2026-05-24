@@ -3,6 +3,7 @@ import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 
 class UserProfilePage extends StatefulWidget {
@@ -683,8 +684,12 @@ class _LanguageSelector extends StatelessWidget {
             ButtonSegment(value: 'ar', label: Text(language.t('arabic'))),
           ],
           selected: {language.locale.languageCode},
-          onSelectionChanged: (selection) {
-            AppLanguage.instance.setLanguage(selection.first);
+          onSelectionChanged: (selection) async {
+            final code = selection.first;
+            await AppLanguage.instance.setLanguage(code);
+            if (context.mounted) {
+              await context.setLocale(Locale(code));
+            }
           },
         ),
       ],

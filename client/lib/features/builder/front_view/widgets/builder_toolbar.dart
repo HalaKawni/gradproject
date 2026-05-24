@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
 import '../controllers/builder_controller.dart';
 import '../shared/builder_character.dart';
 import '../shared/builder_collectable.dart';
@@ -19,33 +20,34 @@ class BuilderToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const tools = [
+    final language = AppLanguage.of(context);
+    final tools = [
       _ToolbarTool(
-        label: 'Ground',
+        label: language.t('builder.ground'),
         tool: BuilderTool.ground,
         icon: Icons.crop_square_rounded,
         color: Color(0xFF3E8D55),
       ),
       _ToolbarTool(
-        label: 'Obstacle',
+        label: language.t('builder.obstacle'),
         tool: BuilderTool.obstacle,
         icon: Icons.grid_view_rounded,
         color: Color(0xFF64748B),
       ),
       _ToolbarTool(
-        label: 'Player',
+        label: language.t('builder.player'),
         tool: BuilderTool.player,
         icon: Icons.person_rounded,
         color: Color(0xFF2563EB),
       ),
       _ToolbarTool(
-        label: 'Collect',
+        label: language.t('builder.collect'),
         tool: BuilderTool.collectable,
         icon: Icons.stars_rounded,
         color: Color(0xFFF59E0B),
       ),
       _ToolbarTool(
-        label: 'Goal',
+        label: language.t('builder.goal'),
         tool: BuilderTool.goal,
         icon: Icons.flag_rounded,
         color: Color(0xFFEF4444),
@@ -178,7 +180,9 @@ class BuilderToolbar extends StatelessWidget {
       case BuilderTool.player:
         return _playerPreview(dimension);
       case BuilderTool.collectable:
-        final collectable = builderCollectableById(controller.collectableItemId);
+        final collectable = builderCollectableById(
+          controller.collectableItemId,
+        );
         return Center(
           child: Image.asset(
             collectable.flutterAssetPath,

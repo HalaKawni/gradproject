@@ -42,18 +42,59 @@ exports.getUserById = async (id) => {
 };
 
 exports.createAdminUser = async (data) => {
-  const existingUser = await User.findOne({ email: data.email });
+  const email = data.email?.toString().trim().toLowerCase();
+
+  if (!data.name || !email || !data.password) {
+    throw new Error('Name, email, and password are required');
+  }
+
+  const existingUser = await User.findOne({ email });
 
   if (existingUser) {
     throw new Error('Email already exists');
   }
 
   const user = await User.create({
-    name: data.name,
-    email: data.email,
+    name: data.name.toString().trim(),
+    email,
     password: data.password,
     role: 'admin',
+    authProvider: 'local',
+    authProviders: ['local'],
+    lastSignInProvider: 'local',
+    emailVerified: true,
+    emailVerificationToken: undefined,
+    emailVerificationExpires: undefined,
   });
+
+  const result = user.toObject();
+  delete result.password;
+
+  return result;
+};
+
+exports.promoteUserToAdminByEmail = async (email) => {
+  const normalizedEmail = email?.toString().trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error('Email is required');
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
+
+  if (!user) {
+    throw new Error('User not found');
+  }
+
+  user.role = 'admin';
+  user.emailVerified = true;
+  user.emailVerificationToken = undefined;
+  user.emailVerificationExpires = undefined;
+  user.isSuspended = false;
+  user.suspendedAt = undefined;
+  user.suspendedBy = undefined;
+
+  await user.save();
 
   const result = user.toObject();
   delete result.password;

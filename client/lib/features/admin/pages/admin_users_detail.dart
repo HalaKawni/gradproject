@@ -184,6 +184,73 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
     }
   }
 
+  Future<void> _showPromoteUserDialog() async {
+    final language = AppLanguage.of(context);
+    final emailController = TextEditingController();
+
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(language.t('promoteUserToAdmin')),
+          content: SizedBox(
+            width: 420,
+            child: TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: language.t('email'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(language.t('cancel')),
+            ),
+            FilledButton(
+              onPressed: () {
+                final value = emailController.text.trim();
+
+                if (value.isEmpty) {
+                  return;
+                }
+
+                Navigator.pop(context, value);
+              },
+              child: Text(language.t('promote')),
+            ),
+          ],
+        );
+      },
+    );
+
+    emailController.dispose();
+
+    if (email == null) {
+      return;
+    }
+
+    final result = await ApiService.promoteUserToAdmin(
+      authToken: widget.session.token,
+      email: email,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      await _loadUsers(page: 1);
+      _showMessage('User promoted to admin successfully');
+    } else {
+      _showMessage(
+        result['message']?.toString() ?? 'Failed to promote user to admin',
+      );
+    }
+  }
+
   Future<void> _deleteUser(AdminUser user) async {
     final language = AppLanguage.of(context);
     if (user.role == 'admin') {
@@ -309,7 +376,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
       case 'parent':
         return language.t('parentRole');
       case 'child':
-        return language.t('studentRole');
+        return language.isArabic ? 'طفل' : 'Child';
       default:
         return role[0].toUpperCase() + role.substring(1);
     }
@@ -370,11 +437,10 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                 onSubmitted: (_) => _loadUsers(page: 1),
                 decoration: InputDecoration(
                   hintText: language.t('searchUsers'),
-                  prefixIcon: const Icon(Icons.search),
                   suffixIcon: IconButton(
                     tooltip: language.t('search'),
                     onPressed: () => _loadUsers(page: 1),
-                    icon: const Icon(Icons.arrow_forward),
+                    icon: const Icon(Icons.search),
                   ),
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -386,6 +452,12 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
               tooltip: language.t('refreshUsers'),
               onPressed: () => _loadUsers(),
               icon: const Icon(Icons.refresh),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _showPromoteUserDialog,
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              label: Text(language.t('promoteToAdmin')),
             ),
             const SizedBox(width: 8),
             ElevatedButton.icon(

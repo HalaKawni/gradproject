@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../models/block_template.dart';
+
 class PuzzleBlockPainter extends CustomPainter {
   final Color color;
-  final bool isContainer;
+  final BlockShape shape;
 
-  PuzzleBlockPainter({required this.color, required this.isContainer});
+  PuzzleBlockPainter({required this.color, required this.shape});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -23,18 +25,47 @@ class PuzzleBlockPainter extends CustomPainter {
   }
 
   Path _buildPath(Size size) {
+    if (shape == BlockShape.reporter) {
+      return Path()..addRRect(
+        RRect.fromRectAndRadius(
+          Offset.zero & size,
+          Radius.circular(size.height / 2),
+        ),
+      );
+    }
+    if (shape == BlockShape.boolean) {
+      return Path()
+        ..moveTo(size.height * 0.45, 0)
+        ..lineTo(size.width - size.height * 0.45, 0)
+        ..lineTo(size.width, size.height / 2)
+        ..lineTo(size.width - size.height * 0.45, size.height)
+        ..lineTo(size.height * 0.45, size.height)
+        ..lineTo(0, size.height / 2)
+        ..close();
+    }
+
+    final isContainer = shape == BlockShape.cBlock;
+    final isHat = shape == BlockShape.hat;
     final r = isContainer ? 13.0 : 12.0;
     const notchH = 8.0;
 
     final path = Path();
 
-    path.moveTo(r, 0);
-    path.lineTo(48, 0);
-    path.cubicTo(52, 0, 54, notchH, 60, notchH);
-    path.lineTo(80, notchH);
-    path.cubicTo(86, notchH, 88, 0, 92, 0);
-    path.lineTo(size.width - r, 0);
-    path.quadraticBezierTo(size.width, 0, size.width, r);
+    if (isHat) {
+      path.moveTo(0, 20);
+      path.quadraticBezierTo(18, 0, 52, 0);
+      path.quadraticBezierTo(86, 0, 104, 20);
+      path.lineTo(size.width - r, 20);
+      path.quadraticBezierTo(size.width, 20, size.width, 20 + r);
+    } else {
+      path.moveTo(r, 0);
+      path.lineTo(48, 0);
+      path.cubicTo(52, 0, 54, notchH, 60, notchH);
+      path.lineTo(80, notchH);
+      path.cubicTo(86, notchH, 88, 0, 92, 0);
+      path.lineTo(size.width - r, 0);
+      path.quadraticBezierTo(size.width, 0, size.width, r);
+    }
     path.lineTo(size.width, size.height - r - notchH);
     path.quadraticBezierTo(
       size.width,
@@ -69,6 +100,6 @@ class PuzzleBlockPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PuzzleBlockPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.isContainer != isContainer;
+    return oldDelegate.color != color || oldDelegate.shape != shape;
   }
 }

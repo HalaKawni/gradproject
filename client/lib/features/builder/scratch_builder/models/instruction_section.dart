@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 enum InstructionSectionType {
   overview,
   instructions,
@@ -46,22 +48,29 @@ class InstructionSection {
 }
 
 String instructionSectionLabel(InstructionSectionType type) {
+  return localizedInstructionSectionLabel(AppLanguage.instance, type);
+}
+
+String localizedInstructionSectionLabel(
+  AppLanguage language,
+  InstructionSectionType type,
+) {
   switch (type) {
     case InstructionSectionType.overview:
-      return 'Overview';
+      return language.t('builder.overview');
     case InstructionSectionType.instructions:
-      return 'Instructions';
+      return language.t('builder.instructions');
     case InstructionSectionType.checklist:
-      return 'Checklist';
+      return language.tr('builder.checklist', 'Checklist');
     case InstructionSectionType.hints:
-      return 'Hints';
+      return language.tr('builder.hints', 'Hints');
     case InstructionSectionType.codeExample:
-      return 'Code Example';
+      return language.t('builder.codeExample');
     case InstructionSectionType.expectedOutput:
-      return 'Expected Output';
+      return language.tr('builder.expectedOutput', 'Expected Output');
     case InstructionSectionType.resources:
-      return 'Resources';
+      return language.tr('builder.resources', 'Resources');
     case InstructionSectionType.custom:
-      return 'Custom Section';
+      return language.tr('builder.customSection', 'Custom Section');
   }
 }

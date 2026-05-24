@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class BuilderCharacterSpriteRect {
   final double? maxWidthScale;
   final double? maxHeightScale;
@@ -38,8 +40,7 @@ class BuilderCharacter {
   });
 
   String get basePath => 'game_builder/charachters/$id';
-  String get idlePreviewAssetPath =>
-      'game_builder/character_previews/$id.png';
+  String get idlePreviewAssetPath => 'game_builder/character_previews/$id.png';
 }
 
 const String defaultBuilderCharacterId = 'polar';
@@ -87,4 +88,9 @@ BuilderCharacter builderCharacterById(String? id) {
   }
 
   return builderCharacters.first;
+}
+
+String localizedBuilderCharacterLabel(AppLanguage language, String id) {
+  final character = builderCharacterById(id);
+  return language.tr('builder.character.$id', character.label);
 }

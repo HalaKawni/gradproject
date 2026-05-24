@@ -31,6 +31,9 @@
   "createLevel": "إنشاء مستوى",
   "createAdmin": "إنشاء مدير",
   "createAdminUser": "إنشاء مستخدم مدير",
+  "promote": "ترقية",
+  "promoteToAdmin": "ترقية إلى مدير",
+  "promoteUserToAdmin": "ترقية مستخدم إلى مدير",
   "searchUsers": "البحث عن مستخدمين",
   "refreshUsers": "تحديث المستخدمين",
   "refreshCourses": "تحديث الدورات",
@@ -124,6 +127,7 @@
   "languageSubtitle": "تبديل عناوين الإدارة والملف الشخصي",
   "adminRole": "مدير",
   "parentRole": "ولي أمر",
+  "childrenRole": "طفل",
   "studentRole": "طالب",
   "userRole": "مستخدم"
 }

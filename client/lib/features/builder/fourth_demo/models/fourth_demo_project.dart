@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import '../../front_view/shared/builder_character.dart';
+import '../../front_view/shared/builder_collectable.dart';
+
 enum FourthDemoStageTool { select, move, brush, eraser }
 
 enum FourthDemoAssetTab { sprites, widgets, sounds, game }
@@ -10,6 +13,8 @@ enum FourthDemoPhysicsMode { none, arcade }
 
 enum FourthDemoSpriteKind { player, collectible, prop }
 
+enum FourthDemoSpriteFacing { left, right }
+
 enum FourthDemoWidgetKind { counter, text, timer, clock, button, dialog }
 
 enum FourthDemoActionType {
@@ -19,11 +24,20 @@ enum FourthDemoActionType {
   setY,
   setRotation,
   setSpeed,
+  setAllowGravity,
   show,
   hide,
+  destroy,
+  disable,
+  enable,
+  setScale,
+  setBackground,
   say,
   wait,
   repeat,
+  ifCondition,
+  times,
+  loop,
   ifTouching,
 }
 
@@ -66,14 +80,16 @@ class FourthDemoProject {
         worldHeight: 400,
         gravity: 0,
         physicsMode: FourthDemoPhysicsMode.arcade,
-        cameraTargetId: 'monkey',
-        background: 'jungle',
+        cameraTargetId: 'polar',
+        background: 'forest',
       ),
       sprites: <FourthDemoSprite>[
         FourthDemoSprite(
-          id: 'monkey',
-          name: 'monkey',
+          id: 'polar',
+          name: 'polar',
           kind: FourthDemoSpriteKind.player,
+          assetId: defaultBuilderCharacterId,
+          facing: FourthDemoSpriteFacing.right,
           x: 72,
           y: 284,
           startX: 72,
@@ -90,6 +106,7 @@ class FourthDemoProject {
           id: 'banana',
           name: 'banana',
           kind: FourthDemoSpriteKind.collectible,
+          assetId: defaultBuilderCollectableId,
           x: 462,
           y: 286,
           startX: 462,
@@ -101,17 +118,7 @@ class FourthDemoProject {
           draggable: true,
         ),
       ],
-      widgets: <FourthDemoScreenWidget>[
-        FourthDemoScreenWidget(
-          id: 'score',
-          name: 'Counter',
-          type: FourthDemoWidgetKind.counter,
-          x: 16,
-          y: 14,
-          value: 0,
-          text: 'Score',
-        ),
-      ],
+      widgets: <FourthDemoScreenWidget>[],
       sounds: <FourthDemoSound>[
         FourthDemoSound(id: 'collect', name: 'Collect sparkle'),
       ],
@@ -134,13 +141,10 @@ class FourthDemoProject {
           FourthDemoTile(x: 12, y: 9, type: 'ground'),
           FourthDemoTile(x: 13, y: 9, type: 'ground'),
           FourthDemoTile(x: 14, y: 9, type: 'ground'),
-          FourthDemoTile(x: 6, y: 7, type: 'platform'),
-          FourthDemoTile(x: 7, y: 7, type: 'platform'),
-          FourthDemoTile(x: 8, y: 7, type: 'platform'),
         ],
       ),
-      selectedSpriteId: 'monkey',
-      codeBySpriteId: <String, String>{'monkey': starterCode, 'banana': ''},
+      selectedSpriteId: 'polar',
+      codeBySpriteId: <String, String>{'polar': starterCode, 'banana': ''},
       events: <FourthDemoEventHandler>[],
     );
   }
@@ -214,28 +218,40 @@ class FourthDemoProject {
   factory FourthDemoProject.fromJson(Map<String, dynamic> json) {
     final sprites = (json['sprites'] as List? ?? const <Object>[])
         .whereType<Map>()
-        .map((item) => FourthDemoSprite.fromJson(Map<String, dynamic>.from(item)))
+        .map(
+          (item) => FourthDemoSprite.fromJson(Map<String, dynamic>.from(item)),
+        )
         .toList();
     return FourthDemoProject(
       id: json['id']?.toString() ?? 'project-1',
       title: json['title']?.toString() ?? 'Mini Course Exercise 1',
       currentExercise: (json['currentExercise'] as num?)?.toInt() ?? 1,
       settings: FourthDemoGameSettings.fromJson(
-        Map<String, dynamic>.from(json['settings'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['settings'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
       sprites: sprites.isEmpty ? FourthDemoProject.sample().sprites : sprites,
       widgets: (json['widgets'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((item) => FourthDemoScreenWidget.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => FourthDemoScreenWidget.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(),
       sounds: (json['sounds'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((item) => FourthDemoSound.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => FourthDemoSound.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
       tilemap: FourthDemoTilemap.fromJson(
-        Map<String, dynamic>.from(json['tilemap'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['tilemap'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
-      selectedSpriteId: json['selectedSpriteId']?.toString() ?? 'monkey',
+      selectedSpriteId: json['selectedSpriteId']?.toString() ?? 'polar',
       codeBySpriteId: Map<String, String>.from(
         (json['codeBySpriteId'] as Map? ?? const <String, String>{}).map(
           (key, value) => MapEntry(key.toString(), value.toString()),
@@ -243,7 +259,11 @@ class FourthDemoProject {
       ),
       events: (json['events'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((item) => FourthDemoEventHandler.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => FourthDemoEventHandler.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
           .toList(),
     );
   }
@@ -306,7 +326,7 @@ class FourthDemoGameSettings {
         (mode) => mode.name == json['physicsMode']?.toString(),
         orElse: () => FourthDemoPhysicsMode.arcade,
       ),
-      cameraTargetId: json['cameraTargetId']?.toString() ?? 'monkey',
+      cameraTargetId: json['cameraTargetId']?.toString() ?? 'polar',
       background: json['background']?.toString() ?? 'jungle',
     );
   }
@@ -316,6 +336,8 @@ class FourthDemoSprite {
   final String id;
   final String name;
   final FourthDemoSpriteKind kind;
+  final String assetId;
+  final FourthDemoSpriteFacing facing;
   final double x;
   final double y;
   final double startX;
@@ -330,6 +352,9 @@ class FourthDemoSprite {
   final bool collideWorldBounds;
   final bool collideOtherSprites;
   final bool draggable;
+  final bool destroyed;
+  final bool enabled;
+  final String currentAnimation;
   final double speed;
   final int colorValue;
 
@@ -337,6 +362,8 @@ class FourthDemoSprite {
     required this.id,
     required this.name,
     required this.kind,
+    this.assetId = '',
+    this.facing = FourthDemoSpriteFacing.right,
     required this.x,
     required this.y,
     required this.startX,
@@ -351,12 +378,17 @@ class FourthDemoSprite {
     this.collideWorldBounds = false,
     this.collideOtherSprites = false,
     this.draggable = true,
+    this.destroyed = false,
+    this.enabled = true,
+    this.currentAnimation = '',
     this.speed = 32,
     this.colorValue = 0xFF66B64A,
   });
 
   FourthDemoSprite copyWith({
     String? name,
+    String? assetId,
+    FourthDemoSpriteFacing? facing,
     double? x,
     double? y,
     double? startX,
@@ -371,6 +403,9 @@ class FourthDemoSprite {
     bool? collideWorldBounds,
     bool? collideOtherSprites,
     bool? draggable,
+    bool? destroyed,
+    bool? enabled,
+    String? currentAnimation,
     double? speed,
     int? colorValue,
   }) {
@@ -378,6 +413,8 @@ class FourthDemoSprite {
       id: id,
       name: name ?? this.name,
       kind: kind,
+      assetId: assetId ?? this.assetId,
+      facing: facing ?? this.facing,
       x: x ?? this.x,
       y: y ?? this.y,
       startX: startX ?? this.startX,
@@ -392,8 +429,40 @@ class FourthDemoSprite {
       collideWorldBounds: collideWorldBounds ?? this.collideWorldBounds,
       collideOtherSprites: collideOtherSprites ?? this.collideOtherSprites,
       draggable: draggable ?? this.draggable,
+      destroyed: destroyed ?? this.destroyed,
+      enabled: enabled ?? this.enabled,
+      currentAnimation: currentAnimation ?? this.currentAnimation,
       speed: speed ?? this.speed,
       colorValue: colorValue ?? this.colorValue,
+    );
+  }
+
+  FourthDemoSprite withId(String nextId) {
+    return FourthDemoSprite(
+      id: nextId,
+      name: name,
+      kind: kind,
+      assetId: assetId,
+      facing: facing,
+      x: x,
+      y: y,
+      startX: startX,
+      startY: startY,
+      width: width,
+      height: height,
+      rotation: rotation,
+      scale: scale,
+      visible: visible,
+      allowGravity: allowGravity,
+      immovable: immovable,
+      collideWorldBounds: collideWorldBounds,
+      collideOtherSprites: collideOtherSprites,
+      draggable: draggable,
+      destroyed: destroyed,
+      enabled: enabled,
+      currentAnimation: currentAnimation,
+      speed: speed,
+      colorValue: colorValue,
     );
   }
 
@@ -402,6 +471,8 @@ class FourthDemoSprite {
       'id': id,
       'name': name,
       'kind': kind.name,
+      'assetId': assetId,
+      'facing': facing.name,
       'x': x,
       'y': y,
       'startX': startX,
@@ -416,6 +487,9 @@ class FourthDemoSprite {
       'collideWorldBounds': collideWorldBounds,
       'collideOtherSprites': collideOtherSprites,
       'draggable': draggable,
+      'destroyed': destroyed,
+      'enabled': enabled,
+      'currentAnimation': currentAnimation,
       'speed': speed,
       'colorValue': colorValue,
     };
@@ -423,16 +497,29 @@ class FourthDemoSprite {
 
   factory FourthDemoSprite.fromJson(Map<String, dynamic> json) {
     return FourthDemoSprite(
-      id: json['id']?.toString() ?? 'sprite-${DateTime.now().microsecondsSinceEpoch}',
+      id:
+          json['id']?.toString() ??
+          'sprite-${DateTime.now().microsecondsSinceEpoch}',
       name: json['name']?.toString() ?? 'sprite',
       kind: FourthDemoSpriteKind.values.firstWhere(
         (kind) => kind.name == json['kind']?.toString(),
         orElse: () => FourthDemoSpriteKind.prop,
       ),
+      assetId: json['assetId']?.toString() ?? '',
+      facing: FourthDemoSpriteFacing.values.firstWhere(
+        (facing) => facing.name == json['facing']?.toString(),
+        orElse: () => FourthDemoSpriteFacing.right,
+      ),
       x: (json['x'] as num?)?.toDouble() ?? 0,
       y: (json['y'] as num?)?.toDouble() ?? 0,
-      startX: (json['startX'] as num?)?.toDouble() ?? (json['x'] as num?)?.toDouble() ?? 0,
-      startY: (json['startY'] as num?)?.toDouble() ?? (json['y'] as num?)?.toDouble() ?? 0,
+      startX:
+          (json['startX'] as num?)?.toDouble() ??
+          (json['x'] as num?)?.toDouble() ??
+          0,
+      startY:
+          (json['startY'] as num?)?.toDouble() ??
+          (json['y'] as num?)?.toDouble() ??
+          0,
       width: (json['width'] as num?)?.toDouble() ?? 48,
       height: (json['height'] as num?)?.toDouble() ?? 48,
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
@@ -443,6 +530,9 @@ class FourthDemoSprite {
       collideWorldBounds: json['collideWorldBounds'] == true,
       collideOtherSprites: json['collideOtherSprites'] == true,
       draggable: json['draggable'] != false,
+      destroyed: json['destroyed'] == true,
+      enabled: json['enabled'] != false,
+      currentAnimation: json['currentAnimation']?.toString() ?? '',
       speed: (json['speed'] as num?)?.toDouble() ?? 32,
       colorValue: (json['colorValue'] as num?)?.toInt() ?? 0xFF66B64A,
     );
@@ -471,10 +561,13 @@ class FourthDemoEventHandler {
   factory FourthDemoEventHandler.fromJson(Map<String, dynamic> json) {
     return FourthDemoEventHandler(
       event: json['event']?.toString() ?? 'onStart',
-      targetSpriteId: json['targetSpriteId']?.toString() ?? 'monkey',
+      targetSpriteId: json['targetSpriteId']?.toString() ?? 'polar',
       actions: (json['actions'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((item) => FourthDemoAction.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                FourthDemoAction.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
     );
   }
@@ -485,12 +578,20 @@ class FourthDemoAction {
   final double amount;
   final String text;
   final String target;
+  final String receiver;
+  final String condition;
+  final List<FourthDemoAction> actions;
+  final List<FourthDemoAction> elseActions;
 
   const FourthDemoAction({
     required this.type,
     this.amount = 0,
     this.text = '',
     this.target = '',
+    this.receiver = '@',
+    this.condition = '',
+    this.actions = const <FourthDemoAction>[],
+    this.elseActions = const <FourthDemoAction>[],
   });
 
   Map<String, dynamic> toJson() {
@@ -499,6 +600,10 @@ class FourthDemoAction {
       'amount': amount,
       'text': text,
       'target': target,
+      'receiver': receiver,
+      'condition': condition,
+      'actions': actions.map((action) => action.toJson()).toList(),
+      'elseActions': elseActions.map((action) => action.toJson()).toList(),
     };
   }
 
@@ -511,6 +616,22 @@ class FourthDemoAction {
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       text: json['text']?.toString() ?? '',
       target: json['target']?.toString() ?? '',
+      receiver: json['receiver']?.toString() ?? '@',
+      condition: json['condition']?.toString() ?? '',
+      actions: (json['actions'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                FourthDemoAction.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(),
+      elseActions: (json['elseActions'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                FourthDemoAction.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList(),
     );
   }
 }
@@ -542,19 +663,31 @@ class FourthDemoScreenWidget {
     this.durationSeconds = 60,
   });
 
-  FourthDemoScreenWidget copyWith({double? value, bool? visible, String? text}) {
+  FourthDemoScreenWidget copyWith({
+    String? id,
+    String? name,
+    FourthDemoWidgetKind? type,
+    double? x,
+    double? y,
+    bool? visible,
+    double? opacity,
+    int? textColorValue,
+    String? text,
+    double? value,
+    int? durationSeconds,
+  }) {
     return FourthDemoScreenWidget(
-      id: id,
-      name: name,
-      type: type,
-      x: x,
-      y: y,
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      x: x ?? this.x,
+      y: y ?? this.y,
       visible: visible ?? this.visible,
-      opacity: opacity,
-      textColorValue: textColorValue,
+      opacity: opacity ?? this.opacity,
+      textColorValue: textColorValue ?? this.textColorValue,
       text: text ?? this.text,
       value: value ?? this.value,
-      durationSeconds: durationSeconds,
+      durationSeconds: durationSeconds ?? this.durationSeconds,
     );
   }
 
@@ -576,7 +709,9 @@ class FourthDemoScreenWidget {
 
   factory FourthDemoScreenWidget.fromJson(Map<String, dynamic> json) {
     return FourthDemoScreenWidget(
-      id: json['id']?.toString() ?? 'widget-${DateTime.now().microsecondsSinceEpoch}',
+      id:
+          json['id']?.toString() ??
+          'widget-${DateTime.now().microsecondsSinceEpoch}',
       name: json['name']?.toString() ?? 'Widget',
       type: FourthDemoWidgetKind.values.firstWhere(
         (type) => type.name == json['type']?.toString(),
@@ -600,11 +735,17 @@ class FourthDemoSound {
 
   const FourthDemoSound({required this.id, required this.name});
 
+  FourthDemoSound copyWith({String? name}) {
+    return FourthDemoSound(id: id, name: name ?? this.name);
+  }
+
   Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name};
 
   factory FourthDemoSound.fromJson(Map<String, dynamic> json) {
     return FourthDemoSound(
-      id: json['id']?.toString() ?? 'sound-${DateTime.now().microsecondsSinceEpoch}',
+      id:
+          json['id']?.toString() ??
+          'sound-${DateTime.now().microsecondsSinceEpoch}',
       name: json['name']?.toString() ?? 'Sound',
     );
   }
@@ -635,7 +776,9 @@ class FourthDemoTilemap {
       rows: (json['rows'] as num?)?.toInt() ?? 10,
       tiles: (json['tiles'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((item) => FourthDemoTile.fromJson(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => FourthDemoTile.fromJson(Map<String, dynamic>.from(item)),
+          )
           .toList(),
     );
   }
@@ -648,7 +791,11 @@ class FourthDemoTile {
 
   const FourthDemoTile({required this.x, required this.y, required this.type});
 
-  Map<String, dynamic> toJson() => <String, dynamic>{'x': x, 'y': y, 'type': type};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'x': x,
+    'y': y,
+    'type': type,
+  };
 
   factory FourthDemoTile.fromJson(Map<String, dynamic> json) {
     return FourthDemoTile(

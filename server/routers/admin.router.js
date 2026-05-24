@@ -19,6 +19,7 @@ router.get('/dashboard', dashboardController.getDashboard);
 // users
 router.get('/users', usersController.getUsers);
 router.post('/users/admin', usersController.createAdminUser);
+router.put('/users/admin/promote', usersController.promoteUserToAdmin);
 router.get('/users/:id', usersController.getUserById);
 router.put('/users/:id/suspension', usersController.updateUserSuspension);
 router.delete('/users/:id', usersController.deleteUser);

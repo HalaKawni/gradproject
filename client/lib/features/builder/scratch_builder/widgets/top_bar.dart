@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
+
 class TopBar extends StatelessWidget {
   final TextEditingController titleController;
   final VoidCallback onRun;
@@ -22,6 +24,7 @@ class TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     return Container(
       height: 64,
       padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -52,8 +55,8 @@ class TopBar extends StatelessWidget {
               width: 320,
               child: TextField(
                 controller: titleController,
-                decoration: const InputDecoration(
-                  hintText: 'New Level',
+                decoration: InputDecoration(
+                  hintText: language.t('builder.newLevel'),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -67,27 +70,31 @@ class TopBar extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: isSaving ? null : onReset,
             icon: const Icon(Icons.refresh_rounded),
-            label: const Text('Reset'),
+            label: Text(language.t('builder.reset')),
           ),
           if (!playMode) ...[
             const SizedBox(width: 10),
             OutlinedButton.icon(
               onPressed: isSaving ? null : onSaveDraft,
               icon: const Icon(Icons.save_outlined),
-              label: const Text('Save Draft'),
+              label: Text(language.t('builder.saveDraft')),
             ),
             const SizedBox(width: 10),
             FilledButton.icon(
               onPressed: isSaving ? null : onPublish,
               icon: const Icon(Icons.cloud_upload_outlined),
-              label: Text(isSaving ? 'Saving...' : 'Publish'),
+              label: Text(
+                isSaving
+                    ? language.t('builder.saving')
+                    : language.t('builder.publish'),
+              ),
             ),
           ],
           const SizedBox(width: 10),
           FilledButton.icon(
             onPressed: isSaving ? null : onRun,
             icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Run'),
+            label: Text(language.t('builder.run')),
           ),
         ],
       ),

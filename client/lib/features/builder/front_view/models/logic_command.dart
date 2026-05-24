@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 enum LogicCommandType { moveLeft, moveRight, jumpUp, climbUpLeft, climbUpRight }
 
 enum LogicCommandNodeType { action, loop }
@@ -19,17 +21,21 @@ extension LogicCommandTypeExtension on LogicCommandType {
   }
 
   String get label {
+    return localizedLabel(AppLanguage.instance);
+  }
+
+  String localizedLabel(AppLanguage language) {
     switch (this) {
       case LogicCommandType.moveLeft:
-        return 'Move Left';
+        return language.t('builder.moveLeft');
       case LogicCommandType.moveRight:
-        return 'Move Right';
+        return language.t('builder.moveRight');
       case LogicCommandType.jumpUp:
-        return 'Jump Up';
+        return language.t('builder.jumpUp');
       case LogicCommandType.climbUpLeft:
-        return 'Climb Up Left';
+        return language.t('builder.climbUpLeft');
       case LogicCommandType.climbUpRight:
-        return 'Climb Up Right';
+        return language.t('builder.climbUpRight');
     }
   }
 
@@ -119,11 +125,15 @@ class LogicCommandNode {
   bool get isAction => type == LogicCommandNodeType.action;
 
   String get label {
+    return localizedLabel(AppLanguage.instance);
+  }
+
+  String localizedLabel(AppLanguage language) {
     if (isLoop) {
-      return 'Loop';
+      return language.t('builder.loop');
     }
 
-    return command?.label ?? 'Command';
+    return command?.localizedLabel(language) ?? language.t('builder.command');
   }
 
   LogicCommandNode copyWith({

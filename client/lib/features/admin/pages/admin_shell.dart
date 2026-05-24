@@ -26,6 +26,29 @@ class AdminShellPage extends StatefulWidget {
 
 class _AdminShellPageState extends State<AdminShellPage> {
   AdminSection selectedSection = AdminSection.dashboard;
+  int _languageVersion = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    AppLanguage.instance.addListener(_handleLanguageChanged);
+  }
+
+  @override
+  void dispose() {
+    AppLanguage.instance.removeListener(_handleLanguageChanged);
+    super.dispose();
+  }
+
+  void _handleLanguageChanged() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _languageVersion++;
+    });
+  }
 
   void _selectSection(AdminSection section) {
     setState(() {
@@ -50,8 +73,7 @@ class _AdminShellPageState extends State<AdminShellPage> {
     }
   }
 
-  String _buildTitle() {
-    final language = AppLanguage.of(context);
+  String _buildTitle(AppLanguage language) {
     switch (selectedSection) {
       case AdminSection.dashboard:
         return language.t('admin');
@@ -72,72 +94,80 @@ class _AdminShellPageState extends State<AdminShellPage> {
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
 
-    return Scaffold(
-      body: Row(
-        children: [
-          NavigationRail(
-            selectedIndex: AdminSection.values.indexOf(selectedSection),
-            onDestinationSelected: (index) {
-              _selectSection(AdminSection.values[index]);
-            },
-            labelType: NavigationRailLabelType.all,
-            destinations: [
-              NavigationRailDestination(
-                icon: const Icon(Icons.dashboard_outlined),
-                selectedIcon: const Icon(Icons.dashboard),
-                label: Text(language.t('dashboard')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.menu_book_outlined),
-                selectedIcon: const Icon(Icons.menu_book),
-                label: Text(language.t('courses')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.extension_outlined),
-                selectedIcon: const Icon(Icons.extension),
-                label: Text(language.t('levels')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.people_outline),
-                selectedIcon: const Icon(Icons.people),
-                label: Text(language.t('users')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.bar_chart_outlined),
-                selectedIcon: const Icon(Icons.bar_chart),
-                label: Text(language.t('statistics')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.person),
-                selectedIcon: const Icon(Icons.person),
-                label: Text(language.t('profile')),
-              ),
-            ],
-          ),
-          const VerticalDivider(width: 1),
-          Expanded(
-            child: Column(
-              children: [
-                Container(
-                  height: 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _buildTitle(),
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+    return Directionality(
+      textDirection: language.textDirection,
+      child: Scaffold(
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: AdminSection.values.indexOf(selectedSection),
+              onDestinationSelected: (index) {
+                _selectSection(AdminSection.values[index]);
+              },
+              labelType: NavigationRailLabelType.all,
+              destinations: [
+                NavigationRailDestination(
+                  icon: const Icon(Icons.dashboard_outlined),
+                  selectedIcon: const Icon(Icons.dashboard),
+                  label: Text(language.t('dashboard')),
                 ),
-                const Divider(height: 1),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildPage(),
-                  ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.menu_book_outlined),
+                  selectedIcon: const Icon(Icons.menu_book),
+                  label: Text(language.t('courses')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.extension_outlined),
+                  selectedIcon: const Icon(Icons.extension),
+                  label: Text(language.t('levels')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.people_outline),
+                  selectedIcon: const Icon(Icons.people),
+                  label: Text(language.t('users')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.bar_chart_outlined),
+                  selectedIcon: const Icon(Icons.bar_chart),
+                  label: Text(language.t('statistics')),
+                ),
+                NavigationRailDestination(
+                  icon: const Icon(Icons.person),
+                  selectedIcon: const Icon(Icons.person),
+                  label: Text(language.t('profile')),
                 ),
               ],
             ),
-          ),
-        ],
+            const VerticalDivider(width: 1),
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    height: 64,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      _buildTitle(language),
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: KeyedSubtree(
+                        key: ValueKey(
+                          '${selectedSection.name}-$_languageVersion',
+                        ),
+                        child: _buildPage(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

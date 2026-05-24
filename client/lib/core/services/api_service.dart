@@ -590,6 +590,20 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> promoteUserToAdmin({
+    required String authToken,
+    required String email,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/admin/users/admin/promote',
+      authToken: authToken,
+      body: {'email': email},
+      defaultSuccessMessage: 'User promoted to admin successfully',
+      defaultErrorMessage: 'Failed to promote user to admin',
+    );
+  }
+
   static Future<Map<String, dynamic>> deleteAdminUser({
     required String authToken,
     required String userId,

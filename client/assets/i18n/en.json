@@ -31,6 +31,9 @@
   "createLevel": "Create Level",
   "createAdmin": "Create Admin",
   "createAdminUser": "Create Admin User",
+  "promote": "Promote",
+  "promoteToAdmin": "Promote to Admin",
+  "promoteUserToAdmin": "Promote User to Admin",
   "searchUsers": "Search users",
   "refreshUsers": "Refresh users",
   "refreshCourses": "Refresh courses",
@@ -124,6 +127,7 @@
   "languageSubtitle": "Switch admin and profile labels",
   "adminRole": "Admin",
   "parentRole": "Parent",
+  "childrenRole": "Child",
   "studentRole": "Student",
   "userRole": "User"
 }

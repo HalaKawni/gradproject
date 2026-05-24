@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
 import '../data/block_templates.dart';
 import '../models/block_template.dart';
 import '../models/block_type.dart';
@@ -91,10 +92,19 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final selectedCategory = widget.selectedCategory;
     final visibleBlocks = selectedCategory == null
         ? <BlockTemplate>[]
-        : blockTemplates.where((b) => b.type == selectedCategory).toList();
+        : blockTemplates
+              .where(
+                (b) =>
+                    b.type == selectedCategory &&
+                    b.enabled &&
+                    b.shape != BlockShape.reporter &&
+                    b.shape != BlockShape.boolean,
+              )
+              .toList();
 
     return Container(
       margin: const EdgeInsets.all(12),
@@ -134,10 +144,10 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                         ),
                       ),
                       if (widget.blocks.isEmpty)
-                        const Center(
+                        Center(
                           child: Text(
-                            'Drag blocks here',
-                            style: TextStyle(
+                            language.t('builder.dragBlocksHere'),
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
                               color: Colors.black38,
@@ -256,7 +266,7 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
                 children: BlockType.values.map((type) {
                   final isSelected = selectedCategory == type;
                   final color = blockCategoryColors[type]!;
-                  final name = blockCategoryNames[type]!;
+                  final name = _categoryName(language, type);
 
                   return GestureDetector(
                     onTap: () => widget.onCategoryPressed(type),
@@ -288,6 +298,20 @@ class _WorkspacePanelState extends State<WorkspacePanel> {
         ),
       ),
     );
+  }
+
+  String _categoryName(AppLanguage language, BlockType type) {
+    return switch (type) {
+      BlockType.event => language.t('builder.eventsCategory'),
+      BlockType.motion => language.t('builder.motionCategory'),
+      BlockType.looks => language.t('builder.looksCategory'),
+      BlockType.sound => language.t('builder.soundCategory'),
+      BlockType.control => language.t('builder.control'),
+      BlockType.sensing => language.t('builder.sensingCategory'),
+      BlockType.operators => language.t('builder.operators'),
+      BlockType.variables => language.t('builder.variablesCategory'),
+      BlockType.lists => language.t('builder.listsCategory'),
+    };
   }
 }
 

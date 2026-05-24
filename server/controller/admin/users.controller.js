@@ -27,6 +27,15 @@ exports.createAdminUser = async (req, res) => {
   }
 };
 
+exports.promoteUserToAdmin = async (req, res) => {
+  try {
+    const admin = await usersService.promoteUserToAdminByEmail(req.body.email);
+    res.json(admin);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 exports.deleteUser = async (req, res) => {
   try {
     await usersService.deleteUser(req.params.id);

@@ -1,3 +1,8 @@
+import 'package:client/app/navigation/app_route_data.dart';
+import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
+import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 // import 'game_webview.dart';
@@ -10,8 +15,13 @@ import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
 
 class DashboardPage extends StatefulWidget {
+  final AuthSession session;
   final String username;
-  const DashboardPage({super.key, this.username = 'Student'});
+  const DashboardPage({
+    super.key,
+    required this.session,
+    this.username = 'Student',
+  });
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -23,20 +33,68 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _showCategoryError = false;
   bool _showTopicError = false;
   String _activeTab = 'Filter'; // internal key, not displayed directly
-  @override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    showDialog(
-      context: context,
-      builder: (_) => const UnlockDialog(),
-    );
-  });
-}
+  bool _isLoadingPublicCourses = false;
+  List<_CourseData> _publicCourses = const [];
 
-  final Set<String> _selectedLevels = {'Novice', 'Beginner', 'Intermediate', 'Advanced'};
+  @override
+  void initState() {
+    super.initState();
+    _loadPublicCourses();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(context: context, builder: (_) => const UnlockDialog());
+    });
+  }
+
+  Future<void> _loadPublicCourses() async {
+    setState(() {
+      _isLoadingPublicCourses = true;
+    });
+
+    final result = await ApiService.getPublicCourses(
+      authToken: widget.session.token,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      final courses = _parseList(result['data'])
+          .map(_CourseData.fromPublicCourseJson)
+          .where((course) => course.publicCourseId.isNotEmpty)
+          .toList();
+      setState(() {
+        _publicCourses = courses;
+        _isLoadingPublicCourses = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingPublicCourses = false;
+    });
+  }
+
+  List<Map<String, dynamic>> _parseList(Object? value) {
+    final rawList = value is List ? value : const [];
+    return rawList
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  final Set<String> _selectedLevels = {
+    'Novice',
+    'Beginner',
+    'Intermediate',
+    'Advanced',
+  };
   final Set<String> _selectedCategories = {'Main Courses', 'Mini Courses'};
-  final Set<String> _selectedTopics = {'Coding', 'Digital Literacy', 'CS Topics'};
+  final Set<String> _selectedTopics = {
+    'Coding',
+    'Digital Literacy',
+    'CS Topics',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -80,15 +138,23 @@ void initState() {
         children: [
           const SizedBox(height: 16),
           _SidebarItem(
-  label: 'dashboard.courses_section'.tr(),
-  isActive: true,
-  onTap: () => showDialog(
-    context: context,
-    builder: (_) => const UnlockDialog(),
-  ),
-),
-          _SidebarItem(label: 'dashboard.my_creations'.tr(), isActive: false, onTap: () {}),
-          _SidebarItem(label: 'dashboard.discover'.tr(), isActive: false, onTap: () {}),
+            label: 'dashboard.courses_section'.tr(),
+            isActive: true,
+            onTap: () => showDialog(
+              context: context,
+              builder: (_) => const UnlockDialog(),
+            ),
+          ),
+          _SidebarItem(
+            label: 'dashboard.my_creations'.tr(),
+            isActive: false,
+            onTap: () {},
+          ),
+          _SidebarItem(
+            label: 'dashboard.discover'.tr(),
+            isActive: false,
+            onTap: () {},
+          ),
           const Spacer(),
           _SidebarItem(
             label: 'dashboard.help_center'.tr(),
@@ -139,219 +205,227 @@ void initState() {
       ),
     );
   }
-Widget _buildHeroBanner() {
+
+  Widget _buildHeroBanner() {
     return Container(
-  decoration: BoxDecoration(
-    boxShadow: [
-      BoxShadow(
-        color: Colors.black.withOpacity(0.25),
-        blurRadius: 12,
-        offset: const Offset(0, 6),
-      ),
-    ],
-  ),
-  child: SizedBox(
-    height:224,
-    child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // ── FULL IMAGE — show RIGHT half ──
-          Image.asset(
-            'assets/images/hot_air_baloon.png',
-            fit: BoxFit.cover,
-            width: double.infinity,
-            alignment: Alignment.bottomLeft, // ← shows right half
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
+        ],
+      ),
+      child: SizedBox(
+        height: 224,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── FULL IMAGE — show RIGHT half ──
+            Image.asset(
+              'assets/images/hot_air_baloon.png',
+              fit: BoxFit.cover,
+              width: double.infinity,
+              alignment: Alignment.bottomLeft, // ← shows right half
+            ),
 
-          // ── DARK OVERLAY on image ──
-          Container(color: Colors.black.withOpacity(0.25)),
+            // ── DARK OVERLAY on image ──
+            Container(color: Colors.black.withOpacity(0.25)),
 
-          // ── YELLOW LEFT with angled cut ──
-          ClipPath(
-            clipper: _AngledClipper(),
-            child: Container(
-              color: const Color.fromARGB(255, 254, 253, 153),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4A7DBF),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
+            // ── YELLOW LEFT with angled cut ──
+            ClipPath(
+              clipper: _AngledClipper(),
+              child: Container(
+                color: const Color.fromARGB(255, 254, 253, 153),
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 44,
+                      ),
                     ),
-                    child: const Icon(Icons.person,
-                        color: Colors.white, size: 44),
+                    const SizedBox(width: 20),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'dashboard.welcome'.tr(),
+                          style: GoogleFonts.nunito(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF3A2A00),
+                          ),
+                        ),
+                        Text(
+                          '${widget.username}!',
+                          style: GoogleFonts.nunito(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF3A2A00),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── RIGHT CONTENT sits on top of image ──
+            Positioned(
+              left: MediaQuery.of(context).size.width * 0.40,
+              right: 24,
+              top: 0,
+              bottom: 0,
+              child: Row(
+                children: [
+                  // Progress circle
+                  FutureBuilder<Map<String, dynamic>>(
+                    future: GameApiService.getProgress('codemonkey-jr'),
+                    builder: (context, snapshot) {
+                      final data = snapshot.data;
+                      final completed = data != null
+                          ? (data['highestLevelReached'] ?? 0) as int
+                          : 0;
+                      final total = 15; // total levels
+                      final percent = (completed / total).clamp(0.0, 1.0);
+                      final percentText = '${(percent * 100).round()}%';
+
+                      return SizedBox(
+                        width: 90,
+                        height: 90,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 90,
+                              height: 90,
+                              child: CircularProgressIndicator(
+                                value: percent,
+                                strokeWidth: 8,
+                                backgroundColor: Colors.white.withOpacity(0.3),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4DD0E1),
+                                ),
+                              ),
+                            ),
+                            Text(
+                              percentText,
+                              style: GoogleFonts.nunito(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 20),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'dashboard.welcome'.tr(),
-                        style: GoogleFonts.nunito(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF3A2A00),
+
+                  // Course info
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'dashboard.current_course'.tr(),
+                          style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${widget.username}!',
-                        style: GoogleFonts.nunito(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF3A2A00),
+                        Text(
+                          'dashboard.codemonkey_jr'.tr(),
+                          style: GoogleFonts.nunito(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                          ),
                         ),
+                        Text(
+                          'dashboard.sequencing_loops'.tr(),
+                          style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.emoji_events,
+                              color: Color(0xFFFFD700),
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'dashboard.achievements'.tr(),
+                              style: GoogleFonts.nunito(
+                                fontSize: 12,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Continue coding button
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WorldMapPage()),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 254, 253, 153),
+                      foregroundColor: const Color(0xFF3A2A00),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 14,
                       ),
-                    ],
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                    ),
+                    icon: const Icon(Icons.play_circle_fill, size: 22),
+                    label: Text(
+                      'dashboard.continue_coding'.tr(),
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-
-          // ── RIGHT CONTENT sits on top of image ──
-          Positioned(
-            left: MediaQuery.of(context).size.width * 0.40,
-            right: 24,
-            top: 0,
-            bottom: 0,
-            child: Row(
-              children: [
-                // Progress circle
-               
-  FutureBuilder<Map<String, dynamic>>(
-  future: GameApiService.getProgress('codemonkey-jr'),
-  builder: (context, snapshot) {
-    final data = snapshot.data;
-    final completed = data != null
-        ? (data['highestLevelReached'] ?? 0) as int
-        : 0;
-    final total = 15; // total levels
-    final percent = (completed / total).clamp(0.0, 1.0);
-    final percentText = '${(percent * 100).round()}%';
-
-    return SizedBox(
-      width: 90,
-      height: 90,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 90,
-            height: 90,
-            child: CircularProgressIndicator(
-              value: percent,
-              strokeWidth: 8,
-              backgroundColor: Colors.white.withOpacity(0.3),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                Color(0xFF4DD0E1),
-              ),
-            ),
-          ),
-          Text(
-            percentText,
-            style: GoogleFonts.nunito(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  },
-),
-                const SizedBox(width: 20),
-
-                // Course info
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'dashboard.current_course'.tr(),
-                        style: GoogleFonts.nunito(
-                          fontSize: 12,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        'dashboard.codemonkey_jr'.tr(),
-                        style: GoogleFonts.nunito(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        'dashboard.sequencing_loops'.tr(),
-                        style: GoogleFonts.nunito(
-                          fontSize: 14,
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.emoji_events,
-                              color: Color(0xFFFFD700), size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            'dashboard.achievements'.tr(),
-                            style: GoogleFonts.nunito(
-                              fontSize: 12,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // Continue coding button
-                ElevatedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const WorldMapPage()),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color.fromARGB(255,254, 253, 153),
-                    foregroundColor: const Color(0xFF3A2A00),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                  icon: const Icon(Icons.play_circle_fill, size: 22),
-                  label: Text(
-                    'dashboard.continue_coding'.tr(),
-                    style: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 16,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-  ),
     );
   }
+
   // ── FILTER SECTION ──
   Widget _buildFilterSection() {
     return Container(
@@ -390,8 +464,7 @@ Widget _buildHeroBanner() {
                       decoration: _activeTab == 'Filter'
                           ? TextDecoration.underline
                           : null,
-                      decorationColor:
-                          const Color.fromARGB(255, 68, 172, 255),
+                      decorationColor: const Color.fromARGB(255, 68, 172, 255),
                     ),
                   ),
                 ),
@@ -423,7 +496,8 @@ Widget _buildHeroBanner() {
                     label: 'common.all'.tr(),
                     isSelected: true,
                     onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
+                      () => _showFilterExpanded = !_showFilterExpanded,
+                    ),
                   ),
                 ]),
                 const SizedBox(width: 24),
@@ -432,14 +506,16 @@ Widget _buildHeroBanner() {
                     label: 'dashboard.main_courses'.tr(),
                     isSelected: _selectedCategories.contains('Main Courses'),
                     onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
+                      () => _showFilterExpanded = !_showFilterExpanded,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   _FilterPill(
                     label: 'dashboard.mini_courses'.tr(),
                     isSelected: _selectedCategories.contains('Mini Courses'),
                     onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
+                      () => _showFilterExpanded = !_showFilterExpanded,
+                    ),
                   ),
                 ]),
                 const SizedBox(width: 24),
@@ -448,15 +524,18 @@ Widget _buildHeroBanner() {
                     label: 'common.all'.tr(),
                     isSelected: true,
                     onTap: () => setState(
-                        () => _showFilterExpanded = !_showFilterExpanded),
+                      () => _showFilterExpanded = !_showFilterExpanded,
+                    ),
                   ),
                 ]),
                 const Spacer(),
                 if (_showFilterExpanded)
                   GestureDetector(
                     onTap: () => setState(() => _showFilterExpanded = false),
-                    child: const Icon(Icons.keyboard_arrow_up,
-                        color: Color(0xFF888888)),
+                    child: const Icon(
+                      Icons.keyboard_arrow_up,
+                      color: Color(0xFF888888),
+                    ),
                   ),
               ],
             ),
@@ -495,7 +574,7 @@ Widget _buildHeroBanner() {
                     items: [
                       'Main Courses',
                       'Mini Courses',
-                      'Seasonal Activities'
+                      'Seasonal Activities',
                     ],
                     displayLabels: [
                       'dashboard.main_courses'.tr(),
@@ -547,11 +626,12 @@ Widget _buildHeroBanner() {
                       });
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          const Color.fromARGB(255, 252, 183, 199),
+                      backgroundColor: const Color.fromARGB(255, 252, 183, 199),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 14),
+                        horizontal: 32,
+                        vertical: 14,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -620,8 +700,10 @@ Widget _buildHeroBanner() {
             if (showError) ...[
               const SizedBox(width: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border.all(color: const Color(0xFFDDDDDD)),
@@ -637,8 +719,11 @@ Widget _buildHeroBanner() {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.arrow_back,
-                        size: 12, color: Color(0xFFE53935)),
+                    const Icon(
+                      Icons.arrow_back,
+                      size: 12,
+                      color: Color(0xFFE53935),
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'error.selection_required'.tr(),
@@ -676,7 +761,8 @@ Widget _buildHeroBanner() {
         ...items.asMap().entries.map((entry) {
           final idx = entry.key;
           final item = entry.value;
-          final displayLabel = (displayLabels != null && idx < displayLabels.length)
+          final displayLabel =
+              (displayLabels != null && idx < displayLabels.length)
               ? displayLabels[idx]
               : item;
           return Padding(
@@ -707,8 +793,7 @@ Widget _buildHeroBanner() {
                       borderRadius: BorderRadius.circular(3),
                     ),
                     child: selected.contains(item)
-                        ? const Icon(Icons.check,
-                            size: 12, color: Colors.white)
+                        ? const Icon(Icons.check, size: 12, color: Colors.white)
                         : null,
                   ),
                   const SizedBox(width: 8),
@@ -738,18 +823,19 @@ Widget _buildHeroBanner() {
         subtitle: 'Computers',
         color: const Color(0xFF5B9EA0),
         imagePath: 'assets/images/course2.jpg',
-        description: 'Linus is having fun using computers! Help him collect items he needs such as a screen and mouse. The Chameleon will raise and lower the trees making Linus reach different heights or just clearing the path.',
-
+        description:
+            'Linus is having fun using computers! Help him collect items he needs such as a screen and mouse. The Chameleon will raise and lower the trees making Linus reach different heights or just clearing the path.',
       ),
-    _CourseData(
-  topic: 'Coding',
-  level: 'Novice',
-  title: 'CodeMonkey Jr.',
-  subtitle: 'Sequencing & Loops',
-  color: const Color(0xFF7BC67E),
-  imagePath: 'assets/images/course1.jpg',
-  description: 'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
-),
+      _CourseData(
+        topic: 'Coding',
+        level: 'Novice',
+        title: 'CodeMonkey Jr.',
+        subtitle: 'Sequencing & Loops',
+        color: const Color(0xFF7BC67E),
+        imagePath: 'assets/images/course1.jpg',
+        description:
+            'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
+      ),
       _CourseData(
         topic: 'CS Topics',
         level: 'Beginner',
@@ -757,8 +843,8 @@ Widget _buildHeroBanner() {
         subtitle: 'Functions & Variables',
         color: const Color(0xFF4A90C4),
         imagePath: 'assets/images/datacourse.png',
-          description: 'Get a glimpse into the world of data. Learn what data is and how to collect it. You will also learn how to organize your data using different graphing visualizations.',
-
+        description:
+            'Get a glimpse into the world of data. Learn what data is and how to collect it. You will also learn how to organize your data using different graphing visualizations.',
       ),
       _CourseData(
         topic: 'Text Coding',
@@ -775,9 +861,8 @@ Widget _buildHeroBanner() {
         subtitle: 'Internet Safety',
         color: const Color(0xFF9B7BCB),
         imagePath: 'assets/images/digitalcourse.png',
-        description: 'A short introduction to some important topics in the digital world: How to use computers, what are software and hardware, possible threats online and protecting your privacy.',
-
-
+        description:
+            'A short introduction to some important topics in the digital world: How to use computers, what are software and hardware, possible threats online and protecting your privacy.',
       ),
       _CourseData(
         topic: 'Text Coding',
@@ -803,6 +888,7 @@ Widget _buildHeroBanner() {
         color: const Color(0xFF7986CB),
         imagePath: 'assets/images/elephant.png',
       ),
+      ..._publicCourses,
     ];
 
     return Container(
@@ -843,16 +929,27 @@ Widget _buildHeroBanner() {
               ],
             ),
           ),
+          if (_isLoadingPublicCourses)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 18, 24, 0),
+              child: LinearProgressIndicator(minHeight: 3),
+            ),
           const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: Wrap(
               spacing: 16,
-  runSpacing: 16,
-  children: courses.where((course) {
-    return _selectedLevels.contains(course.level) &&
-           _selectedTopics.contains(course.topic);
-  }).map((course) => _CourseCard(course: course)).toList(),
+              runSpacing: 16,
+              children: courses
+                  .where((course) {
+                    return _selectedLevels.contains(course.level) &&
+                        _selectedTopics.contains(course.topic);
+                  })
+                  .map(
+                    (course) =>
+                        _CourseCard(session: widget.session, course: course),
+                  )
+                  .toList(),
             ),
           ),
         ],
@@ -880,6 +977,8 @@ Widget _buildHeroBanner() {
 //   });
 // }
 class _CourseData {
+  final String publicCourseId;
+  final String publicCourseKey;
   final String topic;
   final String level;
   final String title;
@@ -889,6 +988,8 @@ class _CourseData {
   final String description;
 
   const _CourseData({
+    this.publicCourseId = '',
+    this.publicCourseKey = '',
     required this.topic,
     required this.level,
     required this.title,
@@ -897,11 +998,59 @@ class _CourseData {
     required this.imagePath,
     this.description = 'Start this course to learn exciting coding concepts!',
   });
+
+  factory _CourseData.fromPublicCourseJson(Map<String, dynamic> json) {
+    final title =
+        json['courseName']?.toString() ??
+        json['title']?.toString() ??
+        'Untitled Course';
+    final category = json['category']?.toString().trim();
+    final topic =
+        category == 'Coding' ||
+            category == 'Digital Literacy' ||
+            category == 'CS Topics'
+        ? category!
+        : 'Coding';
+
+    return _CourseData(
+      publicCourseId: json['_id']?.toString() ?? json['id']?.toString() ?? '',
+      publicCourseKey: json['courseId']?.toString() ?? '',
+      topic: topic,
+      level: _normalizeLevel(json['difficulty']?.toString()),
+      title: title,
+      subtitle: json['subtitle']?.toString() ?? 'Admin Course',
+      color: const Color(0xFF4A90C4),
+      imagePath: 'assets/images/course1.jpg',
+      description:
+          json['description']?.toString() ??
+          'Open this course to play the levels built by your teacher.',
+    );
+  }
+
+  bool get isPublicCourse => publicCourseId.isNotEmpty;
+
+  static String _normalizeLevel(String? raw) {
+    switch (raw?.toLowerCase()) {
+      case 'novice':
+      case 'beginner':
+      case 'intermediate':
+      case 'advanced':
+        return raw![0].toUpperCase() + raw.substring(1).toLowerCase();
+      case 'easy':
+        return 'Beginner';
+      case 'hard':
+        return 'Advanced';
+      case 'medium':
+      default:
+        return 'Beginner';
+    }
+  }
 }
 
 class _CourseCard extends StatefulWidget {
+  final AuthSession session;
   final _CourseData course;
-  const _CourseCard({required this.course});
+  const _CourseCard({required this.session, required this.course});
 
   @override
   State<_CourseCard> createState() => _CourseCardState();
@@ -913,7 +1062,8 @@ class _CourseCardState extends State<_CourseCard> {
   void _showCourseDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (ctx) => _CourseDialog(course: widget.course),
+      builder: (ctx) =>
+          _CourseDialog(session: widget.session, course: widget.course),
     );
   }
 
@@ -931,15 +1081,30 @@ class _CourseCardState extends State<_CourseCard> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
             boxShadow: _hovered
-                ? [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 6))]
-                : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 6, offset: const Offset(0, 2))],
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ── TOP TAG BAR ──
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: widget.course.color,
                   borderRadius: const BorderRadius.only(
@@ -952,18 +1117,38 @@ class _CourseCardState extends State<_CourseCard> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.widgets, color: Colors.white, size: 13),
+                        const Icon(
+                          Icons.widgets,
+                          color: Colors.white,
+                          size: 13,
+                        ),
                         const SizedBox(width: 4),
-                        Text(widget.course.topic,
-                            style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                        Text(
+                          widget.course.topic,
+                          style: GoogleFonts.nunito(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
                       ],
                     ),
                     Row(
                       children: [
-                        const Icon(Icons.bar_chart, color: Colors.white, size: 14),
+                        const Icon(
+                          Icons.bar_chart,
+                          color: Colors.white,
+                          size: 14,
+                        ),
                         const SizedBox(width: 4),
-                        Text(widget.course.level,
-                            style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                        Text(
+                          widget.course.level,
+                          style: GoogleFonts.nunito(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -992,7 +1177,11 @@ class _CourseCardState extends State<_CourseCard> {
                           color: Colors.white.withOpacity(0.9),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.info_outline, size: 18, color: Colors.black54),
+                        child: const Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: Colors.black54,
+                        ),
                       ),
                     ),
                 ],
@@ -1004,11 +1193,22 @@ class _CourseCardState extends State<_CourseCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(widget.course.title,
-                        style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
+                    Text(
+                      widget.course.title,
+                      style: GoogleFonts.nunito(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF333333),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(widget.course.subtitle,
-                        style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                    Text(
+                      widget.course.subtitle,
+                      style: GoogleFonts.nunito(
+                        fontSize: 12,
+                        color: const Color(0xFF888888),
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Container(
                       height: 4,
@@ -1061,10 +1261,9 @@ class _SidebarItemState extends State<_SidebarItem> {
           color: widget.isActive
               ? const Color.fromARGB(255, 68, 172, 255)
               : _hovered
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.transparent,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              ? Colors.white.withOpacity(0.08)
+              : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: Row(
             children: [
               if (widget.icon != null) ...[
@@ -1079,8 +1278,7 @@ class _SidebarItemState extends State<_SidebarItem> {
                   style: GoogleFonts.montserrat(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color:
-                        widget.isActive ? Colors.white : Colors.white70,
+                    color: widget.isActive ? Colors.white : Colors.white70,
                   ),
                 ),
               ),
@@ -1109,8 +1307,7 @@ class _FilterPill extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: Colors.white,
           border: Border.all(
@@ -1142,15 +1339,28 @@ class _UnderwaterPainter extends CustomPainter {
     for (double x in [80, 160, 240]) {
       final path = Path();
       path.moveTo(x, size.height);
-      path.cubicTo(x - 20, size.height * 0.7, x + 20, size.height * 0.4,
-          x, size.height * 0.1);
-      path.cubicTo(x + 20, size.height * 0.4, x - 20, size.height * 0.7,
-          x, size.height);
+      path.cubicTo(
+        x - 20,
+        size.height * 0.7,
+        x + 20,
+        size.height * 0.4,
+        x,
+        size.height * 0.1,
+      );
+      path.cubicTo(
+        x + 20,
+        size.height * 0.4,
+        x - 20,
+        size.height * 0.7,
+        x,
+        size.height,
+      );
       canvas.drawPath(
-          path,
-          Paint()
-            ..color = const Color(0xFF2D6B4A).withOpacity(0.7)
-            ..style = PaintingStyle.fill);
+        path,
+        Paint()
+          ..color = const Color(0xFF2D6B4A).withOpacity(0.7)
+          ..style = PaintingStyle.fill,
+      );
     }
 
     paint.color = Colors.white.withOpacity(0.3);
@@ -1164,24 +1374,23 @@ class _UnderwaterPainter extends CustomPainter {
 
     paint.color = const Color(0xFFE8834A).withOpacity(0.9);
     canvas.drawOval(
-        Rect.fromCenter(
-            center: const Offset(350, 50), width: 40, height: 20),
-        paint);
+      Rect.fromCenter(center: const Offset(350, 50), width: 40, height: 20),
+      paint,
+    );
     canvas.drawOval(
-        Rect.fromCenter(
-            center: const Offset(420, 80), width: 30, height: 15),
-        paint);
+      Rect.fromCenter(center: const Offset(420, 80), width: 30, height: 15),
+      paint,
+    );
   }
 
   @override
   bool shouldRepaint(_UnderwaterPainter old) => false;
-  
 }
 
-
 class _CourseDialog extends StatefulWidget {
+  final AuthSession session;
   final _CourseData course;
-  const _CourseDialog({required this.course});
+  const _CourseDialog({required this.session, required this.course});
 
   @override
   State<_CourseDialog> createState() => _CourseDialogState();
@@ -1191,22 +1400,23 @@ class _CourseDialogState extends State<_CourseDialog> {
   int _imageIndex = 0;
   // Add more screenshot paths per course if you have them
   List<String> get _screenshots => [widget.course.imagePath];
-Widget? _getGamePage(String title) {
-  switch (title) {
-    case 'CodeMonkey Jr.':
-      return const  WorldMapPage();
-    case 'Linus the Lemur':
-      return null; // replace with LinusGamePage() when ready
-    case 'Coding Adventure':
-      return null; // replace with CodingAdventurePage() when ready
-    case 'Digital Literacy':
-      return const DigitalLiteracyPage();
-    case 'Data is Everywhere':
-      return const DataCoursePage();
-    default:
-      return null;
+  Widget? _getGamePage(String title) {
+    switch (title) {
+      case 'CodeMonkey Jr.':
+        return const WorldMapPage();
+      case 'Linus the Lemur':
+        return null; // replace with LinusGamePage() when ready
+      case 'Coding Adventure':
+        return null; // replace with CodingAdventurePage() when ready
+      case 'Digital Literacy':
+        return const DigitalLiteracyPage();
+      case 'Data is Everywhere':
+        return const DataCoursePage();
+      default:
+        return null;
+    }
   }
-}
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -1221,7 +1431,9 @@ Widget? _getGamePage(String title) {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: BoxDecoration(
                 color: const Color(0xFFF5A623),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1257,7 +1469,11 @@ Widget? _getGamePage(String title) {
                         color: Color(0xFF4CAF50),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.close, color: Colors.white, size: 18),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 18,
+                      ),
                     ),
                   ),
                 ],
@@ -1288,14 +1504,17 @@ Widget? _getGamePage(String title) {
                           _ArrowBtn(
                             icon: Icons.chevron_left,
                             onTap: () => setState(() {
-                              _imageIndex = (_imageIndex - 1 + _screenshots.length) % _screenshots.length;
+                              _imageIndex =
+                                  (_imageIndex - 1 + _screenshots.length) %
+                                  _screenshots.length;
                             }),
                           ),
                           const SizedBox(width: 12),
                           _ArrowBtn(
                             icon: Icons.chevron_right,
                             onTap: () => setState(() {
-                              _imageIndex = (_imageIndex + 1) % _screenshots.length;
+                              _imageIndex =
+                                  (_imageIndex + 1) % _screenshots.length;
                             }),
                           ),
                         ],
@@ -1312,7 +1531,10 @@ Widget? _getGamePage(String title) {
                         // Status badge
                         Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFFFF3CD),
                             borderRadius: BorderRadius.circular(30),
@@ -1320,7 +1542,11 @@ Widget? _getGamePage(String title) {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.star_border, color: Color(0xFFFFB300), size: 20),
+                              const Icon(
+                                Icons.star_border,
+                                color: Color(0xFFFFB300),
+                                size: 20,
+                              ),
                               const SizedBox(width: 8),
                               Text(
                                 'dashboard.not_started'.tr(),
@@ -1356,27 +1582,47 @@ Widget? _getGamePage(String title) {
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               decoration: const BoxDecoration(
                 color: Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(12),
+                ),
               ),
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-  final page = _getGamePage(widget.course.title);
-  if (page != null) {
-    final routeName = widget.course.title == 'Data is Everywhere'
-        ? 'data_course_hub'
-        : 'digital_literacy_hub';
-    Navigator.push(context, MaterialPageRoute(
-      settings: RouteSettings(name: routeName),
-      builder: (_) => page,
-    ));
-  }
-  },
+                  if (widget.course.isPublicCourse) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => _DashboardPublicCourseLevelsPage(
+                          session: widget.session,
+                          course: widget.course,
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  final page = _getGamePage(widget.course.title);
+                  if (page != null) {
+                    final routeName =
+                        widget.course.title == 'Data is Everywhere'
+                        ? 'data_course_hub'
+                        : 'digital_literacy_hub';
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        settings: RouteSettings(name: routeName),
+                        builder: (_) => page,
+                      ),
+                    );
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6DB84A),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: Text(
                   'dashboard.start_coding'.tr(),
@@ -1417,18 +1663,204 @@ class _ArrowBtn extends StatelessWidget {
     );
   }
 }
+
+class _DashboardPublicCourseLevelsPage extends StatefulWidget {
+  final AuthSession session;
+  final _CourseData course;
+
+  const _DashboardPublicCourseLevelsPage({
+    required this.session,
+    required this.course,
+  });
+
+  @override
+  State<_DashboardPublicCourseLevelsPage> createState() =>
+      _DashboardPublicCourseLevelsPageState();
+}
+
+class _DashboardPublicCourseLevelsPageState
+    extends State<_DashboardPublicCourseLevelsPage> {
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<SavedBuilderProject> _levels = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLevels();
+  }
+
+  Future<void> _loadLevels() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final result = await ApiService.getPublicCourseLevels(
+      authToken: widget.session.token,
+      courseId: widget.course.publicCourseKey.isNotEmpty
+          ? widget.course.publicCourseKey
+          : widget.course.publicCourseId,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      final levels =
+          _parseList(result['data'])
+              .map(SavedBuilderProject.fromJson)
+              .where((level) => level.id.isNotEmpty)
+              .toList()
+            ..sort((a, b) {
+              final orderComparison = a.orderInCourse.compareTo(
+                b.orderInCourse,
+              );
+              if (orderComparison != 0) {
+                return orderComparison;
+              }
+              return a.title.compareTo(b.title);
+            });
+
+      setState(() {
+        _levels = levels;
+        _isLoading = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage =
+          result['message']?.toString() ?? 'Failed to load course levels';
+      _isLoading = false;
+    });
+  }
+
+  List<Map<String, dynamic>> _parseList(Object? value) {
+    final rawList = value is List ? value : const [];
+    return rawList
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
+  Future<void> _openLevel(SavedBuilderProject level) async {
+    final routeName = level.isTopView
+        ? AppRoutes.topViewBuilder
+        : level.isScratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builderPlay;
+    final routeData = level.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+          )
+        : level.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: level.id,
+            initialTitle: level.title,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.course.title)),
+      body: RefreshIndicator(
+        onRefresh: _loadLevels,
+        child: Builder(
+          builder: (context) {
+            if (_isLoading) {
+              return const _DashboardScrollableMessage(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            if (_errorMessage != null) {
+              return _DashboardScrollableMessage(
+                child: Text(_errorMessage!, textAlign: TextAlign.center),
+              );
+            }
+
+            if (_levels.isEmpty) {
+              return const _DashboardScrollableMessage(
+                child: Text('No published levels are available yet.'),
+              );
+            }
+
+            return ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _levels.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final level = _levels[index];
+                return Card(
+                  child: ListTile(
+                    leading: CircleAvatar(child: Text('${index + 1}')),
+                    title: Text(level.title),
+                    subtitle: Text(
+                      '${level.isTopView
+                          ? 'Top View'
+                          : level.isScratch
+                          ? 'Scratch'
+                          : 'Front View'} - ${level.difficulty}',
+                    ),
+                    trailing: const Icon(Icons.play_arrow_rounded),
+                    onTap: () => _openLevel(level),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardScrollableMessage extends StatelessWidget {
+  final Widget child;
+
+  const _DashboardScrollableMessage({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(height: MediaQuery.sizeOf(context).height * 0.28),
+        Center(child: child),
+      ],
+    );
+  }
+}
+
 class _AngledClipper extends CustomClipper<Path> {
   @override
- @override
-Path getClip(Size size) {
-  final path = Path();
-  path.moveTo(0, 0);
-  path.lineTo(size.width * 0.40, 0);
-path.lineTo(size.width * 0.42, size.height);
-  path.lineTo(0, size.height);
-  path.close();
-  return path;
-}
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(size.width * 0.40, 0);
+    path.lineTo(size.width * 0.42, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    return path;
+  }
 
   @override
   bool shouldReclip(_AngledClipper old) => false;

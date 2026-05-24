@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/localization/app_language.dart';
 import '../models/instruction_section.dart';
 import 'rich_instruction_editor.dart';
 
@@ -29,6 +30,7 @@ class InstructionEditorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     return Container(
       margin: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -50,23 +52,25 @@ class InstructionEditorPanel extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
-                      'Instruction Builder',
-                      style: TextStyle(
+                      language.t('builder.instructionBuilder'),
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
                   PopupMenuButton<InstructionSectionType>(
-                    tooltip: 'Add section',
+                    tooltip: language.t('builder.addSection'),
                     onSelected: onAddSection,
                     itemBuilder: (context) {
                       return InstructionSectionType.values.map((type) {
                         return PopupMenuItem(
                           value: type,
-                          child: Text(instructionSectionLabel(type)),
+                          child: Text(
+                            localizedInstructionSectionLabel(language, type),
+                          ),
                         );
                       }).toList();
                     },
@@ -86,11 +90,11 @@ class InstructionEditorPanel extends StatelessWidget {
             const Divider(height: 1),
             Expanded(
               child: sections.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
+                        padding: const EdgeInsets.all(24),
                         child: Text(
-                          'Add sections for the learner to read before building.',
+                          language.t('builder.emptyInstructions'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.black45,
@@ -157,6 +161,7 @@ class _InstructionSectionCardState extends State<_InstructionSectionCard> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xfff8fafc),
@@ -186,14 +191,17 @@ class _InstructionSectionCardState extends State<_InstructionSectionCard> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        instructionSectionLabel(widget.section.type),
+                        localizedInstructionSectionLabel(
+                          language,
+                          widget.section.type,
+                        ),
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                     ReorderableDragStartListener(
                       index: widget.dragIndex,
-                      child: const Tooltip(
-                        message: 'Drag to arrange',
+                      child: Tooltip(
+                        message: language.t('builder.dragToArrange'),
                         child: Padding(
                           padding: EdgeInsets.all(8),
                           child: Icon(
@@ -204,7 +212,7 @@ class _InstructionSectionCardState extends State<_InstructionSectionCard> {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Delete section',
+                      tooltip: language.t('builder.deleteSection'),
                       onPressed: widget.onRemove,
                       icon: const Icon(Icons.delete_outline_rounded),
                     ),
@@ -248,15 +256,16 @@ class _SectionBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     return Column(
       children: [
         TextFormField(
           key: ValueKey('title_${section.id}'),
           initialValue: section.title,
-          decoration: const InputDecoration(
-            labelText: 'Title',
+          decoration: InputDecoration(
+            labelText: language.t('builder.title'),
             isDense: true,
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
           ),
           onChanged: onTitleChanged,
         ),
@@ -265,8 +274,8 @@ class _SectionBody extends StatelessWidget {
           key: ValueKey('content_${section.id}'),
           initialValue: _initialEditorValue(section),
           placeholder: section.type == InstructionSectionType.codeExample
-              ? 'Write or paste an example.'
-              : 'Start writing...',
+              ? language.t('builder.examplePlaceholder')
+              : language.t('builder.startWriting'),
           maxHeight: section.type == InstructionSectionType.codeExample
               ? 300
               : 240,

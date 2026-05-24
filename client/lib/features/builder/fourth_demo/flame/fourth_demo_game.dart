@@ -1,13 +1,31 @@
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../controllers/fourth_demo_controller.dart';
 import '../models/fourth_demo_project.dart';
+import '../../front_view/shared/builder_collectable.dart';
+import '../../front_view/shared/builder_character.dart';
 
 class FourthDemoGame extends FlameGame {
+  static const int _idleFrameDurationMs = 95;
+  static const int _walkFrameDurationMs = 62;
+  static const double _defaultPlayerSpriteMaxWidthScale = 1.35;
+  static const double _defaultPlayerSpriteMaxHeightScale = 1.7;
+  static const double _defaultPlayerSpriteFacingLeftOffsetXScale = 0.20;
+  static const double _defaultPlayerSpriteFacingRightOffsetXScale = -0.1;
+  static const double _defaultPlayerSpriteOffsetYScale = 0.17;
+
   final FourthDemoController controller;
+  final Map<String, ui.Image> _assetImages = <String, ui.Image>{};
+  final Map<String, _CharacterFrameSet> _characterFrames =
+      <String, _CharacterFrameSet>{};
+  ui.Image? _forestBackground;
+  double _animationElapsedMs = 0;
 
   FourthDemoGame({required this.controller});
 
@@ -17,6 +35,9 @@ class FourthDemoGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    unawaited(_loadSpriteImages());
+    unawaited(_loadBackgroundImage());
+    unawaited(_loadPlayerFrames());
     controller.addListener(_wake);
   }
 
@@ -27,6 +48,13 @@ class FourthDemoGame extends FlameGame {
   }
 
   void _wake() {}
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _animationElapsedMs += dt * Duration.millisecondsPerSecond;
+    controller.handleUpdate(dt);
+  }
 
   Offset worldPositionFromCanvas(Offset canvasPosition) {
     final scale = _scale;
@@ -51,20 +79,11 @@ class FourthDemoGame extends FlameGame {
   }
 
   double get _scale {
-    final settings = controller.project.settings;
-    if (size.x <= 0 || size.y <= 0) {
-      return 1;
-    }
-    return math.min(size.x / settings.worldWidth, size.y / settings.worldHeight);
+    return 1;
   }
 
   Offset get _worldOffset {
-    final settings = controller.project.settings;
-    final scale = _scale;
-    return Offset(
-      (size.x - settings.worldWidth * scale) / 2,
-      (size.y - settings.worldHeight * scale) / 2,
-    );
+    return Offset.zero;
   }
 
   void _drawStage(Canvas canvas, FourthDemoProject project) {
@@ -78,10 +97,14 @@ class FourthDemoGame extends FlameGame {
     _drawBackground(canvas, world);
     _drawTiles(canvas, project);
     for (final sprite in project.sprites) {
-      if (!sprite.visible) {
+      if (!sprite.visible || sprite.destroyed) {
         continue;
       }
-      _drawSprite(canvas, sprite);
+      final visualPosition = controller.visualPositionFor(sprite);
+      _drawSprite(
+        canvas,
+        sprite.copyWith(x: visualPosition.dx, y: visualPosition.dy),
+      );
     }
     _drawScreenWidgets(canvas, project.widgets);
     _drawSelection(canvas, project);
@@ -91,14 +114,28 @@ class FourthDemoGame extends FlameGame {
   }
 
   void _drawBackground(Canvas canvas, Rect world) {
+    final image = _forestBackground;
+    if (image != null) {
+      paintImage(
+        canvas: canvas,
+        rect: world,
+        image: image,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.none,
+      );
+      return;
+    }
+
     canvas.drawRect(world, Paint()..color = const Color(0xFFB7DFF2));
     canvas.drawCircle(
       Offset(world.width * 0.83, world.height * 0.2),
       32,
       Paint()..color = const Color(0xFFFFE082),
     );
-    final far = Paint()..color = const Color(0xFF7BB86F).withValues(alpha: 0.55);
-    final near = Paint()..color = const Color(0xFF3E8D41).withValues(alpha: 0.72);
+    final far = Paint()
+      ..color = const Color(0xFF7BB86F).withValues(alpha: 0.55);
+    final near = Paint()
+      ..color = const Color(0xFF3E8D41).withValues(alpha: 0.72);
     _drawHill(canvas, world, far, 0.58, 80);
     _drawHill(canvas, world, near, 0.68, 54);
     for (var i = 0; i < 7; i += 1) {
@@ -110,7 +147,13 @@ class FourthDemoGame extends FlameGame {
     }
   }
 
-  void _drawHill(Canvas canvas, Rect world, Paint paint, double yFactor, double height) {
+  void _drawHill(
+    Canvas canvas,
+    Rect world,
+    Paint paint,
+    double yFactor,
+    double height,
+  ) {
     final path = Path()..moveTo(0, world.height);
     for (var x = 0.0; x <= world.width; x += 80) {
       path.quadraticBezierTo(
@@ -160,26 +203,74 @@ class FourthDemoGame extends FlameGame {
     canvas.translate(-rect.center.dx, -rect.center.dy);
     switch (sprite.kind) {
       case FourthDemoSpriteKind.player:
-        _drawPlayer(canvas, rect);
+        _drawPlayer(canvas, rect, sprite);
       case FourthDemoSpriteKind.collectible:
-        _drawBanana(canvas, rect);
+        _drawCollectible(canvas, rect, sprite.assetId);
       case FourthDemoSpriteKind.prop:
         _drawProp(canvas, rect, Color(sprite.colorValue));
     }
     canvas.restore();
   }
 
-  void _drawPlayer(Canvas canvas, Rect rect) {
+  void _drawPlayer(Canvas canvas, Rect rect, FourthDemoSprite sprite) {
+    final character = builderCharacterById(
+      sprite.assetId.isEmpty ? defaultBuilderCharacterId : sprite.assetId,
+    );
+    final image =
+        _currentPlayerFrame(
+          character.id,
+          isWalking: controller.isSpriteWalking(sprite),
+        ) ??
+        _assetImages[character.idlePreviewAssetPath];
+    if (image != null) {
+      final flip = sprite.facing == FourthDemoSpriteFacing.right;
+      final sourceRect = _sourceRectForCharacter(image, character);
+      final destinationRect = _playerDestinationRect(
+        image: image,
+        spriteRect: rect,
+        character: character,
+        facing: sprite.facing,
+      );
+      _drawImageRectFacing(
+        canvas: canvas,
+        image: image,
+        sourceRect: sourceRect,
+        destinationRect: destinationRect,
+        flipHorizontally: flip,
+      );
+      return;
+    }
+
     final body = Paint()..color = const Color(0xFF9A5B26);
     final face = Paint()..color = const Color(0xFFFFC48C);
-    canvas.drawCircle(Offset(rect.left + rect.width * 0.28, rect.top + 13), 12, body);
-    canvas.drawCircle(Offset(rect.right - rect.width * 0.28, rect.top + 13), 12, body);
+    canvas.drawCircle(
+      Offset(rect.left + rect.width * 0.28, rect.top + 13),
+      12,
+      body,
+    );
+    canvas.drawCircle(
+      Offset(rect.right - rect.width * 0.28, rect.top + 13),
+      12,
+      body,
+    );
     canvas.drawOval(rect.deflate(4), body);
     canvas.drawOval(rect.deflate(13).translate(0, 6), face);
-    canvas.drawCircle(Offset(rect.left + rect.width * 0.42, rect.top + 25), 3, Paint()..color = Colors.black87);
-    canvas.drawCircle(Offset(rect.left + rect.width * 0.60, rect.top + 25), 3, Paint()..color = Colors.black87);
+    canvas.drawCircle(
+      Offset(rect.left + rect.width * 0.42, rect.top + 25),
+      3,
+      Paint()..color = Colors.black87,
+    );
+    canvas.drawCircle(
+      Offset(rect.left + rect.width * 0.60, rect.top + 25),
+      3,
+      Paint()..color = Colors.black87,
+    );
     canvas.drawArc(
-      Rect.fromCenter(center: Offset(rect.center.dx, rect.top + 34), width: 18, height: 10),
+      Rect.fromCenter(
+        center: Offset(rect.center.dx, rect.top + 34),
+        width: 18,
+        height: 10,
+      ),
       0,
       math.pi,
       false,
@@ -190,10 +281,108 @@ class FourthDemoGame extends FlameGame {
     );
   }
 
-  void _drawBanana(Canvas canvas, Rect rect) {
+  Rect _playerDestinationRect({
+    required ui.Image image,
+    required Rect spriteRect,
+    required BuilderCharacter character,
+    required FourthDemoSpriteFacing facing,
+  }) {
+    final config = character.spriteRect;
+    final baseRect = _imageRectForSprite(
+      image: image,
+      spriteRect: spriteRect,
+      maxWidth:
+          spriteRect.width *
+          (config.maxWidthScale ?? _defaultPlayerSpriteMaxWidthScale),
+      maxHeight:
+          spriteRect.height *
+          (config.maxHeightScale ?? _defaultPlayerSpriteMaxHeightScale),
+    );
+
+    return baseRect.translate(
+      facing == FourthDemoSpriteFacing.right
+          ? spriteRect.width *
+                (config.facingRightOffsetXScale ??
+                    _defaultPlayerSpriteFacingRightOffsetXScale)
+          : spriteRect.width *
+                (config.facingLeftOffsetXScale ??
+                    _defaultPlayerSpriteFacingLeftOffsetXScale),
+      spriteRect.height *
+          (config.offsetYScale ?? _defaultPlayerSpriteOffsetYScale),
+    );
+  }
+
+  Rect _imageRectForSprite({
+    required ui.Image image,
+    required Rect spriteRect,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final imageAspect = image.width / image.height;
+    var width = maxWidth;
+    var height = width / imageAspect;
+
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * imageAspect;
+    }
+
+    return Rect.fromLTWH(
+      spriteRect.center.dx - width / 2,
+      spriteRect.bottom - height,
+      width,
+      height,
+    );
+  }
+
+  void _drawImageRectFacing({
+    required Canvas canvas,
+    required ui.Image image,
+    required Rect sourceRect,
+    required Rect destinationRect,
+    required bool flipHorizontally,
+  }) {
+    if (!flipHorizontally) {
+      canvas.drawImageRect(image, sourceRect, destinationRect, Paint());
+      return;
+    }
+
+    canvas.save();
+    canvas.translate(
+      destinationRect.left + destinationRect.width,
+      destinationRect.top,
+    );
+    canvas.scale(-1, 1);
+    canvas.drawImageRect(
+      image,
+      sourceRect,
+      Rect.fromLTWH(0, 0, destinationRect.width, destinationRect.height),
+      Paint(),
+    );
+    canvas.restore();
+  }
+
+  void _drawCollectible(Canvas canvas, Rect rect, String assetId) {
+    final image = _assetImages[_collectableAssetPath(assetId)];
+    if (image != null) {
+      paintImage(
+        canvas: canvas,
+        rect: rect,
+        image: image,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.none,
+      );
+      return;
+    }
+
     final path = Path()
       ..moveTo(rect.left + 8, rect.center.dy)
-      ..quadraticBezierTo(rect.center.dx, rect.bottom + 10, rect.right - 8, rect.top + 10);
+      ..quadraticBezierTo(
+        rect.center.dx,
+        rect.bottom + 10,
+        rect.right - 8,
+        rect.top + 10,
+      );
     canvas.drawPath(
       path,
       Paint()
@@ -217,7 +406,11 @@ class FourthDemoGame extends FlameGame {
       RRect.fromRectAndRadius(rect.deflate(3), const Radius.circular(8)),
       Paint()..color = color,
     );
-    canvas.drawCircle(rect.center, rect.width * 0.18, Paint()..color = Colors.white.withValues(alpha: 0.5));
+    canvas.drawCircle(
+      rect.center,
+      rect.width * 0.18,
+      Paint()..color = Colors.white.withValues(alpha: 0.5),
+    );
   }
 
   void _drawScreenWidgets(Canvas canvas, List<FourthDemoScreenWidget> widgets) {
@@ -232,14 +425,21 @@ class FourthDemoGame extends FlameGame {
         text: TextSpan(
           text: text,
           style: TextStyle(
-            color: Color(widget.textColorValue).withValues(alpha: widget.opacity),
+            color: Color(
+              widget.textColorValue,
+            ).withValues(alpha: widget.opacity),
             fontSize: 16,
             fontWeight: FontWeight.w800,
           ),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      final bg = Rect.fromLTWH(widget.x - 8, widget.y - 5, painter.width + 16, painter.height + 10);
+      final bg = Rect.fromLTWH(
+        widget.x - 8,
+        widget.y - 5,
+        painter.width + 16,
+        painter.height + 10,
+      );
       canvas.drawRRect(
         RRect.fromRectAndRadius(bg, const Radius.circular(8)),
         Paint()..color = Colors.white.withValues(alpha: 0.82),
@@ -253,7 +453,12 @@ class FourthDemoGame extends FlameGame {
     if (sprite == null || !sprite.visible) {
       return;
     }
-    final rect = Rect.fromLTWH(sprite.x, sprite.y, sprite.width, sprite.height).inflate(6);
+    final rect = Rect.fromLTWH(
+      sprite.x,
+      sprite.y,
+      sprite.width,
+      sprite.height,
+    ).inflate(6);
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(8)),
       Paint()
@@ -276,10 +481,142 @@ class FourthDemoGame extends FlameGame {
     final painter = TextPainter(
       text: const TextSpan(
         text: 'Success! Banana collected',
-        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900),
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: rect.width);
     painter.paint(canvas, Offset(rect.left + 22, rect.top + 11));
   }
+
+  ui.Image? _currentPlayerFrame(String characterId, {required bool isWalking}) {
+    final frameSet =
+        _characterFrames[builderCharacterById(characterId).id] ??
+        _characterFrames[defaultBuilderCharacterId];
+    if (frameSet == null) {
+      return null;
+    }
+
+    final frames = isWalking && frameSet.walk.isNotEmpty
+        ? frameSet.walk
+        : frameSet.idle;
+    if (frames.isEmpty) {
+      return null;
+    }
+
+    final duration = isWalking ? _walkFrameDurationMs : _idleFrameDurationMs;
+    final frameIndex = (_animationElapsedMs / duration).floor() % frames.length;
+    return frames[frameIndex];
+  }
+
+  Future<void> _loadPlayerFrames() async {
+    for (final character in builderCharacters) {
+      final frames = await _loadCharacterFrames(character);
+      if (frames.idle.isNotEmpty || frames.walk.isNotEmpty) {
+        _characterFrames[character.id] = frames;
+      }
+    }
+  }
+
+  Future<_CharacterFrameSet> _loadCharacterFrames(
+    BuilderCharacter character,
+  ) async {
+    return _CharacterFrameSet(
+      idle: await _loadFrameList(_idleFramePaths(character)),
+      walk: await _loadFrameList(_walkFramePaths(character)),
+    );
+  }
+
+  Future<List<ui.Image>> _loadFrameList(List<String> paths) async {
+    final frames = <ui.Image>[];
+    for (final path in paths) {
+      final image = await _loadImage(path);
+      if (image != null) {
+        frames.add(image);
+      }
+    }
+    return frames;
+  }
+
+  List<String> _idleFramePaths(BuilderCharacter character) {
+    return List.generate(
+      12,
+      (index) =>
+          '${character.basePath}/01-Idle/01-Idle/${character.filePrefix}_Idle_${index.toString().padLeft(3, '0')}.png',
+    );
+  }
+
+  List<String> _walkFramePaths(BuilderCharacter character) {
+    return List.generate(
+      12,
+      (index) =>
+          '${character.basePath}/${character.walkFolder}/${character.filePrefix}_Walk_${index.toString().padLeft(3, '0')}.png',
+    );
+  }
+
+  Rect _sourceRectForCharacter(ui.Image frame, BuilderCharacter character) {
+    return Rect.fromLTWH(
+      character.sourceInsetLeft,
+      character.sourceInsetTop,
+      frame.width.toDouble() -
+          character.sourceInsetLeft -
+          character.sourceInsetRight,
+      frame.height.toDouble() -
+          character.sourceInsetTop -
+          character.sourceInsetBottom,
+    );
+  }
+
+  Future<void> _loadSpriteImages() async {
+    final paths = <String>{
+      for (final character in builderCharacters) character.idlePreviewAssetPath,
+      for (final collectable in builderCollectables)
+        collectable.flutterAssetPath,
+    };
+    for (final path in paths) {
+      final image = await _loadImage(path);
+      if (image != null) {
+        _assetImages[path] = image;
+      }
+    }
+  }
+
+  Future<void> _loadBackgroundImage() async {
+    _forestBackground = await _loadImage(
+      'game_builder/background/backgroundColorForest.png',
+    );
+  }
+
+  Future<ui.Image?> _loadImage(String assetPath) async {
+    final candidates = <String>[assetPath, 'assets/$assetPath'];
+
+    for (final candidate in candidates) {
+      try {
+        final data = await rootBundle.load(candidate);
+        final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+        final frame = await codec.getNextFrame();
+        return frame.image;
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return null;
+  }
+
+  String _collectableAssetPath(String assetId) {
+    return builderCollectableById(
+      assetId.isEmpty ? defaultBuilderCollectableId : assetId,
+    ).flutterAssetPath;
+  }
+}
+
+class _CharacterFrameSet {
+  final List<ui.Image> idle;
+  final List<ui.Image> walk;
+
+  const _CharacterFrameSet({required this.idle, required this.walk});
 }

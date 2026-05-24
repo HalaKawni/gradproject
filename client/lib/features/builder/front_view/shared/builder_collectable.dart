@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class BuilderCollectable {
   final String id;
   final String label;
@@ -32,11 +34,7 @@ const List<BuilderCollectable> builderCollectables = <BuilderCollectable>[
     label: 'Black Cherry',
     fileName: 'black-cherry.png',
   ),
-  BuilderCollectable(
-    id: 'coconut',
-    label: 'Coconut',
-    fileName: 'coconut.png',
-  ),
+  BuilderCollectable(id: 'coconut', label: 'Coconut', fileName: 'coconut.png'),
   BuilderCollectable(
     id: 'green-apple',
     label: 'Green Apple',
@@ -98,4 +96,9 @@ BuilderCollectable builderCollectableById(String? id) {
   }
 
   return builderCollectables.first;
+}
+
+String localizedBuilderCollectableLabel(AppLanguage language, String id) {
+  final collectable = builderCollectableById(id);
+  return language.tr('builder.collectable.$id', collectable.label);
 }

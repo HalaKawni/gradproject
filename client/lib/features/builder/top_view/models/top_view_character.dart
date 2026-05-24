@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class TopViewCharacter {
   final String id;
   final String label;
@@ -77,4 +79,9 @@ TopViewCharacter topViewCharacterById(String? id) {
   }
 
   return topViewCharacters.first;
+}
+
+String localizedTopViewCharacterLabel(AppLanguage language, String id) {
+  final character = topViewCharacterById(id);
+  return language.tr('builder.topViewCharacter.$id', character.label);
 }
