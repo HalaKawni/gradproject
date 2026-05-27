@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'digital_review_page.dart';
 import '../services/api_service.dart';
 import 'digital_review_pagelesson3.dart';
+import 'lesson_slide_texts.dart';
 
 
 class DigitalPlayPageLesson3 extends StatefulWidget {
@@ -21,7 +22,7 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
   final GlobalKey _gameAreaKey = GlobalKey();
   final Map<String, double> _lineProgress = {};
 
-  final List<_Pair> _pairs = [
+  static final List<_Pair> _fallbackPairs = [
     _Pair(
       word: 'Virtual Reality',
       definition: 'An application that makes you feel like you are in another place.',
@@ -40,6 +41,9 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
     ),
   ];
 
+  List<_Pair> _pairs = List.of(_fallbackPairs);
+  bool _isLoading = false;
+
   String? _selectedWord;
   String? _selectedDef;
   final Map<String, String> _matched = {};
@@ -56,6 +60,59 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
 
   late List<_Pair> _shuffledWords;
   late List<_Pair> _shuffledDefs;
+
+  void _initPairs(List<_Pair> newPairs) {
+    _wordKeys.clear();
+    _defKeys.clear();
+    for (final p in newPairs) {
+      _wordKeys[p.word] = GlobalKey();
+      _defKeys[p.definition] = GlobalKey();
+    }
+    setState(() {
+      _pairs = newPairs;
+      _shuffledWords = List.from(newPairs)..shuffle(Random());
+      _shuffledDefs  = List.from(newPairs)..shuffle(Random());
+      _matched.clear();
+      _selectedWord = null;
+      _selectedDef  = null;
+      _wrongWords.clear();
+      _wrongDefs.clear();
+      _lines.clear();
+      _lineProgress.clear();
+      _playScore = 0;
+    });
+  }
+
+  Future<void> _loadAiPairs() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final raw = await ApiService.generateWordMatchPairs(
+        lessonNumber: lessonNumber,
+        slideTexts: LessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (raw.isNotEmpty) {
+        _initPairs(raw.map((p) => _Pair(
+          word: p['word']!,
+          definition: p['definition']!,
+        )).toList());
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI pairs loaded!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI failed. Using original pairs.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _saveScore() async {
     final lessonNumber = widget.lesson['number'] as int;
@@ -309,6 +366,38 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
               style: const TextStyle(
                   fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiPairs,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _isLoading
+                    ? Colors.grey.withOpacity(0.4)
+                    : const Color(0xFFF5A623),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _isLoading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ),
+                    )
+                  : Row(children: [
+                      const Icon(Icons.auto_awesome_rounded,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text('✨ AI',
+                          style: GoogleFonts.nunito(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800)),
+                    ]),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
               label: 'LEARN', value: '12/12',
               bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),

@@ -19,6 +19,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  String _activeSection = 'courses';
   bool _showFilterExpanded = false;
   bool _showLevelError = false;
   bool _showCategoryError = false;
@@ -43,17 +44,19 @@ void initState() {
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
 
-    final content = SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildHeroBanner(),
-          _buildFilterSection(),
-          const SizedBox(height: 24),
-          _buildCoursesSection(),
-          const SizedBox(height: 40),
-        ],
-      ),
-    );
+    final content = _activeSection == 'my_creations'
+        ? _buildMyCreationsView()
+        : SingleChildScrollView(
+            child: Column(
+              children: [
+                _buildHeroBanner(),
+                _buildFilterSection(),
+                const SizedBox(height: 24),
+                _buildCoursesSection(),
+                const SizedBox(height: 40),
+              ],
+            ),
+          );
 
     if (isMobile) {
       return Scaffold(
@@ -139,14 +142,18 @@ void initState() {
         children: [
           const SizedBox(height: 16),
           _SidebarItem(
-  label: 'dashboard.courses_section'.tr(),
-  isActive: true,
-  onTap: () => showDialog(
-    context: context,
-    builder: (_) => const UnlockDialog(),
-  ),
-),
-          _SidebarItem(label: 'dashboard.my_creations'.tr(), isActive: false, onTap: () {}),
+            label: 'dashboard.courses_section'.tr(),
+            isActive: _activeSection == 'courses',
+            onTap: () {
+              setState(() => _activeSection = 'courses');
+              showDialog(context: context, builder: (_) => const UnlockDialog());
+            },
+          ),
+          _SidebarItem(
+            label: 'dashboard.my_creations'.tr(),
+            isActive: _activeSection == 'my_creations',
+            onTap: () => setState(() => _activeSection = 'my_creations'),
+          ),
           _SidebarItem(label: 'dashboard.discover'.tr(), isActive: false, onTap: () {}),
           const Spacer(),
           _SidebarItem(
@@ -972,6 +979,157 @@ Widget _buildHeroBanner() {
            _selectedTopics.contains(course.topic);
   }).map((course) => _CourseCard(course: course)).toList(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MY CREATIONS VIEW ──
+  Widget _buildMyCreationsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header bar
+        Container(
+          color: const Color(0xFFB8D9E8),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'dashboard.my_creations'.tr(),
+                style: GoogleFonts.montserrat(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF2C3E50),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF1A73E8)),
+                label: Text(
+                  'MY PROFILE',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A73E8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Controls row
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+          child: Row(
+            children: [
+              // All Types dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('All Types',
+                        style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF333333))),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_drop_down, color: Color(0xFF555555)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Search bar
+              SizedBox(
+                width: 220,
+                height: 40,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search',
+                    hintStyle: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFFAAAAAA)),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFFAAAAAA)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFF44ACFF)),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              // Create a Course button
+              ElevatedButton.icon(
+                onPressed: () => _showCreateCourseDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6DB84A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(
+                  'Create a Course',
+                  style: GoogleFonts.montserrat(
+                      fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Empty state
+        Expanded(
+          child: Container(
+            color: const Color(0xFFEEEEEE),
+            child: Center(
+              child: Text(
+                'No Results Found',
+                style: GoogleFonts.montserrat(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF555555),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showCreateCourseDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Create a Course',
+            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
+        content: Text('Course creation coming soon!',
+            style: GoogleFonts.nunito(fontSize: 15)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
           ),
         ],
       ),

@@ -206,6 +206,150 @@ class ApiService {
     );
   }
 
+  // ── AI ENDPOINTS ─────────────────────────────────────────
+
+  // POST /api/ai/wordsearch-words
+  static Future<List<String>> generateWordSearchWords({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/wordsearch-words';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['words'] != null) {
+          return List<String>.from(data['words']);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
+  // POST /api/ai/wordmatch-pairs
+  static Future<List<Map<String, String>>> generateWordMatchPairs({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/wordmatch-pairs';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['pairs'] != null) {
+          return List<Map<String, String>>.from(
+            (data['pairs'] as List).map((p) => {
+              'word': p['word'].toString(),
+              'definition': p['definition'].toString(),
+            }),
+          );
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
+  // POST /api/ai/fill-blanks
+  static Future<Map<String, dynamic>> generateFillBlanks({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/ai/fill-blanks'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data;
+      }
+      return {};
+    } catch (e) {
+      print('[AI] Error: $e');
+      return {};
+    }
+  }
+
+  // POST /api/ai/quiz-questions
+  static Future<List<Map<String, dynamic>>> generateQuizQuestions({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/quiz-questions';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['questions'] != null) {
+          return List<Map<String, dynamic>>.from(data['questions']);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
+  // POST /api/ai/swipe-concepts
+  static Future<List<Map<String, dynamic>>> generateSwipeConcepts({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/swipe-concepts';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['concepts'] != null) {
+          return List<Map<String, dynamic>>.from(
+            (data['concepts'] as List).map((c) => {
+              'text': c['text'].toString(),
+              'positive': c['positive'] as bool,
+              'sender': c['sender'].toString(),
+              'preview': c['preview'].toString(),
+            }),
+          );
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
   // Final Quiz → levels 101, 102, 103
   static Future<void> saveQuizScore({
     required String gameId,

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'digital_wordsearch_page.dart';
 import '../services/api_service.dart';
 import 'cyber_match_game.dart';
+import 'lesson_slide_texts.dart';
 
 
 // ===========================================================================
@@ -75,7 +76,7 @@ class _DigitalReviewPageState extends State<DigitalReviewPage>
 
   late List<_Sentence> _sentences;
 
-  final List<String> _allWords = [
+  List<String> _allWords = [
     'software', 'Cc:', 'To:', 'keywords',
     'hardware', 'search engine', 'inbox folder', 'drafts folder',
     'YouTube', 'browser', 'webpages', 'monitor',
@@ -91,6 +92,7 @@ class _DigitalReviewPageState extends State<DigitalReviewPage>
 
   int _score = 0;
   bool _done  = false;
+  bool _isLoading = false;
   String _hintMsg = 'Select a word below, then tap a blank — or drag!';
 
   late final AnimationController _confettiCtrl;
@@ -108,6 +110,78 @@ class _DigitalReviewPageState extends State<DigitalReviewPage>
         vsync: this, duration: const Duration(milliseconds: 700));
     _initSentences();
     _bank = List.from(_allWords)..shuffle(math.Random());
+  }
+
+  Future<void> _loadAiSentences() async {
+    setState(() => _isLoading = true);
+    final lessonNumber = widget.lesson['number'] as int;
+    final slideTexts = LessonSlideTexts.forLesson(lessonNumber);
+    if (slideTexts.isEmpty) { setState(() => _isLoading = false); return; }
+
+    final data = await ApiService.generateFillBlanks(
+      lessonNumber: lessonNumber,
+      slideTexts: slideTexts,
+    );
+    if (!mounted) return;
+
+    final rawSentences = List<String>.from(data['sentences'] ?? []);
+    final distractors  = List<String>.from(data['distractors'] ?? []);
+
+    if (rawSentences.length >= 2) {
+      final blankRe = RegExp(r'\{\{([^}]+)\}\}');
+      int blankCounter = 0;
+
+      final newSentences = rawSentences.map((raw) {
+        final parts = <_SentencePart>[];
+        int last = 0;
+        for (final m in blankRe.allMatches(raw)) {
+          if (m.start > last) parts.add(_SentencePart.text(raw.substring(last, m.start)));
+          parts.add(_SentencePart.blank(_Blank(id: 'ai_b${blankCounter++}', answer: m.group(1)!.trim())));
+          last = m.end;
+        }
+        if (last < raw.length) parts.add(_SentencePart.text(raw.substring(last)));
+        return _Sentence(parts);
+      }).toList();
+
+      final answers = newSentences
+          .expand((s) => s.parts.where((p) => p.isBlank).map((p) => p.blank!.answer))
+          .toList();
+      final newBank = [...answers, ...distractors]..shuffle(math.Random());
+
+      setState(() {
+        _sentences = newSentences;
+        _allWords.clear();
+        _allWords.addAll(newBank);
+        _bank = List.from(newBank);
+        _filled.clear();
+        _correct.clear();
+        _wrongKey = null;
+        _sparkleKey = null;
+        _selectedChip = null;
+        _score = 0;
+        _done = false;
+        _hintMsg = 'Select a word below, then tap a blank — or drag!';
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✨ New sentences generated from lesson!',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: _WPColors.grassDeep,
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } else {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('⚠️ AI unavailable — using default sentences.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: _WPColors.coralDeep,
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
   }
 
   void _initSentences() {
@@ -292,6 +366,32 @@ void _reset() {
                 ),
               ],
             ),
+
+            // ── AI loading overlay ──
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+                      decoration: BoxDecoration(
+                        color: _WPColors.paper,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 30)],
+                      ),
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        const CircularProgressIndicator(color: _WPColors.purple),
+                        const SizedBox(height: 16),
+                        Text('Generating new sentences…',
+                            style: GoogleFonts.nunito(
+                                fontSize: 16, fontWeight: FontWeight.w700,
+                                color: _WPColors.ink)),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
 
             // ── confetti ──
             AnimatedBuilder(
@@ -618,9 +718,15 @@ Widget _buildSentences() {
         _RailButton(icon: Icons.arrow_back_ios_rounded,
             onTap: () => Navigator.of(context).pop()),
         const SizedBox(height: 14),
-        _RailButton(icon: Icons.refresh_rounded, onTap: _reset),
+        _RailButton(icon: Icons.refresh_rounded, onTap: _isLoading ? null : _reset),
         const SizedBox(height: 14),
-        _RailButton(icon: Icons.lightbulb_rounded, onTap: _giveHint),
+        _RailButton(
+          icon: Icons.auto_awesome_rounded,
+          onTap: _isLoading ? null : _loadAiSentences,
+          color: _WPColors.sun,
+        ),
+        const SizedBox(height: 14),
+        _RailButton(icon: Icons.lightbulb_rounded, onTap: _isLoading ? null : _giveHint),
         const Spacer(),
         _NextButton(
           pulsing: _done,
@@ -1041,9 +1147,11 @@ class _SpeechArrowPainter extends CustomPainter {
 class _RailButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
-  const _RailButton({required this.icon, this.onTap});
+  final Color? color;
+  const _RailButton({required this.icon, this.onTap, this.color});
   @override
   Widget build(BuildContext context) {
+    final bg = color ?? _WPColors.purple;
     return Opacity(
       opacity: onTap != null ? 1 : 0.5,
       child: GestureDetector(
@@ -1051,9 +1159,9 @@ class _RailButton extends StatelessWidget {
         child: Container(
           width: 56, height: 56,
           decoration: BoxDecoration(
-            color: _WPColors.purple,
+            color: bg,
             borderRadius: BorderRadius.circular(14),
-            boxShadow: const [BoxShadow(color: _WPColors.purpleDeep, offset: Offset(0, 4))],
+            boxShadow: [BoxShadow(color: bg.withValues(alpha: 0.6), offset: const Offset(0, 4))],
           ),
           child: Icon(icon, color: Colors.white, size: 26),
         ),
