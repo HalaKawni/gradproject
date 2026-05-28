@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.12:3000/api';
+  static const String baseUrl = 'http://192.168.1.26:3000/api';
 
   // ── Token management ──────────────────────────────────────
   static Future<void> saveToken(String token) async {
@@ -207,6 +207,36 @@ class ApiService {
   }
 
   // ── AI ENDPOINTS ─────────────────────────────────────────
+
+  // POST /api/ai/lesson-chat
+  static Future<String?> chatWithAI({
+    required String message,
+    required String lessonTitle,
+    required int lessonNumber,
+    required List<Map<String, String>> history,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/ai/lesson-chat'),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          'message': message,
+          'lessonTitle': lessonTitle,
+          'lessonNumber': lessonNumber,
+          'history': history,
+        }),
+      );
+      print('[AI-chat] status=${response.statusCode} body=${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['status'] == true) return data['text'] as String;
+      }
+      return null;
+    } catch (e) {
+      print('[AI-chat] error: $e');
+      return null;
+    }
+  }
 
   // POST /api/ai/wordsearch-words
   static Future<List<String>> generateWordSearchWords({

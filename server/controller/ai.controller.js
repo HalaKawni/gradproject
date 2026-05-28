@@ -242,6 +242,43 @@ ${combinedText}`,
   }
 };
 
+exports.generateLessonText = async (req, res) => {
+  try {
+    const { message, lessonTitle = 'Lesson', lessonNumber = 1, history = [] } = req.body;
+    const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ status: false, error: 'No message provided' });
+    }
+
+    const messages = [
+      {
+        role: 'system',
+        content: `You are an AI assistant helping a teacher create educational lesson slides for children aged 8–14.
+The teacher is building slides for Lesson ${lessonNumber}: "${lessonTitle}".
+When asked to write slide content:
+- Be concise and engaging (2–4 sentences unless more is requested)
+- Use simple, age-appropriate language
+- Respond with plain text only — no bullet symbols, no markdown, no asterisks
+Reply directly with the content, no preamble like "Here is..." or "Sure!".`,
+      },
+      ...history.map((h) => ({ role: h.role, content: h.content })),
+      { role: 'user', content: message },
+    ];
+
+    const completion = await client.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      max_tokens: 350,
+      messages,
+    });
+
+    const text = completion.choices[0].message.content.trim();
+    res.json({ status: true, text });
+  } catch (err) {
+    res.status(500).json({ status: false, error: err.message || 'AI generation failed' });
+  }
+};
+
 exports.generateFillBlanks = async (req, res) => {
   try {
     const { slideTexts = [], lessonNumber } = req.body;

@@ -7,6 +7,7 @@ import 'services/game_api_service.dart';
 import 'digitalgame/digital_literacy_page.dart';
 import 'datagame/data_course_page.dart';
 import 'package:client/AIcourse/ai_hoot_page_game.dart';
+import 'mycourses/create_course_page.dart';
 import 'utils/responsive.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -1118,21 +1119,8 @@ Widget _buildHeroBanner() {
   }
 
   void _showCreateCourseDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: Text('Create a Course',
-            style: GoogleFonts.montserrat(fontWeight: FontWeight.w700)),
-        content: Text('Course creation coming soon!',
-            style: GoogleFonts.nunito(fontSize: 15)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreateCoursePage()),
     );
   }
 }

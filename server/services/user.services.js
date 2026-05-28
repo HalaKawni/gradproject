@@ -27,7 +27,9 @@ class UserService{
 
     static async loginUser(email, password) {
         try {
-            const user = await UserModel.findOne({ email });
+            const user = await UserModel.findOne({
+                $or: [{ email: email }, { name: email }]
+            });
 
             if (!user) {
                 throw new Error("Invalid email or password");
