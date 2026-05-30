@@ -24,7 +24,16 @@ const userSchema = new Schema({
         type: String,
         enum: ['parent', 'child', 'admin'],
         required: true
-    }
+    },
+    linkCode: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    linkedChildren: [{
+        type: Schema.Types.ObjectId,
+        ref: 'user'
+    }]
 });
 
 userSchema.pre('save', async function(){

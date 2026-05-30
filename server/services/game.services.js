@@ -78,6 +78,56 @@ class GameService {
     await GameProgressModel.findOneAndDelete({ userId, gameId });
     return { message: 'Progress reset successfully' };
   }
+
+  static async getMyStats(userId) {
+    const allProgress = await GameProgressModel.find({ userId }).sort({ updatedAt: -1 });
+
+    // Collect unique play-dates from completed level results
+    function dateKey(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    const playDates = new Set();
+    allProgress.forEach(p => {
+      p.levelResults.forEach(r => {
+        if (r.stars > 0) playDates.add(dateKey(new Date(r.completedAt)));
+      });
+    });
+
+    // Streak: count consecutive days going back from today (or yesterday)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let streak = 0;
+    let cursor = new Date(today);
+    if (!playDates.has(dateKey(cursor))) {
+      cursor.setDate(cursor.getDate() - 1); // allow until end of today
+    }
+    while (playDates.has(dateKey(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    // Last 7 days activity flags (oldest → newest)
+    const last7Days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      last7Days.push(playDates.has(dateKey(d)));
+    }
+
+    const totalScore = allProgress.reduce((s, p) => s + p.totalScore, 0);
+    const totalStars  = allProgress.reduce((s, p) => s + p.totalStars, 0);
+
+    const games = allProgress.map(p => ({
+      gameId:       p.gameId,
+      highestLevel: p.highestLevelReached,
+      totalStars:   p.totalStars,
+      totalScore:   p.totalScore,
+      levelCount:   p.levelResults.filter(r => r.stars > 0).length,
+    }));
+
+    return { streak, totalScore, totalStars, last7Days, games };
+  }
 }
 
 module.exports = GameService;

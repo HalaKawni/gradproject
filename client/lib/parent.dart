@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'parent/parent_signup_page.dart';
+import 'services/auth_service.dart';
+import 'parent/parent_dashboard_page.dart';
 
 class parentAccountPage extends StatefulWidget {
   const parentAccountPage({super.key});
@@ -48,7 +49,10 @@ class _parentAccountPageState extends State<parentAccountPage>
     super.dispose();
   }
 
-  void _onSignUp() {
+  bool _isLoading = false;
+  String? _apiError;
+
+  Future<void> _onSignUp() async {
     setState(() {
       _showEmailError = _emailController.text.isEmpty;
       _showNameError = _displayNameController.text.isEmpty;
@@ -57,6 +61,7 @@ class _parentAccountPageState extends State<parentAccountPage>
       _showPasswordMismatch = !_showPasswordError &&
           !_showRePasswordError &&
           _passwordController.text != _rePasswordController.text;
+      _apiError = null;
     });
 
     final hasError = _emailController.text.isEmpty ||
@@ -65,11 +70,29 @@ class _parentAccountPageState extends State<parentAccountPage>
         _rePasswordController.text.isEmpty ||
         _passwordController.text != _rePasswordController.text;
 
-    if (!hasError) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ParentSignupPage()),
+    if (hasError) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final result = await AuthService.register(
+        name: _displayNameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        role: 'parent',
       );
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ParentDashboardPage(
+            parentName: result['user']['name'] ?? 'Parent',
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() => _apiError = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -296,7 +319,7 @@ class _parentAccountPageState extends State<parentAccountPage>
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _onSignUp,
+                                                onPressed: _isLoading ? null : _onSignUp,
                                                 style:
                                                     ElevatedButton.styleFrom(
                                                   backgroundColor:
@@ -313,19 +336,39 @@ class _parentAccountPageState extends State<parentAccountPage>
                                                             6),
                                                   ),
                                                 ),
-                                                child: Text(
-                                                  'nav.signup'.tr(),
-                                                  style:
-                                                      GoogleFonts.montserrat(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.5,
-                                                  ),
-                                                ),
+                                                child: _isLoading
+                                                    ? const SizedBox(
+                                                        height: 18,
+                                                        width: 18,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Color(0xFF3A2A00),
+                                                        ),
+                                                      )
+                                                    : Text(
+                                                        'nav.signup'.tr(),
+                                                        style:
+                                                            GoogleFonts.montserrat(
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight.w800,
+                                                          letterSpacing: 1.5,
+                                                        ),
+                                                      ),
                                               ),
                                             ),
                                           ),
                                         ),
+                                        if (_apiError != null) ...[
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            _apiError!,
+                                            style: GoogleFonts.nunito(
+                                              color: const Color(0xFFE53935),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

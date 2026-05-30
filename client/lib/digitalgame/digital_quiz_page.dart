@@ -68,7 +68,8 @@ final List<_Question> _kFallbackQuestions = [
 // ===========================================================================
 class DigitalQuizPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalQuizPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalQuizPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalQuizPage> createState() => _DigitalQuizPageState();
@@ -202,7 +203,7 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
           score: _score,
           total: _questions.length,
           onBack: () => Navigator.of(context).pop(),
-          onNext: () => Navigator.of(context).pop(),
+          onNext: widget.onChainFinished ?? () => Navigator.of(context).pop(),
         ),
       ),
     );

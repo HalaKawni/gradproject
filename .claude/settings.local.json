@@ -12,7 +12,10 @@
       "Bash(head -n 956 \"c:/Users/magic/Downloads/gradproj/client/lib/mycourses/lesson_editor_page.dart\")",
       "Bash(tail -n +1295 \"c:/Users/magic/Downloads/gradproj/client/lib/mycourses/lesson_editor_page.dart\")",
       "Read(//tmp/**)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(node -e \"const j = JSON.parse\\(require\\('fs'\\).readFileSync\\('c:/Users/magic/Downloads/gradproj/client/assets/translations/en.json','utf8'\\)\\); console.log\\('dashboard keys:', Object.keys\\(j.dashboard\\)\\);\")",
+      "Bash(flutter clean *)",
+      "Bash(dir \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\assets\\\\images\\\\digital*\")"
     ]
   }
 }

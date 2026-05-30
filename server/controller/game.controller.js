@@ -67,6 +67,15 @@ exports.getLeaderboard = async (req, res, next) => {
   }
 };
 
+exports.getMyStats = async (req, res) => {
+  try {
+    const stats = await GameService.getMyStats(req.user._id);
+    res.json({ status: true, stats });
+  } catch (err) {
+    res.status(500).json({ status: false, error: err.message });
+  }
+};
+
 exports.resetProgress = async (req, res, next) => {
   try {
     const { gameId } = req.params;

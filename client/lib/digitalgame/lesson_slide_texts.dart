@@ -1,5 +1,11 @@
 class LessonSlideTexts {
+  // Custom texts injected by the course viewer for AI-generated activities
+  static final Map<int, List<String>> _custom = {};
+  static void setCustom(int n, List<String> texts) => _custom[n] = texts;
+  static void clearCustom(int n) => _custom.remove(n);
+
   static List<String> forLesson(int lessonNumber) {
+    if (_custom.containsKey(lessonNumber)) return _custom[lessonNumber]!;
     switch (lessonNumber) {
       case 1:
         return [

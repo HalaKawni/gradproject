@@ -131,7 +131,8 @@ List<_Cell>? _getLineCells(int sr, int sc, int er, int ec) {
 // ===========================================================================
 class DigitalWordSearchPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalWordSearchPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalWordSearchPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalWordSearchPage> createState() => _DigitalWordSearchPageState();
@@ -724,7 +725,7 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
 // In _buildSideRail and win overlay:
 onTap: _done ? () => Navigator.of(context).push(
   MaterialPageRoute(
-    builder: (_) => DigitalQuizPage(lesson: widget.lesson),
+    builder: (_) => DigitalQuizPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
   ),
 ) : null,        ),
       ]),
@@ -760,7 +761,7 @@ onTap: _done ? () => Navigator.of(context).push(
               GestureDetector(
 onTap: _done ? () => Navigator.of(context).push(
   MaterialPageRoute(
-    builder: (_) => DigitalQuizPage(lesson: widget.lesson),
+    builder: (_) => DigitalQuizPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
   ),
 ) : null,                child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),

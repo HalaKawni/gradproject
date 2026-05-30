@@ -9,7 +9,8 @@ import 'lesson_slide_texts.dart';
 
 class DigitalPlayPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalPlayPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalPlayPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalPlayPage> createState() => _DigitalPlayPageState();
@@ -342,7 +343,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
                onTap: _matched.length == _pairs.length
     ? () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => DigitalReviewPage(lesson: widget.lesson),
+          builder: (_) => DigitalReviewPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
         ),
       )
     : null,

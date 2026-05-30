@@ -65,7 +65,8 @@ class _Sentence {
 // ===========================================================================
 class DigitalReviewPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalReviewPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalReviewPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalReviewPage> createState() => _DigitalReviewPageState();
@@ -732,7 +733,7 @@ Widget _buildSentences() {
           pulsing: _done,
          onTap: _done ? () => Navigator.of(context).push(
   MaterialPageRoute(
-    builder: (_) => DigitalWordSearchPage(lesson: widget.lesson),
+    builder: (_) => DigitalWordSearchPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
   ),
 ) : null,
         ),
@@ -771,7 +772,7 @@ onTap: () {
   Navigator.of(context).pop(); // close dialog
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) => DigitalWordSearchPage(lesson: widget.lesson),
+      builder: (_) => DigitalWordSearchPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
     ),
   );
 },                child: Container(

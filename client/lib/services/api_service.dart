@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.26:3000/api';
+  static const String baseUrl = 'http://127.0.0.1:3000/api';
 
   // ── Token management ──────────────────────────────────────
   static Future<void> saveToken(String token) async {
@@ -67,6 +67,22 @@ class ApiService {
   }
 
   // ── GAME ENDPOINTS ────────────────────────────────────────
+
+  static Future<Map<String, dynamic>?> getMyStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/game/my-stats'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data['stats']);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
 
   // GET /api/game/:gameId/progress
   // Backend returns the progress doc directly:
@@ -204,6 +220,171 @@ class ApiService {
       completed: found == total,
       score: ((found / total) * 100).round(),
     );
+  }
+
+  // ── COURSE ENDPOINTS ─────────────────────────────────────
+
+  static Future<Map<String, dynamic>?> saveCourse({
+    required String title,
+    required String description,
+    required List<Map<String, dynamic>> lessons,
+    String? coverImageBase64,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/course'),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          'title': title,
+          'description': description,
+          'lessons': lessons,
+          if (coverImageBase64 != null) 'courseImageBase64': coverImageBase64,
+        }),
+      );
+      if (response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data['course'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      print('[Course] Save error: $e');
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getCourses() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/course'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) {
+          return List<Map<String, dynamic>>.from(data['courses']);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[Course] Load error: $e');
+      return [];
+    }
+  }
+
+  static Future<bool> updateCourse(String id, Map<String, dynamic> updates) async {
+    try {
+      final response = await http.patch(
+        Uri.parse('$baseUrl/course/$id'),
+        headers: await _authHeaders(),
+        body: jsonEncode(updates),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> deleteCourse(String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/course/$id'),
+        headers: await _authHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ── PARENT-CHILD LINKING ──────────────────────────────────
+
+  static Future<String> generateLinkCode() async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/generate-link-code'),
+      headers: await _authHeaders(),
+    );
+    final data = jsonDecode(response.body);
+    if (response.statusCode == 200 && data['status'] == true) {
+      return data['linkCode'] as String;
+    }
+    throw Exception(data['error'] ?? 'Failed to generate code');
+  }
+
+  static Future<String?> getLinkCode() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/link-code'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data['linkCode'] as String?;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> linkChild(String code) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/link-child'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'code': code}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['status'] == true) return data['child'];
+      throw Exception(data['error'] ?? 'Failed to link child');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<bool> unlinkChild(String childId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/user/unlink-child/$childId'),
+        headers: await _authHeaders(),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getChildStats(String childId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/children/$childId/stats'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data['stats']);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getLinkedChildren() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/linked-children'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) {
+          return List<Map<String, dynamic>>.from(data['children']);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
   }
 
   // ── AI ENDPOINTS ─────────────────────────────────────────

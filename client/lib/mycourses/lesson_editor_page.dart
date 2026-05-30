@@ -2035,8 +2035,12 @@ class LessonSlideRenderer extends StatelessWidget {
         inner = _buildTextWidget(e, w, h);
     }
 
-    return Positioned(
-        left: dx, top: dy, child: SizedBox(width: w, height: h, child: inner));
+    // Text elements: only constrain width so wrapped text is never clipped.
+    // Images/shapes keep their exact height.
+    final sized = type == 'text'
+        ? SizedBox(width: w, child: inner)
+        : SizedBox(width: w, height: h, child: inner);
+    return Positioned(left: dx, top: dy, child: sized);
   }
 
   Widget _buildTextWidget(Map<String, dynamic> e, double w, double h) {

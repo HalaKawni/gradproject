@@ -1,13 +1,17 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'world_map_page.dart';
 import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
+import 'services/api_service.dart';
 import 'digitalgame/digital_literacy_page.dart';
 import 'datagame/data_course_page.dart';
 import 'package:client/AIcourse/ai_hoot_page_game.dart';
 import 'mycourses/create_course_page.dart';
+import 'mycourses/course_detail_page.dart';
 import 'utils/responsive.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -27,19 +31,28 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _showTopicError = false;
   String _activeTab = 'Filter';
   @override
-void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    showDialog(
-      context: context,
-      builder: (_) => const UnlockDialog(),
-    );
-  });
-}
+  void initState() {
+    super.initState();
+    _loadMyStats();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(context: context, builder: (_) => const UnlockDialog());
+    });
+  }
+
+  Future<void> _loadMyStats() async {
+    final stats = await ApiService.getMyStats();
+    if (mounted) setState(() => _myStats = stats);
+  }
 
   final Set<String> _selectedLevels = {'Novice', 'Beginner', 'Intermediate', 'Advanced'};
   final Set<String> _selectedCategories = {'Main Courses', 'Mini Courses'};
   final Set<String> _selectedTopics = {'Coding', 'Digital Literacy', 'CS Topics'};
+
+  Future<List<Map<String, dynamic>>>? _coursesFuture;
+  String? _linkCode;
+  bool _linkCodeLoading = false;
+  String? _linkCodeError;
+  Map<String, dynamic>? _myStats;
 
   @override
   Widget build(BuildContext context) {
@@ -51,8 +64,12 @@ void initState() {
             child: Column(
               children: [
                 _buildHeroBanner(),
+                _buildStreakBanner(),
+                _buildShareWithParentBanner(),
                 _buildFilterSection(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
+                _buildMyScoresSection(),
+                const SizedBox(height: 16),
                 _buildCoursesSection(),
                 const SizedBox(height: 40),
               ],
@@ -153,7 +170,10 @@ void initState() {
           _SidebarItem(
             label: 'dashboard.my_creations'.tr(),
             isActive: _activeSection == 'my_creations',
-            onTap: () => setState(() => _activeSection = 'my_creations'),
+            onTap: () => setState(() {
+              _activeSection = 'my_creations';
+              _coursesFuture = ApiService.getCourses();
+            }),
           ),
           _SidebarItem(label: 'dashboard.discover'.tr(), isActive: false, onTap: () {}),
           const Spacer(),
@@ -467,6 +487,339 @@ Widget _buildHeroBanner() {
   );
   });
 }
+  // ── SHARE WITH PARENT BANNER ──
+  Widget _buildShareWithParentBanner() {
+    return Container(
+      color: const Color(0xFFF0F6FF),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.link, color: Color(0xFF4A7DBF), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _linkCodeLoading
+                ? Row(children: [
+                    const SizedBox(height: 18, width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4A7DBF))),
+                    const SizedBox(width: 10),
+                    Text('dashboard.generate_code'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF888888))),
+                  ])
+                : _linkCode != null
+                    ? Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
+                        Text('dashboard.your_link_code'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: _linkCode!));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Copied!',
+                                      style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+                                  duration: const Duration(seconds: 2),
+                                  backgroundColor: const Color(0xFF4A7DBF),
+                                  behavior: SnackBarBehavior.floating,
+                                  width: 120,
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4A7DBF),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_linkCode!,
+                                      style: GoogleFonts.robotoMono(
+                                          fontSize: 18, fontWeight: FontWeight.w900,
+                                          color: Colors.white, letterSpacing: 5)),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.copy, size: 14, color: Colors.white70),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text('dashboard.share_code_hint'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                      ])
+                    : _linkCodeError != null
+                        ? Row(children: [
+                            const Icon(Icons.error_outline, color: Color(0xFFE53935), size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(_linkCodeError!,
+                                  style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFFE53935))),
+                            ),
+                          ])
+                        : Text('dashboard.share_with_parent'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w600,
+                                color: const Color(0xFF4A7DBF))),
+          ),
+          const SizedBox(width: 8),
+          if (_linkCode != null)
+            TextButton(
+              onPressed: () => setState(() { _linkCode = null; _linkCodeError = null; }),
+              child: Text('dashboard.hide_code'.tr(),
+                  style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700,
+                      color: const Color(0xFF4A7DBF))),
+            )
+          else if (!_linkCodeLoading)
+            TextButton(
+              onPressed: () async {
+                setState(() { _linkCodeLoading = true; _linkCodeError = null; });
+                try {
+                  final code = await ApiService.generateLinkCode();
+                  if (mounted) { setState(() { _linkCode = code; _linkCodeLoading = false; }); }
+                } catch (e) {
+                  if (mounted) setState(() {
+                    _linkCodeError = e.toString().replaceFirst('Exception: ', '');
+                    _linkCodeLoading = false;
+                  });
+                }
+              },
+              child: Text(
+                _linkCodeError != null ? 'dashboard.retry'.tr() : 'dashboard.generate_code'.tr(),
+                style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700,
+                    color: _linkCodeError != null ? const Color(0xFFE53935) : const Color(0xFF4A7DBF)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── STREAK BANNER ──
+  Widget _buildStreakBanner() {
+    final s      = _myStats ?? {};
+    final streak = s['streak'] as int? ?? 0;
+    final last7  = (s['last7Days'] as List?)?.map((v) => v as bool).toList()
+        ?? List.filled(7, false);
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFF7A00), Color(0xFFFFB347)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 22)),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                streak == 0 ? 'Start your streak today!' : '$streak Day Streak!',
+                style: GoogleFonts.nunito(
+                    fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+              Text(
+                streak == 0 ? 'Play a course to begin' : 'Keep coding every day!',
+                style: GoogleFonts.nunito(fontSize: 11, color: Colors.white70),
+              ),
+            ],
+          ),
+          const Spacer(),
+          // 7-day activity dots
+          Row(
+            children: List.generate(7, (i) {
+              final active = i < last7.length && last7[i];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white.withOpacity(0.25),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: active
+                        ? const Icon(Icons.check, size: 13, color: Color(0xFFFF7A00))
+                        : null,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(dayLabels[i],
+                      style: GoogleFonts.nunito(fontSize: 9, color: Colors.white70)),
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MY SCORES SECTION ──
+  static const _scoreGameNames = {
+    'codemonkey-jr':    'CodeMonkey Jr.',
+    'linus-lemur':      'Linus the Lemur',
+    'data-everywhere':  'Data is Everywhere',
+    'digital-literacy': 'Digital Literacy',
+    'ai-hoot':          'Coding Chatbots',
+    'scratch-game':     'Coding Chatbots',
+  };
+
+  Widget _buildMyScoresSection() {
+    final s     = _myStats ?? {};
+    final games = (s['games'] as List? ?? [])
+        .map((g) => g as Map<String, dynamic>)
+        .toList();
+    if (games.isEmpty) return const SizedBox.shrink();
+
+    final totalScore = s['totalScore'] as int? ?? 0;
+    final totalStars = s['totalStars'] as int? ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF4A7DBF),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events, color: Colors.amber, size: 20),
+                const SizedBox(width: 10),
+                Text('MY SCORES',
+                    style: GoogleFonts.montserrat(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1)),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 14),
+                    const SizedBox(width: 4),
+                    Text('$totalStars stars',
+                        style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.sports_score,
+                        color: Colors.white70, size: 14),
+                    const SizedBox(width: 4),
+                    Text('$totalScore pts',
+                        style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+          // Game rows
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              children: games.map((g) {
+                final gameId     = g['gameId'] as String? ?? '';
+                final name       = _scoreGameNames[gameId] ?? gameId;
+                final levelCount = g['levelCount'] as int? ?? 0;
+                final stars      = g['totalStars'] as int? ?? 0;
+                final score      = g['totalScore'] as int? ?? 0;
+                // Cap star display at 3 icons (scale from raw star count)
+                final starFill = (stars / 5.0).clamp(0.0, 3.0);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.videogame_asset,
+                          color: Color(0xFF4A7DBF), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name,
+                              style: GoogleFonts.nunito(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF333333))),
+                          Text('$levelCount activities completed',
+                              style: GoogleFonts.nunito(
+                                  fontSize: 11, color: const Color(0xFF888888))),
+                        ],
+                      ),
+                    ),
+                    // Star display
+                    Row(
+                      children: List.generate(3, (i) => Icon(
+                        i < starFill.round() ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 16,
+                      )),
+                    ),
+                    const SizedBox(width: 14),
+                    // Score badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('$score pts',
+                          style: GoogleFonts.nunito(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white)),
+                    ),
+                  ]),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── FILTER SECTION ──
   Widget _buildFilterSection() {
     return Container(
@@ -1098,19 +1451,63 @@ Widget _buildHeroBanner() {
           ),
         ),
 
-        // Empty state
+        // Courses list
         Expanded(
           child: Container(
             color: const Color(0xFFEEEEEE),
-            child: Center(
-              child: Text(
-                'No Results Found',
-                style: GoogleFonts.montserrat(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF555555),
-                ),
-              ),
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _coursesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final courses = snapshot.data ?? [];
+                if (courses.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No courses yet. Create your first one!',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 18, fontWeight: FontWeight.w600,
+                        color: const Color(0xFF888888),
+                      ),
+                    ),
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    children: courses.map((course) {
+                      final lessons = (course['lessons'] as List? ?? []);
+                      return _CreationCard(
+                        title: course['title'] as String? ?? 'Untitled',
+                        description: course['description'] as String? ?? '',
+                        lessonCount: lessons.length,
+                        imageBase64: course['courseImageBase64'] as String?,
+                        isPublished: course['isPublished'] as bool? ?? false,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CourseDetailPage(
+                                course: course,
+                                onRefresh: () => setState(() { _coursesFuture = ApiService.getCourses(); }),
+                              ),
+                            ),
+                          );
+                          if (mounted) setState(() { _coursesFuture = ApiService.getCourses(); });
+                        },
+                        onDelete: () async {
+                          final id = course['_id'] as String?;
+                          if (id == null) return;
+                          await ApiService.deleteCourse(id);
+                          if (mounted) setState(() { _coursesFuture = ApiService.getCourses(); });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -1118,10 +1515,11 @@ Widget _buildHeroBanner() {
     );
   }
 
-  void _showCreateCourseDialog() {
-    Navigator.of(context).push(
+  Future<void> _showCreateCourseDialog() async {
+    await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CreateCoursePage()),
     );
+    if (mounted) setState(() { _coursesFuture = ApiService.getCourses(); });
   }
 }
 
@@ -1662,6 +2060,152 @@ class _ArrowBtn extends StatelessWidget {
     );
   }
 }
+// ── MY CREATIONS CARD ──
+class _CreationCard extends StatefulWidget {
+  final String title;
+  final String description;
+  final int lessonCount;
+  final String? imageBase64;
+  final bool isPublished;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _CreationCard({
+    required this.title,
+    required this.description,
+    required this.lessonCount,
+    required this.onTap,
+    required this.onDelete,
+    this.imageBase64,
+    this.isPublished = false,
+  });
+
+  @override
+  State<_CreationCard> createState() => _CreationCardState();
+}
+
+class _CreationCardState extends State<_CreationCard> {
+  bool _hovered = false;
+
+  Widget _fallbackHeader() => Container(
+        height: 120,
+        width: double.infinity,
+        color: const Color(0xFF4DD0C4),
+        child: Center(
+          child: Icon(Icons.menu_book_rounded, size: 38,
+              color: Colors.white.withValues(alpha: 0.9)),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 240,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: _hovered
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 6))]
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                child: widget.imageBase64 != null
+                    ? Image.memory(
+                        base64Decode(widget.imageBase64!),
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, e) => _fallbackHeader(),
+                      )
+                    : _fallbackHeader(),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(widget.title,
+                              style: GoogleFonts.montserrat(
+                                  fontSize: 14, fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF222222)),
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: widget.isPublished ? const Color(0xFF4DD0C4) : const Color(0xFFFFC83D),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            widget.isPublished ? 'Published' : 'Draft',
+                            style: GoogleFonts.montserrat(
+                                fontSize: 10, fontWeight: FontWeight.w700,
+                                color: widget.isPublished ? Colors.white : const Color(0xFF1A1A2E)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (widget.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(widget.description,
+                          style: GoogleFonts.nunito(
+                              fontSize: 12, color: const Color(0xFF888888)),
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.layers_outlined, size: 14, color: Color(0xFF888888)),
+                        const SizedBox(width: 4),
+                        Text('${widget.lessonCount} lesson${widget.lessonCount == 1 ? '' : 's'}',
+                            style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Delete Course?'),
+                                content: Text('Delete "${widget.title}"?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                  TextButton(
+                                    onPressed: () { Navigator.pop(context); widget.onDelete(); },
+                                    child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFCCCCCC)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AngledClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {

@@ -1,12 +1,27 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import '../services/api_service.dart';
 import 'lesson_editor_page.dart';
 import 'custom_course_viewer_page.dart';
 
 class CreateCoursePage extends StatefulWidget {
-  const CreateCoursePage({super.key});
+  final String? courseId;
+  final String? initialTitle;
+  final String? initialDescription;
+  final String? initialCoverImageBase64;
+  final List<Map<String, dynamic>>? initialLessons;
+
+  const CreateCoursePage({
+    super.key,
+    this.courseId,
+    this.initialTitle,
+    this.initialDescription,
+    this.initialCoverImageBase64,
+    this.initialLessons,
+  });
 
   @override
   State<CreateCoursePage> createState() => _CreateCoursePageState();
@@ -17,6 +32,39 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
   final _descController = TextEditingController();
   final List<_LessonDraft> _lessons = [];
   bool _saved = false;
+  Uint8List? _coverImageBytes;
+  bool get _isEditMode => widget.courseId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) {
+      _titleController.text = widget.initialTitle ?? '';
+      _descController.text = widget.initialDescription ?? '';
+      if (widget.initialCoverImageBase64 != null) {
+        try {
+          _coverImageBytes = base64Decode(widget.initialCoverImageBase64!);
+        } catch (_) {}
+      }
+      if (widget.initialLessons != null) {
+        for (final l in widget.initialLessons!) {
+          Uint8List? imgBytes;
+          final imgB64 = l['imageBase64'] as String?;
+          if (imgB64 != null) {
+            try { imgBytes = base64Decode(imgB64); } catch (_) {}
+          }
+          _lessons.add(_LessonDraft(
+            number: (l['number'] as num?)?.toInt() ?? (_lessons.length + 1),
+            title: l['title'] as String? ?? '',
+            imageBytes: imgBytes,
+            slides: List<Map<String, dynamic>>.from(
+              (l['slides'] as List? ?? []).map((s) => Map<String, dynamic>.from(s as Map)),
+            ),
+          ));
+        }
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -127,7 +175,13 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
     });
   }
 
-  void _saveCourst() {
+  Future<void> _pickCoverImage() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+    if (!mounted || result == null || result.files.first.bytes == null) return;
+    setState(() => _coverImageBytes = result.files.first.bytes);
+  }
+
+  Future<void> _saveCourst() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Please enter a course title first.'),
@@ -136,7 +190,56 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
       ));
       return;
     }
-    setState(() => _saved = true);
+
+    final lessonsData = _lessons.map((l) => <String, dynamic>{
+      'number': l.number,
+      'title': l.title,
+      if (l.imageBytes != null) 'imageBase64': base64Encode(l.imageBytes!),
+      'slides': l.slides,
+    }).toList();
+
+    bool success;
+    if (_isEditMode) {
+      success = await ApiService.updateCourse(widget.courseId!, {
+        'title': _titleController.text.trim(),
+        'description': _descController.text.trim(),
+        'lessons': lessonsData,
+        'courseImageBase64': _coverImageBytes != null ? base64Encode(_coverImageBytes!) : null,
+      });
+    } else {
+      final saved = await ApiService.saveCourse(
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        lessons: lessonsData,
+        coverImageBase64: _coverImageBytes != null ? base64Encode(_coverImageBytes!) : null,
+      );
+      success = saved != null;
+    }
+
+    if (!mounted) return;
+    if (success) {
+      if (_isEditMode) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Course updated!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ));
+        Navigator.of(context).pop();
+      } else {
+        setState(() => _saved = true);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Course saved!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Failed to save. Are you logged in?'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 3),
+      ));
+    }
   }
 
 
@@ -181,7 +284,7 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
             ),
             const SizedBox(width: 12),
             Text(
-              _saved ? _titleController.text : 'Create New Course',
+              _isEditMode ? 'Edit Course' : (_saved ? _titleController.text : 'Create New Course'),
               style: GoogleFonts.montserrat(
                 color: const Color.fromARGB(255, 202, 97, 128),
                 fontSize: 18, fontWeight: FontWeight.bold,
@@ -231,6 +334,53 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
                 '${_lessons.length} Lesson${_lessons.length == 1 ? '' : 's'}',
                 style: const TextStyle(fontFamily: 'Chennai', fontSize: 12,
                     fontWeight: FontWeight.w800, color: Colors.black),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Cover image picker
+            Text('Cover Image',
+                style: GoogleFonts.nunito(fontSize: 12, fontWeight: FontWeight.w700,
+                    color: const Color(0xFF555555))),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _pickCoverImage,
+              child: Container(
+                width: double.infinity,
+                height: 130,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _coverImageBytes != null
+                    ? Stack(fit: StackFit.expand, children: [
+                        Image.memory(_coverImageBytes!, fit: BoxFit.cover),
+                        Positioned(
+                          top: 6, right: 6,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _coverImageBytes = null),
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                color: Colors.black54, shape: BoxShape.circle),
+                              padding: const EdgeInsets.all(4),
+                              child: const Icon(Icons.close, color: Colors.white, size: 14),
+                            ),
+                          ),
+                        ),
+                      ])
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.add_photo_alternate_outlined,
+                              size: 32, color: Color(0xFFAAAAAA)),
+                          const SizedBox(height: 6),
+                          Text('Tap to add cover image',
+                              style: GoogleFonts.nunito(
+                                  fontSize: 12, color: const Color(0xFFAAAAAA))),
+                        ],
+                      ),
               ),
             ),
             const SizedBox(height: 20),
@@ -302,8 +452,8 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
                   elevation: 3,
                 ),
                 icon: const Icon(Icons.save_rounded, size: 22),
-                label: const Text('Save Course',
-                    style: TextStyle(fontFamily: 'Chennai', fontSize: 15,
+                label: Text(_isEditMode ? 'Update Course' : 'Save Course',
+                    style: const TextStyle(fontFamily: 'Chennai', fontSize: 15,
                         fontWeight: FontWeight.w900, letterSpacing: 1)),
               ),
             ),
@@ -368,6 +518,16 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
             ],
           ),
           const SizedBox(height: 20),
+
+          // Cover image
+          if (_coverImageBytes != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.memory(_coverImageBytes!,
+                  width: double.infinity, height: 120, fit: BoxFit.cover),
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // Course title
           Text(_titleController.text,

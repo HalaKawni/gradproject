@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'services/auth_service.dart';
 import 'dashboard_page.dart';
+import 'parent/parent_dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -19,7 +20,7 @@ class _LoginPageState extends State<LoginPage>
   bool _rememberMe = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _showError = false;
+  String? _errorText;
 
   @override
   void initState() {
@@ -35,6 +36,8 @@ class _LoginPageState extends State<LoginPage>
   @override
   void dispose() {
     _cloudController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
   @override
@@ -115,19 +118,26 @@ class _LoginPageState extends State<LoginPage>
                                   const SizedBox(height: 6),
                                   TextField(
                                     controller: _emailController,
+                                    onChanged: (_) {
+                                      if (_errorText != null) setState(() => _errorText = null);
+                                    },
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
                                               horizontal: 12, vertical: 14),
                                       enabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                            color: Color(0xFFE53935)),
+                                        borderSide: BorderSide(
+                                            color: _errorText != null
+                                                ? const Color(0xFFE53935)
+                                                : const Color(0xFFBDBDBD)),
                                         borderRadius:
                                             BorderRadius.circular(6),
                                       ),
                                       focusedBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                            color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                            color: _errorText != null
+                                                ? const Color(0xFFE53935)
+                                                : const Color(0xFF1A73E8),
                                             width: 2),
                                         borderRadius:
                                             BorderRadius.circular(6),
@@ -148,19 +158,26 @@ class _LoginPageState extends State<LoginPage>
                                   TextField(
                                     controller: _passwordController,
                                     obscureText: _obscurePassword,
+                                    onChanged: (_) {
+                                      if (_errorText != null) setState(() => _errorText = null);
+                                    },
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
                                               horizontal: 12, vertical: 14),
                                       enabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                            color: Color(0xFFE53935)),
+                                        borderSide: BorderSide(
+                                            color: _errorText != null
+                                                ? const Color(0xFFE53935)
+                                                : const Color(0xFFBDBDBD)),
                                         borderRadius:
                                             BorderRadius.circular(6),
                                       ),
                                       focusedBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                            color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                            color: _errorText != null
+                                                ? const Color(0xFFE53935)
+                                                : const Color(0xFF1A73E8),
                                             width: 2),
                                         borderRadius:
                                             BorderRadius.circular(6),
@@ -230,27 +247,28 @@ class _LoginPageState extends State<LoginPage>
                                          onPressed: () async {
   if (_emailController.text.isEmpty ||
       _passwordController.text.isEmpty) {
-    setState(() => _showError = true);
+    setState(() => _errorText = 'error.required'.tr());
     return;
   }
-  setState(() => _showError = false);
+  setState(() => _errorText = null);
   try {
     final result = await AuthService.login(
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
     );
     if (!mounted) return;
+    final user = result['user'] as Map<String, dynamic>;
+    final role = user['role'] as String? ?? 'child';
+    final name = user['name'] as String? ?? '';
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => DashboardPage(
-          username: result['user']['name'] ?? 'Student',
-        ),
+        builder: (_) => role == 'parent'
+            ? ParentDashboardPage(parentName: name)
+            : DashboardPage(username: name.isEmpty ? 'Student' : name),
       ),
     );
   } catch (e) {
-    setState(() {
-      _showError = true;
-    });
+    if (mounted) setState(() => _errorText = e.toString().replaceFirst('Exception: ', ''));
   }
 },
                                           style: ElevatedButton.styleFrom(
@@ -280,10 +298,10 @@ class _LoginPageState extends State<LoginPage>
                                   ),
 
                                   // Error message
-                                  if (_showError) ...[
+                                  if (_errorText != null) ...[
                                     const SizedBox(height: 12),
                                     Text(
-                                      'error.required'.tr(),
+                                      _errorText!,
                                       style: GoogleFonts.nunito(
                                         color: const Color(0xFFE53935),
                                         fontSize: 13,
