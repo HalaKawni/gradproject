@@ -1,4 +1,5 @@
 const BuilderProject = require('../../model/builderProjectModel');
+const uploadedAssetService = require('../uploadedAsset.service');
 
 exports.getLevels = async (query) => {
   const status = query.status;
@@ -128,6 +129,12 @@ exports.updateLevel = async (id, data) => {
     throw new Error('Level not found');
   }
 
+  if (level.status === 'published') {
+    await uploadedAssetService.makeAssetsPublicByIds(
+      collectDraftAssetIds(level.draftData || {})
+    );
+  }
+
   return level;
 };
 
@@ -140,3 +147,15 @@ exports.deleteLevel = async (id) => {
 
   return level;
 };
+
+function collectDraftAssetIds(draftData) {
+  const customAssets = Array.isArray(draftData.customAssets)
+    ? draftData.customAssets
+    : [];
+
+  return customAssets
+    .map((asset) =>
+      asset && typeof asset === 'object' ? asset.assetId : undefined
+    )
+    .filter(Boolean);
+}

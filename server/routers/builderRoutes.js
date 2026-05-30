@@ -2,9 +2,16 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');
 const builderController = require('../controller/builderController');
+const uploadedAssetController = require('../controller/uploadedAsset.controller');
 
 router.use(authMiddleware);
 
+router.post('/assets', uploadedAssetController.createAsset);
+router.get('/assets', uploadedAssetController.listAssets);
+router.get('/assets/:id/data', uploadedAssetController.getAssetData);
+router.get('/assets/:id', uploadedAssetController.getAssetMetadata);
+router.put('/assets/:id', uploadedAssetController.updateAsset);
+router.delete('/assets/:id', uploadedAssetController.deleteAsset);
 router.post('/projects', builderController.createProject);
 router.put('/projects/:id', builderController.updateProject);
 router.delete('/projects/:id', builderController.deleteProject);

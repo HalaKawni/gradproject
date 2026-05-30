@@ -1,4 +1,5 @@
 const BuilderProject = require('../model/builderProjectModel');
+const uploadedAssetService = require('./uploadedAsset.service');
 const {
   FRONT_VIEW_COLLECTABLE_ITEMS,
   FRONT_VIEW_PLAYER_CHARACTERS,
@@ -165,14 +166,22 @@ async function createProject(projectData, user) {
     draftData,
   });
 
-  return await project.save();
+  const savedProject = await project.save();
+  if (projectData.status === 'published') {
+    await uploadedAssetService.makeAssetsPublic(
+      collectDraftAssetIds(draftData),
+      user
+    );
+  }
+
+  return savedProject;
 }
 
 async function updateProject(projectId, projectData, user) {
   const owner = buildOwnerSummary(user);
   const draftData = buildDraftData(projectData, user);
 
-  return await BuilderProject.findOneAndUpdate(
+  const project = await BuilderProject.findOneAndUpdate(
     {
       _id: projectId,
       ownerId: owner.id,
@@ -197,6 +206,27 @@ async function updateProject(projectId, projectData, user) {
       returnDocument: 'after',
     }
   );
+
+  if (project && projectData.status === 'published') {
+    await uploadedAssetService.makeAssetsPublic(
+      collectDraftAssetIds(draftData),
+      user
+    );
+  }
+
+  return project;
+}
+
+function collectDraftAssetIds(draftData) {
+  const customAssets = Array.isArray(draftData.customAssets)
+    ? draftData.customAssets
+    : [];
+
+  return customAssets
+    .map((asset) =>
+      asset && typeof asset === 'object' ? asset.assetId : undefined
+    )
+    .filter(Boolean);
 }
 
 async function getProjectById(projectId, user) {

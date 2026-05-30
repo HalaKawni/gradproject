@@ -40,11 +40,11 @@ const BuilderProjectSchema = new mongoose.Schema(
       default: 'frontView',
     },
     draftData: {
-      type: Object,
+      type: mongoose.Schema.Types.Mixed,
       required: true,
     },
     frontViewDetails: {
-      type: Object,
+      type: mongoose.Schema.Types.Mixed,
       default: null,
     },
     courseId: {
