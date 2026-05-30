@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/builder_playback_state.dart';
 import '../models/builder_project.dart';
 import '../models/builder_validation.dart';
+import '../models/custom_asset_data.dart';
 import '../models/entity_data.dart';
 import '../models/level_settings.dart';
 import '../models/logic_command.dart';
@@ -27,6 +29,7 @@ class BuilderController extends ChangeNotifier {
   final bool useAdminLevelApi;
 
   BuilderTool currentTool = BuilderTool.ground;
+  String? currentCustomAssetId;
 
   int? selectedX;
   int? selectedY;
@@ -48,6 +51,10 @@ class BuilderController extends ChangeNotifier {
   String _pendingPlayerInitialDirection = playerFacingRight;
   String _pendingPlayerCharacterId = defaultBuilderCharacterId;
   String _pendingCollectableItemId = defaultBuilderCollectableId;
+  final Map<String, Uint8List> _assetImageCache = <String, Uint8List>{};
+  final Map<String, Uint8List> _uploadedAssetImageCache = <String, Uint8List>{};
+  final Map<String, Future<void>> _assetImageLoads = <String, Future<void>>{};
+  List<CustomAssetData> _savedAssetLibrary = const <CustomAssetData>[];
 
   bool get hasBlockingValidationIssues {
     return validation.errors.isNotEmpty || validation.warnings.isNotEmpty;
@@ -91,14 +98,37 @@ class BuilderController extends ChangeNotifier {
 
   String get collectableItemId => _pendingCollectableItemId;
 
+  CustomAssetData? get currentCustomAsset =>
+      customAssetById(currentCustomAssetId);
+
+  List<CustomAssetData> get createdCustomAssets =>
+      project.customAssets.where((asset) => asset.isCreatedByUser).toList();
+
+  List<CustomAssetData> get savedCustomAssets {
+    final projectAssetIds = project.customAssets
+        .map((asset) => asset.assetId)
+        .whereType<String>()
+        .toSet();
+
+    return [
+      ...project.customAssets.where((asset) => !asset.isCreatedByUser),
+      ..._savedAssetLibrary.where(
+        (asset) => !projectAssetIds.contains(asset.assetId),
+      ),
+    ];
+  }
+
   BuilderController({
     required this.project,
     required this.session,
+    String? initialSavedProjectId,
     this.requireAllCollectablesForSuccess = true,
     this.useAdminLevelApi = false,
-  }) {
+  }) : savedProjectId = initialSavedProjectId {
     project = _normalizeProject(project);
+    _seedEmbeddedAssetImages();
     _runValidation();
+    unawaited(loadSavedAssetLibrary());
   }
 
   @override
@@ -110,7 +140,163 @@ class BuilderController extends ChangeNotifier {
   void setTool(BuilderTool tool) {
     _clearPlaybackPreview();
     currentTool = tool;
+    currentCustomAssetId = null;
     notifyListeners();
+  }
+
+  void selectCustomAssetTool(String assetId) {
+    if (customAssetById(assetId) == null || isPlaybackRunning) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    currentCustomAssetId = assetId;
+    notifyListeners();
+  }
+
+  CustomAssetData? customAssetById(String? assetId) {
+    if (assetId == null) {
+      return null;
+    }
+
+    for (final asset in project.customAssets) {
+      if (asset.id == assetId) {
+        return asset;
+      }
+    }
+
+    return null;
+  }
+
+  CustomAssetData? customAssetByUploadedAssetId(String? uploadedAssetId) {
+    if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+      return null;
+    }
+
+    for (final asset in project.customAssets) {
+      if (asset.assetId == uploadedAssetId) {
+        return asset;
+      }
+    }
+
+    return null;
+  }
+
+  void setLastMessage(String message) {
+    lastMessage = message;
+    notifyListeners();
+  }
+
+  Uint8List? assetImageBytes(CustomAssetData asset) {
+    final cachedBytes = _assetImageCache[asset.id];
+    if (cachedBytes != null) {
+      return cachedBytes;
+    }
+
+    final uploadedAssetId = asset.assetId;
+    if (uploadedAssetId != null && uploadedAssetId.isNotEmpty) {
+      final uploadedBytes = _uploadedAssetImageCache[uploadedAssetId];
+      if (uploadedBytes != null) {
+        _assetImageCache[asset.id] = uploadedBytes;
+        return uploadedBytes;
+      }
+    }
+
+    if (asset.hasEmbeddedImage) {
+      final embeddedBytes = asset.imageBytes;
+      _cacheAssetImageForAsset(asset, embeddedBytes);
+      return embeddedBytes;
+    }
+
+    return null;
+  }
+
+  void cacheAssetImage(String localAssetId, Uint8List bytes) {
+    _assetImageCache[localAssetId] = bytes;
+  }
+
+  Future<void> loadSavedAssetLibrary() async {
+    final response = await ApiService.getBuilderAssets(
+      authToken: session.token,
+    );
+    if (response['success'] != true) {
+      return;
+    }
+
+    final data = response['data'];
+    if (data is! List) {
+      return;
+    }
+
+    _savedAssetLibrary = data
+        .whereType<Map>()
+        .map((assetJson) {
+          final assetId = (assetJson['_id'] ?? assetJson['id'])?.toString();
+          if (assetId == null || assetId.isEmpty) {
+            return null;
+          }
+
+          return CustomAssetData(
+            id: 'saved-$assetId',
+            assetId: assetId,
+            name: assetJson['name']?.toString() ?? 'Untitled asset',
+            type: CustomAssetTypeExtension.fromString(
+              assetJson['type']?.toString(),
+            ),
+            mimeType: assetJson['mimeType']?.toString() ?? 'image/png',
+            isCreatedByUser: false,
+            isPublic: assetJson['isPublic'] == true,
+          );
+        })
+        .whereType<CustomAssetData>()
+        .toList();
+
+    unawaited(loadMissingSavedAssetImages());
+    notifyListeners();
+  }
+
+  Future<void> loadMissingSavedAssetImages() async {
+    await Future.wait(_savedAssetLibrary.map(ensureAssetImageLoaded));
+  }
+
+  Future<void> ensureAssetImageLoaded(CustomAssetData asset) {
+    if (assetImageBytes(asset) != null) {
+      return Future.value();
+    }
+
+    final uploadedAssetId = asset.assetId;
+    if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+      return Future.value();
+    }
+
+    final existingLoad = _assetImageLoads[asset.id];
+    if (existingLoad != null) {
+      return existingLoad;
+    }
+
+    final load =
+        ApiService.getBuilderAssetData(
+              authToken: session.token,
+              assetId: uploadedAssetId,
+            )
+            .then((bytes) {
+              if (bytes == null || bytes.isEmpty) {
+                return;
+              }
+
+              _cacheAssetImageForAsset(asset, bytes);
+              notifyListeners();
+            })
+            .whenComplete(() {
+              _assetImageLoads.remove(asset.id);
+            });
+
+    _assetImageLoads[asset.id] = load;
+    return load;
+  }
+
+  Future<void> loadMissingCustomAssetImages() async {
+    await Future.wait(project.customAssets.map(ensureAssetImageLoaded));
   }
 
   void setTitle(String title) {
@@ -256,6 +442,7 @@ class BuilderController extends ChangeNotifier {
 
   void applyToolAt(BuilderTool tool, int x, int y) {
     _clearPlaybackPreview();
+    currentCustomAssetId = null;
     selectedX = x;
     selectedY = y;
 
@@ -450,7 +637,190 @@ class BuilderController extends ChangeNotifier {
   }
 
   void placeAt(int x, int y) {
+    final assetId = currentCustomAssetId;
+    if (assetId != null) {
+      placeCustomAssetAt(assetId, x, y);
+      return;
+    }
+
     applyToolAt(currentTool, x, y);
+  }
+
+  void addCustomAsset(CustomAssetData asset, {bool selectAfterAdd = true}) {
+    _clearPlaybackPreview();
+    final existingUploadedAsset = customAssetByUploadedAssetId(asset.assetId);
+    final assetToStore = existingUploadedAsset == null
+        ? asset
+        : asset.copyWith(id: existingUploadedAsset.id);
+    final nextAssets = List<CustomAssetData>.from(project.customAssets)
+      ..removeWhere(
+        (existing) =>
+            existing.id == assetToStore.id ||
+            (_sameUploadedAsset(existing, assetToStore) &&
+                existing.id != assetToStore.id),
+      )
+      ..add(assetToStore);
+    if (assetToStore.hasEmbeddedImage) {
+      _cacheAssetImageForAsset(assetToStore, assetToStore.imageBytes);
+    }
+    project = project.copyWith(customAssets: _dedupeCustomAssets(nextAssets));
+    if (selectAfterAdd && assetToStore.type != CustomAssetType.background) {
+      currentCustomAssetId = assetToStore.id;
+    }
+    lastMessage = assetToStore.type == CustomAssetType.background
+        ? '${assetToStore.name} added. Drag it onto the game area to use it as the background.'
+        : '${assetToStore.name} added to your creations.';
+    notifyListeners();
+  }
+
+  void useCustomAssetFromCollection(CustomAssetData asset) {
+    final existingAsset =
+        customAssetById(asset.id) ??
+        customAssetByUploadedAssetId(asset.assetId);
+    if (existingAsset != null) {
+      if (existingAsset.type != CustomAssetType.background) {
+        selectCustomAssetTool(existingAsset.id);
+      }
+      return;
+    }
+
+    final projectAsset = asset.copyWith(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      imageBase64: '',
+    );
+    final bytes = assetImageBytes(asset);
+    if (bytes != null) {
+      _cacheAssetImageForAsset(projectAsset, bytes);
+    }
+
+    addCustomAsset(projectAsset);
+  }
+
+  void updateCustomAssetSettings(CustomAssetData asset) {
+    _clearPlaybackPreview();
+    final nextAssets = project.customAssets
+        .map((existing) => existing.id == asset.id ? asset : existing)
+        .toList();
+    project = project.copyWith(customAssets: nextAssets);
+    notifyListeners();
+  }
+
+  void removeCustomAssetFromLevel(String assetId) {
+    final asset = customAssetById(assetId);
+    if (asset == null || isPlaybackRunning) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    final nextTiles = project.tiles
+        .where((tile) => tile.config['customAssetId']?.toString() != assetId)
+        .toList();
+    final nextEntities = project.entities
+        .where(
+          (entity) => entity.config['customAssetId']?.toString() != assetId,
+        )
+        .toList();
+    final nextAssets = project.customAssets
+        .where((customAsset) => customAsset.id != assetId)
+        .toList();
+
+    project = project.copyWith(
+      tiles: _enforceProtectedGroundTiles(
+        tiles: nextTiles,
+        settings: project.settings,
+      ),
+      entities: nextEntities,
+      customAssets: nextAssets,
+      clearBackgroundAsset: project.backgroundAssetId == assetId,
+    );
+    _assetImageCache.remove(assetId);
+
+    if (currentCustomAssetId == assetId) {
+      currentCustomAssetId = null;
+    }
+
+    lastMessage = '${asset.name} removed from this level.';
+    _runValidation();
+    notifyListeners();
+  }
+
+  void setCustomBackgroundAsset(String assetId) {
+    final asset = customAssetById(assetId);
+    if (asset == null || asset.type != CustomAssetType.background) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    project = project.copyWith(backgroundAssetId: assetId);
+    lastMessage = '${asset.name} is now the level background.';
+    notifyListeners();
+  }
+
+  void useDefaultBackground() {
+    if (project.backgroundAssetId == null || isPlaybackRunning) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    project = project.copyWith(clearBackgroundAsset: true);
+    lastMessage = 'Default background is now the level background.';
+    notifyListeners();
+  }
+
+  void placeCustomAssetAt(String assetId, int x, int y) {
+    final asset = customAssetById(assetId);
+    if (asset == null || isPlaybackRunning) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    selectedX = x;
+    selectedY = y;
+
+    switch (asset.type) {
+      case CustomAssetType.character:
+        _placeUniqueEntity(
+          'playerStart',
+          x,
+          y,
+          config: <String, dynamic>{
+            ..._customAssetReferenceConfig(asset),
+            'direction': playerInitialDirection,
+          },
+        );
+        break;
+      case CustomAssetType.obstacle:
+        _placeTile(
+          'customObstacle',
+          x,
+          y,
+          config: _customAssetReferenceConfig(asset),
+        );
+        break;
+      case CustomAssetType.collectable:
+        _placeEntity(
+          'collectable',
+          x,
+          y,
+          config: _customAssetReferenceConfig(asset),
+        );
+        break;
+      case CustomAssetType.goal:
+        _placeUniqueEntity(
+          'goal',
+          x,
+          y,
+          config: _customAssetReferenceConfig(asset),
+        );
+        break;
+      case CustomAssetType.background:
+        setCustomBackgroundAsset(asset.id);
+        return;
+    }
+
+    _extendWorldIfNeeded(x);
+    _runValidation();
+    notifyListeners();
   }
 
   String addSolutionCommand(
@@ -745,10 +1115,15 @@ class BuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _placeTile(String type, int x, int y) {
+  void _placeTile(
+    String type,
+    int x,
+    int y, {
+    Map<String, dynamic> config = const <String, dynamic>{},
+  }) {
     final updatedTiles = List<TileData>.from(project.tiles);
     updatedTiles.removeWhere((tile) => tile.x == x && tile.y == y);
-    updatedTiles.add(TileData(type: type, x: x, y: y));
+    updatedTiles.add(TileData(type: type, x: x, y: y, config: config));
     project = project.copyWith(
       tiles: _enforceProtectedGroundTiles(
         tiles: updatedTiles,
@@ -779,7 +1154,12 @@ class BuilderController extends ChangeNotifier {
     project = project.copyWith(entities: updatedEntities);
   }
 
-  void _placeUniqueEntity(String type, int x, int y) {
+  void _placeUniqueEntity(
+    String type,
+    int x,
+    int y, {
+    Map<String, dynamic>? config,
+  }) {
     final updatedEntities = List<EntityData>.from(project.entities);
 
     updatedEntities.removeWhere((entity) => entity.type == type);
@@ -791,12 +1171,14 @@ class BuilderController extends ChangeNotifier {
         type: type,
         x: x,
         y: y,
-        config: type == 'playerStart'
-            ? <String, dynamic>{
-                'direction': playerInitialDirection,
-                'character': playerCharacterId,
-              }
-            : const <String, dynamic>{},
+        config:
+            config ??
+            (type == 'playerStart'
+                ? <String, dynamic>{
+                    'direction': playerInitialDirection,
+                    'character': playerCharacterId,
+                  }
+                : const <String, dynamic>{}),
       ),
     );
 
@@ -867,6 +1249,7 @@ class BuilderController extends ChangeNotifier {
   }) async {
     try {
       isLoading = true;
+      savedProjectId = projectId;
       lastMessage = null;
       notifyListeners();
 
@@ -908,6 +1291,13 @@ class BuilderController extends ChangeNotifier {
                 data['difficulty']?.toString() ?? loadedProject.difficulty,
           ),
         );
+        project = _dedupeProjectCustomAssets(project);
+        project = _withAssetReferenceConfigs(project);
+        await _restoreReferencedCustomAssets();
+        project = _dedupeProjectCustomAssets(project);
+        _seedEmbeddedAssetImages();
+        await loadMissingCustomAssetImages();
+        await loadSavedAssetLibrary();
         savedProjectId = data['_id']?.toString() ?? projectId;
 
         _runValidation();
@@ -961,6 +1351,10 @@ class BuilderController extends ChangeNotifier {
 
       isSaving = true;
       lastMessage = null;
+      project = _dedupeProjectCustomAssets(project);
+      project = _withAssetReferenceConfigs(project);
+      // debugPrint('Saving project. savedProjectId = $savedProjectId');
+      // debugPrint('useAdminLevelApi = $useAdminLevelApi');
       notifyListeners();
 
       final projectJson = project.toJson();
@@ -1067,10 +1461,318 @@ class BuilderController extends ChangeNotifier {
     validation = BuilderValidation.initial();
   }
 
+  void _seedEmbeddedAssetImages() {
+    for (final asset in project.customAssets) {
+      if (asset.hasEmbeddedImage) {
+        _cacheAssetImageForAsset(asset, asset.imageBytes);
+      }
+    }
+  }
+
+  void _cacheAssetImageForAsset(CustomAssetData asset, Uint8List bytes) {
+    _assetImageCache[asset.id] = bytes;
+    final uploadedAssetId = asset.assetId;
+    if (uploadedAssetId != null && uploadedAssetId.isNotEmpty) {
+      _uploadedAssetImageCache[uploadedAssetId] = bytes;
+    }
+  }
+
+  Map<String, dynamic> _customAssetReferenceConfig(CustomAssetData asset) {
+    return <String, dynamic>{
+      'customAssetId': asset.id,
+      if (asset.hasUploadedAsset) 'uploadedAssetId': asset.assetId,
+    };
+  }
+
+  BuilderProject _withAssetReferenceConfigs(BuilderProject sourceProject) {
+    final assetsById = {
+      for (final asset in sourceProject.customAssets) asset.id: asset,
+    };
+
+    Map<String, dynamic> withUploadedAssetId(Map<String, dynamic> config) {
+      final localAssetId = config['customAssetId']?.toString();
+      if (localAssetId == null || localAssetId.isEmpty) {
+        return config;
+      }
+
+      final uploadedAssetId = assetsById[localAssetId]?.assetId;
+      if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+        return config;
+      }
+
+      return <String, dynamic>{...config, 'uploadedAssetId': uploadedAssetId};
+    }
+
+    return sourceProject.copyWith(
+      tiles: sourceProject.tiles
+          .map(
+            (tile) => tile.copyWith(config: withUploadedAssetId(tile.config)),
+          )
+          .toList(),
+      entities: sourceProject.entities
+          .map(
+            (entity) =>
+                entity.copyWith(config: withUploadedAssetId(entity.config)),
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> _restoreReferencedCustomAssets() async {
+    final knownAssetIds = project.customAssets.map((asset) => asset.id).toSet();
+    final restoredAssets = <CustomAssetData>[];
+
+    for (final reference in _referencedUploadedAssets()) {
+      if (knownAssetIds.contains(reference.localAssetId)) {
+        continue;
+      }
+
+      final existingUploadedAsset = customAssetByUploadedAssetId(
+        reference.uploadedAssetId,
+      );
+      if (existingUploadedAsset != null) {
+        project = _replaceCustomAssetReference(
+          project,
+          fromLocalAssetId: reference.localAssetId,
+          toLocalAssetId: existingUploadedAsset.id,
+        );
+        continue;
+      }
+
+      final metadata = await _loadAssetMetadata(reference.uploadedAssetId);
+      restoredAssets.add(
+        CustomAssetData(
+          id: reference.localAssetId,
+          assetId: reference.uploadedAssetId,
+          name: metadata?['name']?.toString() ?? 'Restored asset',
+          type: CustomAssetTypeExtension.fromString(
+            metadata?['type']?.toString() ?? reference.assetType.value,
+          ),
+          mimeType: metadata?['mimeType']?.toString() ?? 'image/png',
+          isCreatedByUser: metadata?['ownerId']?.toString() == session.user.id,
+          isPublic: metadata?['isPublic'] == true,
+        ),
+      );
+      knownAssetIds.add(reference.localAssetId);
+    }
+
+    if (restoredAssets.isEmpty) {
+      return;
+    }
+
+    project = project.copyWith(
+      customAssets: _dedupeCustomAssets(<CustomAssetData>[
+        ...project.customAssets,
+        ...restoredAssets,
+      ]),
+    );
+  }
+
+  BuilderProject _dedupeProjectCustomAssets(BuilderProject sourceProject) {
+    final dedupedAssets = _dedupeCustomAssets(sourceProject.customAssets);
+    final canonicalByUploadedAssetId = <String, CustomAssetData>{};
+
+    for (final asset in dedupedAssets) {
+      final uploadedAssetId = asset.assetId;
+      if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+        continue;
+      }
+      canonicalByUploadedAssetId[uploadedAssetId] = asset;
+    }
+
+    Map<String, dynamic> relinkConfig(Map<String, dynamic> config) {
+      final uploadedAssetId = config['uploadedAssetId']?.toString() ?? '';
+      if (uploadedAssetId.isEmpty) {
+        return config;
+      }
+
+      final canonicalAsset = canonicalByUploadedAssetId[uploadedAssetId];
+      if (canonicalAsset == null) {
+        return config;
+      }
+
+      return <String, dynamic>{...config, 'customAssetId': canonicalAsset.id};
+    }
+
+    return sourceProject.copyWith(
+      customAssets: dedupedAssets,
+      backgroundAssetId: _canonicalBackgroundAssetId(
+        sourceProject.backgroundAssetId,
+        dedupedAssets,
+      ),
+      tiles: sourceProject.tiles
+          .map((tile) => tile.copyWith(config: relinkConfig(tile.config)))
+          .toList(),
+      entities: sourceProject.entities
+          .map((entity) => entity.copyWith(config: relinkConfig(entity.config)))
+          .toList(),
+    );
+  }
+
+  List<CustomAssetData> _dedupeCustomAssets(List<CustomAssetData> assets) {
+    final byLocalId = <String, CustomAssetData>{};
+    final localIdByUploadedId = <String, String>{};
+
+    for (final asset in assets) {
+      final uploadedAssetId = asset.assetId;
+      if (uploadedAssetId != null && uploadedAssetId.isNotEmpty) {
+        final existingLocalId = localIdByUploadedId[uploadedAssetId];
+        if (existingLocalId != null) {
+          final existingAsset = byLocalId[existingLocalId];
+          if (existingAsset != null) {
+            byLocalId[existingLocalId] = _mergeCustomAsset(
+              existingAsset,
+              asset,
+            );
+          }
+          continue;
+        }
+        localIdByUploadedId[uploadedAssetId] = asset.id;
+      }
+
+      final existingAsset = byLocalId[asset.id];
+      byLocalId[asset.id] = existingAsset == null
+          ? asset
+          : _mergeCustomAsset(existingAsset, asset);
+    }
+
+    return byLocalId.values.toList();
+  }
+
+  CustomAssetData _mergeCustomAsset(
+    CustomAssetData existing,
+    CustomAssetData next,
+  ) {
+    return existing.copyWith(
+      assetId: existing.assetId ?? next.assetId,
+      name: existing.name.trim().isEmpty ? next.name : existing.name,
+      type: existing.type,
+      imageBase64: existing.imageBase64.isNotEmpty
+          ? existing.imageBase64
+          : next.imageBase64,
+      mimeType: existing.mimeType,
+      isCreatedByUser: existing.isCreatedByUser || next.isCreatedByUser,
+      isPublic: existing.isPublic || next.isPublic,
+      frameScale: existing.frameScale,
+      frameOffsetX: existing.frameOffsetX,
+      frameOffsetY: existing.frameOffsetY,
+    );
+  }
+
+  bool _sameUploadedAsset(CustomAssetData left, CustomAssetData right) {
+    final leftAssetId = left.assetId;
+    final rightAssetId = right.assetId;
+    return leftAssetId != null &&
+        leftAssetId.isNotEmpty &&
+        rightAssetId != null &&
+        rightAssetId.isNotEmpty &&
+        leftAssetId == rightAssetId;
+  }
+
+  String? _canonicalBackgroundAssetId(
+    String? backgroundAssetId,
+    List<CustomAssetData> assets,
+  ) {
+    if (backgroundAssetId == null) {
+      return null;
+    }
+    if (assets.any((asset) => asset.id == backgroundAssetId)) {
+      return backgroundAssetId;
+    }
+    return null;
+  }
+
+  BuilderProject _replaceCustomAssetReference(
+    BuilderProject sourceProject, {
+    required String fromLocalAssetId,
+    required String toLocalAssetId,
+  }) {
+    Map<String, dynamic> relinkConfig(Map<String, dynamic> config) {
+      if (config['customAssetId']?.toString() != fromLocalAssetId) {
+        return config;
+      }
+
+      return <String, dynamic>{...config, 'customAssetId': toLocalAssetId};
+    }
+
+    return sourceProject.copyWith(
+      backgroundAssetId: sourceProject.backgroundAssetId == fromLocalAssetId
+          ? toLocalAssetId
+          : sourceProject.backgroundAssetId,
+      tiles: sourceProject.tiles
+          .map((tile) => tile.copyWith(config: relinkConfig(tile.config)))
+          .toList(),
+      entities: sourceProject.entities
+          .map((entity) => entity.copyWith(config: relinkConfig(entity.config)))
+          .toList(),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _loadAssetMetadata(String assetId) async {
+    final response = await ApiService.getBuilderAsset(
+      authToken: session.token,
+      assetId: assetId,
+    );
+
+    if (response['success'] != true || response['data'] is! Map) {
+      return null;
+    }
+
+    return Map<String, dynamic>.from(response['data'] as Map);
+  }
+
+  List<_ReferencedUploadedAsset> _referencedUploadedAssets() {
+    final references = <_ReferencedUploadedAsset>[];
+
+    void addReference({
+      required Map<String, dynamic> config,
+      required CustomAssetType type,
+    }) {
+      final localAssetId = config['customAssetId']?.toString() ?? '';
+      final uploadedAssetId = config['uploadedAssetId']?.toString() ?? '';
+      if (localAssetId.isEmpty || uploadedAssetId.isEmpty) {
+        return;
+      }
+
+      references.add(
+        _ReferencedUploadedAsset(
+          localAssetId: localAssetId,
+          uploadedAssetId: uploadedAssetId,
+          assetType: type,
+        ),
+      );
+    }
+
+    for (final tile in project.tiles) {
+      if (tile.type == 'customObstacle') {
+        addReference(config: tile.config, type: CustomAssetType.obstacle);
+      }
+    }
+
+    for (final entity in project.entities) {
+      final type = switch (entity.type) {
+        'playerStart' => CustomAssetType.character,
+        'collectable' => CustomAssetType.collectable,
+        'goal' => CustomAssetType.goal,
+        _ => CustomAssetType.obstacle,
+      };
+      addReference(config: entity.config, type: type);
+    }
+
+    final uniqueReferences = <String, _ReferencedUploadedAsset>{};
+    for (final reference in references) {
+      uniqueReferences[reference.localAssetId] = reference;
+    }
+
+    return uniqueReferences.values.toList();
+  }
+
   int _calculateDifficultyScore() {
     final solutionScore = _scoreSolutionCommands(project.solutionCommands);
     final obstacleScore = project.tiles
-        .where((tile) => tile.type == 'obstacle')
+        .where(
+          (tile) => tile.type == 'obstacle' || tile.type == 'customObstacle',
+        )
         .length;
     final collectableScore = project.entities
         .where((entity) => entity.type == 'collectable')
@@ -2395,6 +3097,18 @@ class _TransactionalSequenceResult {
   }
 
   String? get lastCommandId => steps.isEmpty ? null : steps.last.commandId;
+}
+
+class _ReferencedUploadedAsset {
+  final String localAssetId;
+  final String uploadedAssetId;
+  final CustomAssetType assetType;
+
+  const _ReferencedUploadedAsset({
+    required this.localAssetId,
+    required this.uploadedAssetId,
+    required this.assetType,
+  });
 }
 
 int? _readInt(Object? value) {

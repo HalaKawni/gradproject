@@ -19,11 +19,19 @@ class TopViewRenderItem {
   final String type;
   final TopViewRenderCell cell;
   final String? obstacleStyleId;
+  final String? customAssetId;
+  final double customAssetFrameScale;
+  final double customAssetFrameOffsetX;
+  final double customAssetFrameOffsetY;
 
   const TopViewRenderItem({
     required this.type,
     required this.cell,
     this.obstacleStyleId,
+    this.customAssetId,
+    this.customAssetFrameScale = 1,
+    this.customAssetFrameOffsetX = 0,
+    this.customAssetFrameOffsetY = 0,
   });
 }
 
@@ -48,6 +56,12 @@ class TopViewBuilderGame extends FlameGame {
   final Map<String, ui.Image> _characterWalkSheets = <String, ui.Image>{};
   final Map<String, ui.Image> _backgroundImages = <String, ui.Image>{};
   final Map<String, ui.Image> _obstacleImages = <String, ui.Image>{};
+  final Map<String, ui.Image> _customAssetImages = <String, ui.Image>{};
+  final Set<String> _customAssetImagesLoading = <String>{};
+  String? _customBackgroundAssetId;
+  double _customBackgroundFrameScale = 1;
+  double _customBackgroundFrameOffsetX = 0;
+  double _customBackgroundFrameOffsetY = 0;
   double _walkAnimationElapsedSeconds = 0;
 
   TopViewBuilderGame({
@@ -116,6 +130,11 @@ class TopViewBuilderGame extends FlameGame {
     required String backgroundId,
     required String obstacleStyleId,
     required double playerHeadingDegrees,
+    String? customBackgroundAssetId,
+    double customBackgroundFrameScale = 1,
+    double customBackgroundFrameOffsetX = 0,
+    double customBackgroundFrameOffsetY = 0,
+    Map<String, Uint8List> customAssetImages = const <String, Uint8List>{},
   }) {
     _items = List<TopViewRenderItem>.unmodifiable(items);
     _playerCell = playerCell;
@@ -123,7 +142,30 @@ class TopViewBuilderGame extends FlameGame {
     _backgroundId = topViewBackgroundById(backgroundId).id;
     _obstacleStyleId = topViewObstacleStyleById(obstacleStyleId).id;
     _playerHeadingDegrees = playerHeadingDegrees;
+    _customBackgroundAssetId = customBackgroundAssetId;
+    _customBackgroundFrameScale = customBackgroundFrameScale;
+    _customBackgroundFrameOffsetX = customBackgroundFrameOffsetX;
+    _customBackgroundFrameOffsetY = customBackgroundFrameOffsetY;
+    _ensureCustomAssetImages(customAssetImages);
     _playerPosition ??= _playerCenterFromCell(playerCell);
+  }
+
+  void _ensureCustomAssetImages(Map<String, Uint8List> images) {
+    for (final entry in images.entries) {
+      if (_customAssetImages.containsKey(entry.key) ||
+          _customAssetImagesLoading.contains(entry.key)) {
+        continue;
+      }
+
+      _customAssetImagesLoading.add(entry.key);
+      decodeImageFromList(entry.value)
+          .then((image) {
+            _customAssetImages[entry.key] = image;
+          })
+          .whenComplete(() {
+            _customAssetImagesLoading.remove(entry.key);
+          });
+    }
   }
 
   void resetPlayerToCell(TopViewRenderCell? cell, double headingDegrees) {
@@ -201,6 +243,20 @@ class TopViewBuilderGame extends FlameGame {
 
   void _renderBackground(Canvas canvas) {
     final boardRect = Offset.zero & Size(size.x, size.y);
+    final customBackgroundImage = _customAssetImages[_customBackgroundAssetId];
+    if (customBackgroundImage != null) {
+      _drawImageFrameCover(
+        canvas,
+        customBackgroundImage,
+        boardRect,
+        scale: _customBackgroundFrameScale,
+        offsetX: _customBackgroundFrameOffsetX,
+        offsetY: _customBackgroundFrameOffsetY,
+        clipToFrame: true,
+      );
+      return;
+    }
+
     final image = _backgroundImages[_backgroundId];
 
     if (image == null) {
@@ -228,6 +284,29 @@ class TopViewBuilderGame extends FlameGame {
       );
       final shortestSide = math.min(cellWidth, cellHeight);
       final paint = Paint()..color = _itemColor(item.type);
+      final customImage = _customAssetImages[item.customAssetId];
+      if (customImage != null) {
+        final scale = item.type == 'obstacle'
+            ? obstacleSpriteTileScale
+            : item.type == 'player'
+            ? playerSpriteTileScale
+            : 1.0;
+        final rect = Rect.fromCenter(
+          center: center,
+          width: shortestSide * scale,
+          height: shortestSide * scale,
+        );
+        _drawImageFrameCover(
+          canvas,
+          customImage,
+          rect,
+          scale: item.customAssetFrameScale,
+          offsetX: item.customAssetFrameOffsetX,
+          offsetY: item.customAssetFrameOffsetY,
+          clipToFrame: false,
+        );
+        continue;
+      }
 
       if (item.type == 'obstacle') {
         final obstacleStyleId = topViewObstacleStyleById(
@@ -278,6 +357,50 @@ class TopViewBuilderGame extends FlameGame {
     );
   }
 
+  void _drawImageFrameCover(
+    Canvas canvas,
+    ui.Image image,
+    Rect bounds, {
+    required double scale,
+    required double offsetX,
+    required double offsetY,
+    bool clipToFrame = false,
+  }) {
+    final imageAspectRatio = image.width / image.height;
+    final boundsAspectRatio = bounds.width / bounds.height;
+    final fittedRect = imageAspectRatio > boundsAspectRatio
+        ? Rect.fromCenter(
+            center: bounds.center,
+            width: bounds.width,
+            height: bounds.width / imageAspectRatio,
+          )
+        : Rect.fromCenter(
+            center: bounds.center,
+            width: bounds.height * imageAspectRatio,
+            height: bounds.height,
+          );
+    final scaledRect = Rect.fromCenter(
+      center: bounds.center.translate(
+        offsetX * bounds.width * 0.5,
+        offsetY * bounds.height * 0.5,
+      ),
+      width: fittedRect.width * scale,
+      height: fittedRect.height * scale,
+    );
+
+    canvas.save();
+    if (clipToFrame) {
+      canvas.clipRect(bounds);
+    }
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      scaledRect,
+      Paint()..filterQuality = FilterQuality.high,
+    );
+    canvas.restore();
+  }
+
   void _renderPlayer(Canvas canvas, double cellWidth, double cellHeight) {
     final playerPosition =
         _playerPosition ?? _playerCenterFromCell(_playerCell);
@@ -286,6 +409,15 @@ class TopViewBuilderGame extends FlameGame {
     }
 
     final isMoving = _targetPosition != null;
+    TopViewRenderItem? customPlayerItem;
+    for (final item in _items) {
+      if (item.type == 'player' && item.customAssetId != null) {
+        customPlayerItem = item;
+        break;
+      }
+    }
+    final customPlayerImage =
+        _customAssetImages[customPlayerItem?.customAssetId];
     final image = isMoving
         ? _characterWalkSheets[_playerCharacterId] ??
               _characterImages[_playerCharacterId]
@@ -300,7 +432,22 @@ class TopViewBuilderGame extends FlameGame {
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(_degreesToRadians(90 - _playerHeadingDegrees));
-    if (image == null) {
+    if (customPlayerImage != null) {
+      final destination = Rect.fromCenter(
+        center: Offset.zero,
+        width: spriteSize,
+        height: spriteSize,
+      );
+      _drawImageFrameCover(
+        canvas,
+        customPlayerImage,
+        destination,
+        scale: customPlayerItem?.customAssetFrameScale ?? 1,
+        offsetX: customPlayerItem?.customAssetFrameOffsetX ?? 0,
+        offsetY: customPlayerItem?.customAssetFrameOffsetY ?? 0,
+        clipToFrame: false,
+      );
+    } else if (image == null) {
       final destination = Rect.fromCenter(
         center: Offset.zero,
         width: spriteSize,

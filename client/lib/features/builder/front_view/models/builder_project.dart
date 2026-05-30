@@ -1,3 +1,4 @@
+import 'custom_asset_data.dart';
 import 'entity_data.dart';
 import 'level_settings.dart';
 import 'logic_command.dart';
@@ -16,6 +17,8 @@ class BuilderProject {
   final List<TileData> tiles;
   final List<EntityData> entities;
   final List<LogicCommandNode> solutionCommands;
+  final List<CustomAssetData> customAssets;
+  final String? backgroundAssetId;
 
   const BuilderProject({
     required this.id,
@@ -30,6 +33,8 @@ class BuilderProject {
     required this.tiles,
     required this.entities,
     required this.solutionCommands,
+    this.customAssets = const [],
+    this.backgroundAssetId,
   });
 
   factory BuilderProject.initial({
@@ -53,6 +58,7 @@ class BuilderProject {
       tiles: buildGroundTemplate(settings),
       entities: const [],
       solutionCommands: const [],
+      customAssets: const [],
     );
   }
 
@@ -106,6 +112,8 @@ class BuilderProject {
       'solutionCommands': solutionCommands
           .map((command) => command.toJson())
           .toList(),
+      'customAssets': customAssets.map((asset) => asset.toJson()).toList(),
+      'backgroundAssetId': backgroundAssetId,
     };
   }
 
@@ -134,6 +142,18 @@ class BuilderProject {
           .map(LogicCommandNode.tryParse)
           .whereType<LogicCommandNode>()
           .toList(),
+      customAssets: (json['customAssets'] as List<dynamic>? ?? [])
+          .map((asset) {
+            return CustomAssetData.fromJson(Map<String, dynamic>.from(asset));
+          })
+          .where(
+            (asset) =>
+                asset.id.isNotEmpty &&
+                (asset.imageBase64.isNotEmpty ||
+                    (asset.assetId?.isNotEmpty ?? false)),
+          )
+          .toList(),
+      backgroundAssetId: json['backgroundAssetId']?.toString(),
     );
   }
 
@@ -150,6 +170,9 @@ class BuilderProject {
     List<TileData>? tiles,
     List<EntityData>? entities,
     List<LogicCommandNode>? solutionCommands,
+    List<CustomAssetData>? customAssets,
+    String? backgroundAssetId,
+    bool clearBackgroundAsset = false,
   }) {
     return BuilderProject(
       id: id ?? this.id,
@@ -164,6 +187,10 @@ class BuilderProject {
       tiles: tiles ?? this.tiles,
       entities: entities ?? this.entities,
       solutionCommands: solutionCommands ?? this.solutionCommands,
+      customAssets: customAssets ?? this.customAssets,
+      backgroundAssetId: clearBackgroundAsset
+          ? null
+          : backgroundAssetId ?? this.backgroundAssetId,
     );
   }
 }

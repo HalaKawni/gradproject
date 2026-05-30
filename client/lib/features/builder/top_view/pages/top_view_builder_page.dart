@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/builder/front_view/models/custom_asset_data.dart';
 import 'package:client/features/builder/shared/solver/grid_position.dart';
 import 'package:client/features/builder/top_view/flame/top_view_builder_game.dart';
 import 'package:client/features/builder/top_view/models/top_view_board_style.dart';
@@ -12,6 +15,7 @@ import 'package:client/features/builder/top_view/solver/top_view_level_grid.dart
 import 'package:client/features/builder/top_view/solver/top_view_solution_converter.dart';
 import 'package:client/features/builder/top_view/solver/top_view_solver.dart';
 import 'package:flame/game.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 class TopViewBuilderPage extends StatefulWidget {
@@ -70,6 +74,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   final Map<_Cell, _BoardItemType> _items = <_Cell, _BoardItemType>{};
   final Map<_Cell, String> _obstacleStylesByCell = <_Cell, String>{};
+  final Map<_Cell, String> _customAssetIdsByCell = <_Cell, String>{};
+  final Map<String, Uint8List> _customAssetImageBytes = <String, Uint8List>{};
+  final Map<String, Future<void>> _customAssetImageLoads =
+      <String, Future<void>>{};
+  final List<CustomAssetData> _customAssets = <CustomAssetData>[];
+  List<CustomAssetData> _savedAssetLibrary = const <CustomAssetData>[];
   final List<_CodeBlock> _allowedBlocks = <_CodeBlock>[];
   late final TextEditingController _titleController;
   late final TextEditingController _codeController;
@@ -94,6 +104,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   String _playerCharacterId = defaultTopViewCharacterId;
   String _backgroundId = defaultTopViewBackgroundId;
   String _obstacleStyleId = defaultTopViewObstacleStyleId;
+  String? _customBackgroundAssetId;
   String? _loadedPossibleSolutionCode;
   int _runGeneration = 0;
   int? _activeCodeLine;
@@ -106,20 +117,21 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   void _syncTopViewGame({bool resetPlayer = false}) {
     final playerCell = _playerCell;
     _topViewGame.syncBoard(
-      items: _items.entries
-          .map(
-            (entry) => TopViewRenderItem(
-              type: entry.value.id,
-              cell: TopViewRenderCell(
-                column: entry.key.column,
-                row: entry.key.row,
-              ),
-              obstacleStyleId: entry.value == _BoardItemType.obstacle
-                  ? _obstacleStylesByCell[entry.key]
-                  : null,
-            ),
-          )
-          .toList(),
+      items: _items.entries.map((entry) {
+        final customAssetId = _customAssetIdsByCell[entry.key];
+        final customAsset = _customAssetById(customAssetId);
+        return TopViewRenderItem(
+          type: entry.value.id,
+          cell: TopViewRenderCell(column: entry.key.column, row: entry.key.row),
+          obstacleStyleId: entry.value == _BoardItemType.obstacle
+              ? _obstacleStylesByCell[entry.key]
+              : null,
+          customAssetId: customAssetId,
+          customAssetFrameScale: customAsset?.frameScale ?? 1,
+          customAssetFrameOffsetX: customAsset?.frameOffsetX ?? 0,
+          customAssetFrameOffsetY: customAsset?.frameOffsetY ?? 0,
+        );
+      }).toList(),
       playerCell: playerCell == null
           ? null
           : TopViewRenderCell(column: playerCell.column, row: playerCell.row),
@@ -127,6 +139,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       backgroundId: _backgroundId,
       obstacleStyleId: _obstacleStyleId,
       playerHeadingDegrees: _initialPlayerHeadingDegrees,
+      customBackgroundAssetId: _customBackgroundAssetId,
+      customBackgroundFrameScale:
+          _customAssetById(_customBackgroundAssetId)?.frameScale ?? 1,
+      customBackgroundFrameOffsetX:
+          _customAssetById(_customBackgroundAssetId)?.frameOffsetX ?? 0,
+      customBackgroundFrameOffsetY:
+          _customAssetById(_customBackgroundAssetId)?.frameOffsetY ?? 0,
+      customAssetImages: _customAssetImageBytes,
     );
 
     if (resetPlayer) {
@@ -163,6 +183,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _codeController.addListener(_handleCodeChanged);
     _titleController.addListener(_handleTitleChanged);
     _syncTopViewGame(resetPlayer: true);
+    unawaited(_loadSavedAssetLibrary());
     if (widget.initialProjectId != null) {
       _loadProject(widget.initialProjectId!);
     }
@@ -704,6 +725,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   }) {
     final items = <_Cell, _BoardItemType>{};
     final obstacleStylesByCell = <_Cell, String>{};
+    final customAssetIdsByCell = <_Cell, String>{};
     final rawItems = draftData['items'];
     if (rawItems is List) {
       for (final item in rawItems.whereType<Map>()) {
@@ -721,6 +743,24 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             itemMap['obstacleStyle']?.toString() ??
                 draftData['obstacleStyle']?.toString(),
           ).id;
+        }
+        final customAssetId = itemMap['customAssetId']?.toString();
+        if (customAssetId != null && customAssetId.isNotEmpty) {
+          customAssetIdsByCell[cell] = customAssetId;
+        }
+      }
+    }
+
+    final customAssets = <CustomAssetData>[];
+    final rawCustomAssets = draftData['customAssets'];
+    if (rawCustomAssets is List) {
+      for (final rawAsset in rawCustomAssets.whereType<Map>()) {
+        final asset = CustomAssetData.fromJson(
+          Map<String, dynamic>.from(rawAsset),
+        );
+        if (asset.id.isNotEmpty &&
+            (asset.hasEmbeddedImage || asset.hasUploadedAsset)) {
+          customAssets.add(asset);
         }
       }
     }
@@ -761,6 +801,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _backgroundId = topViewBackgroundById(
         draftData['background']?.toString(),
       ).id;
+      _customBackgroundAssetId = draftData['customBackgroundAssetId']
+          ?.toString();
       _obstacleStyleId = topViewObstacleStyleById(
         draftData['obstacleStyle']?.toString(),
       ).id;
@@ -775,6 +817,20 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _obstacleStylesByCell
         ..clear()
         ..addAll(obstacleStylesByCell);
+      _customAssetIdsByCell
+        ..clear()
+        ..addAll(customAssetIdsByCell);
+      _customAssets
+        ..clear()
+        ..addAll(customAssets);
+      _customAssetImageBytes.clear();
+      for (final asset in _customAssets) {
+        if (asset.hasEmbeddedImage) {
+          _customAssetImageBytes[asset.id] = asset.imageBytes;
+        } else {
+          unawaited(_ensureAssetImageLoaded(asset));
+        }
+      }
       _allowedBlocks
         ..clear()
         ..addAll(allowedBlocks);
@@ -803,6 +859,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       'difficulty': _difficulty,
       'playerCharacter': _playerCharacterId,
       'background': _backgroundId,
+      'customBackgroundAssetId': _customBackgroundAssetId,
       'obstacleStyle': _obstacleStyleId,
       'settings': {'columns': _cols, 'rows': _rows},
       'items': _items.entries
@@ -814,9 +871,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               if (entry.value == _BoardItemType.obstacle)
                 'obstacleStyle':
                     _obstacleStylesByCell[entry.key] ?? _obstacleStyleId,
+              if (_customAssetIdsByCell[entry.key] != null)
+                'customAssetId': _customAssetIdsByCell[entry.key],
+              if (_customAssetIdsByCell[entry.key] != null &&
+                  _customAssetById(_customAssetIdsByCell[entry.key])?.assetId !=
+                      null)
+                'uploadedAssetId': _customAssetById(
+                  _customAssetIdsByCell[entry.key],
+                )!.assetId,
             },
           )
           .toList(),
+      'customAssets': _customAssets.map((asset) => asset.toJson()).toList(),
       'allowedBlocks': _allowedBlocks.map((block) => block.id).toList(),
       'solutionCode': _codeController.text,
       'initialDirectionDegrees': _initialPlayerHeadingDegrees,
@@ -1151,6 +1217,575 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         (position.dy - (cell.row + 0.5)).abs() < 0.001;
   }
 
+  CustomAssetData? _customAssetById(String? assetId) {
+    if (assetId == null || assetId.isEmpty) {
+      return null;
+    }
+    for (final asset in _customAssets) {
+      if (asset.id == assetId) {
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  CustomAssetData? _customAssetByUploadedAssetId(String? uploadedAssetId) {
+    if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+      return null;
+    }
+    for (final asset in _customAssets) {
+      if (asset.assetId == uploadedAssetId) {
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  List<CustomAssetData> get _createdCustomAssets =>
+      _customAssets.where((asset) => asset.isCreatedByUser).toList();
+
+  List<CustomAssetData> get _savedCustomAssets {
+    final projectAssetIds = _customAssets
+        .map((asset) => asset.assetId)
+        .whereType<String>()
+        .toSet();
+
+    return [
+      ..._customAssets.where((asset) => !asset.isCreatedByUser),
+      ..._savedAssetLibrary.where(
+        (asset) => !projectAssetIds.contains(asset.assetId),
+      ),
+    ];
+  }
+
+  Uint8List? _assetImageBytes(CustomAssetData asset) {
+    final cached = _customAssetImageBytes[asset.id];
+    if (cached != null) {
+      return cached;
+    }
+    if (asset.hasEmbeddedImage) {
+      final bytes = asset.imageBytes;
+      _customAssetImageBytes[asset.id] = bytes;
+      return bytes;
+    }
+    return null;
+  }
+
+  Future<void> _ensureAssetImageLoaded(CustomAssetData asset) {
+    if (_assetImageBytes(asset) != null) {
+      return Future.value();
+    }
+    final uploadedAssetId = asset.assetId;
+    if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+      return Future.value();
+    }
+    final existingLoad = _customAssetImageLoads[asset.id];
+    if (existingLoad != null) {
+      return existingLoad;
+    }
+    final load =
+        ApiService.getBuilderAssetData(
+              authToken: widget.session.token,
+              assetId: uploadedAssetId,
+            )
+            .then((bytes) {
+              if (bytes == null || bytes.isEmpty) {
+                return;
+              }
+              _customAssetImageBytes[asset.id] = bytes;
+              if (mounted) {
+                setState(() {});
+                _syncTopViewGame();
+              }
+            })
+            .whenComplete(() {
+              _customAssetImageLoads.remove(asset.id);
+            });
+    _customAssetImageLoads[asset.id] = load;
+    return load;
+  }
+
+  Future<void> _loadSavedAssetLibrary() async {
+    final response = await ApiService.getBuilderAssets(
+      authToken: widget.session.token,
+    );
+    if (response['success'] != true || response['data'] is! List) {
+      return;
+    }
+
+    final assets = <CustomAssetData>[];
+    for (final rawAsset in (response['data'] as List).whereType<Map>()) {
+      final assetId = (rawAsset['_id'] ?? rawAsset['id'])?.toString();
+      if (assetId == null || assetId.isEmpty) {
+        continue;
+      }
+
+      assets.add(
+        CustomAssetData(
+          id: 'saved-$assetId',
+          assetId: assetId,
+          name: rawAsset['name']?.toString() ?? 'Untitled asset',
+          type: CustomAssetTypeExtension.fromString(
+            rawAsset['type']?.toString(),
+          ),
+          mimeType: rawAsset['mimeType']?.toString() ?? 'image/png',
+          isCreatedByUser: false,
+          isPublic: rawAsset['isPublic'] == true,
+        ),
+      );
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _savedAssetLibrary = assets;
+    });
+    for (final asset in assets) {
+      unawaited(_ensureAssetImageLoaded(asset));
+    }
+  }
+
+  void _addCustomAssetToLevel(CustomAssetData asset, {Uint8List? bytes}) {
+    final existingUploadedAsset = _customAssetByUploadedAssetId(asset.assetId);
+    final assetToStore = existingUploadedAsset == null
+        ? asset
+        : asset.copyWith(id: existingUploadedAsset.id);
+
+    setState(() {
+      _customAssets
+        ..removeWhere(
+          (existing) =>
+              existing.id == assetToStore.id ||
+              (existing.assetId != null &&
+                  existing.assetId == assetToStore.assetId &&
+                  existing.id != assetToStore.id),
+        )
+        ..add(assetToStore);
+      if (bytes != null) {
+        _customAssetImageBytes[assetToStore.id] = bytes;
+      }
+    });
+    _syncTopViewGame(resetPlayer: true);
+  }
+
+  void _useCustomAssetFromCollection(CustomAssetData asset) {
+    final existingAsset =
+        _customAssetById(asset.id) ??
+        _customAssetByUploadedAssetId(asset.assetId);
+    if (existingAsset != null) {
+      return;
+    }
+
+    final levelAsset = asset.copyWith(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      imageBase64: '',
+    );
+    _addCustomAssetToLevel(levelAsset, bytes: _assetImageBytes(asset));
+  }
+
+  void _updateCustomAssetSettings(CustomAssetData asset) {
+    setState(() {
+      final index = _customAssets.indexWhere((item) => item.id == asset.id);
+      if (index >= 0) {
+        _customAssets[index] = asset;
+      }
+    });
+    _syncTopViewGame(resetPlayer: true);
+  }
+
+  void _removeCustomAssetFromLevel(String assetId) {
+    setState(() {
+      final cellsUsingAsset = _customAssetIdsByCell.entries
+          .where((entry) => entry.value == assetId)
+          .map((entry) => entry.key)
+          .toList();
+      _customAssets.removeWhere((asset) => asset.id == assetId);
+      for (final cell in cellsUsingAsset) {
+        _customAssetIdsByCell.remove(cell);
+        _items.remove(cell);
+      }
+      if (_customBackgroundAssetId == assetId) {
+        _customBackgroundAssetId = null;
+      }
+      _customAssetImageBytes.remove(assetId);
+    });
+    _syncTopViewGame(resetPlayer: true);
+  }
+
+  Future<void> _pickAndCreateCustomAsset() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final file = result?.files.single;
+    final bytes = file?.bytes;
+    if (!mounted || file == null || bytes == null) {
+      return;
+    }
+    if (bytes.length > 2 * 1024 * 1024) {
+      _showSnackBar(
+        'Image must be 2 MB or smaller.',
+        backgroundColor: Colors.red.shade600,
+      );
+      return;
+    }
+
+    final asset = await _showAssetEditorDialog(
+      imageBytes: bytes,
+      suggestedName: _nameWithoutExtension(file.name),
+      mimeType: _mimeTypeForName(file.name),
+    );
+    if (asset == null) {
+      return;
+    }
+
+    final uploadResult = await ApiService.uploadBuilderAsset(
+      authToken: widget.session.token,
+      name: asset.name,
+      type: asset.type.value,
+      mimeType: asset.mimeType,
+      imageBase64: base64Encode(bytes),
+      isPublic: asset.isPublic,
+    );
+    if (uploadResult['success'] != true) {
+      _showSnackBar(
+        uploadResult['message']?.toString() ?? 'Failed to upload asset.',
+        backgroundColor: Colors.red.shade600,
+      );
+      return;
+    }
+
+    final data = uploadResult['data'];
+    final uploadedAssetId = data is Map
+        ? (data['_id'] ?? data['id'])?.toString()
+        : null;
+    if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+      return;
+    }
+
+    final storedAsset = asset.copyWith(
+      assetId: uploadedAssetId,
+      imageBase64: '',
+    );
+    _addCustomAssetToLevel(storedAsset, bytes: bytes);
+  }
+
+  Future<CustomAssetData?> _showAssetEditorDialog({
+    CustomAssetData? existingAsset,
+    Uint8List? imageBytes,
+    String suggestedName = '',
+    String mimeType = 'image/png',
+  }) {
+    final isEditing = existingAsset != null;
+    final bytes =
+        imageBytes ??
+        (existingAsset == null ? null : _assetImageBytes(existingAsset));
+    if (bytes == null) {
+      return Future.value(null);
+    }
+    final nameController = TextEditingController(
+      text: isEditing ? existingAsset.name : suggestedName,
+    );
+    var selectedType = existingAsset?.type ?? CustomAssetType.character;
+    var frameScale =
+        existingAsset?.frameScale ?? _defaultFrameScaleForType(selectedType);
+    var frameOffsetX = existingAsset?.frameOffsetX ?? 0.0;
+    var frameOffsetY = existingAsset?.frameOffsetY ?? 0.0;
+
+    return showDialog<CustomAssetData>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final previewSize = _assetEditorPreviewSize(
+              selectedType,
+              MediaQuery.sizeOf(context),
+            );
+
+            return AlertDialog(
+              title: Text(isEditing ? 'Asset settings' : 'Create asset'),
+              content: SizedBox(
+                width: math.min(MediaQuery.sizeOf(context).width * 0.82, 640),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.min(
+                      MediaQuery.sizeOf(context).height * 0.78,
+                      720,
+                    ),
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Center(
+                          child: SizedBox(
+                            width: previewSize.width,
+                            height: previewSize.height,
+                            child: LayoutBuilder(
+                              builder: (context, previewConstraints) {
+                                final previewWidth =
+                                    previewConstraints.maxWidth.isFinite
+                                    ? previewConstraints.maxWidth
+                                    : 1.0;
+                                final previewHeight =
+                                    previewConstraints.maxHeight.isFinite
+                                    ? previewConstraints.maxHeight
+                                    : 1.0;
+
+                                return GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onPanUpdate: (details) {
+                                    setDialogState(() {
+                                      frameOffsetX =
+                                          (frameOffsetX +
+                                                  details.delta.dx /
+                                                      (previewWidth * 0.5))
+                                              .clamp(-1.0, 1.0)
+                                              .toDouble();
+                                      frameOffsetY =
+                                          (frameOffsetY +
+                                                  details.delta.dy /
+                                                      (previewHeight * 0.5))
+                                              .clamp(-1.0, 1.0)
+                                              .toDouble();
+                                    });
+                                  },
+                                  child: MouseRegion(
+                                    cursor: SystemMouseCursors.move,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.blueGrey.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.blueGrey.shade200,
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: _buildFramedImagePreview(
+                                        bytes: bytes,
+                                        scale: frameScale,
+                                        offsetX: frameOffsetX,
+                                        offsetY: frameOffsetY,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Drag the image to position it in the frame.',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Colors.blueGrey.shade500,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 14),
+                        TextField(
+                          controller: nameController,
+                          enabled: !isEditing,
+                          decoration: const InputDecoration(
+                            labelText: 'Asset name',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<CustomAssetType>(
+                          initialValue: selectedType,
+                          isExpanded: true,
+                          items: [
+                            for (final type in CustomAssetType.values)
+                              DropdownMenuItem<CustomAssetType>(
+                                value: type,
+                                child: Text(type.label),
+                              ),
+                          ],
+                          onChanged: (type) {
+                            if (type == null) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              selectedType = type;
+                              frameScale = _defaultFrameScaleForType(type);
+                              frameOffsetX = 0;
+                              frameOffsetY = 0;
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            labelText: 'Type',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildAssetSlider(
+                          label: 'Zoom',
+                          value: frameScale,
+                          min: 0.5,
+                          max: 3,
+                          onChanged: (value) {
+                            setDialogState(() => frameScale = value);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                if (isEditing)
+                  TextButton.icon(
+                    onPressed: () async {
+                      final shouldRemove = await _confirmRemoveAssetFromLevel(
+                        dialogContext,
+                        existingAsset,
+                      );
+                      if (!shouldRemove || !dialogContext.mounted) {
+                        return;
+                      }
+
+                      _removeCustomAssetFromLevel(existingAsset.id);
+                      Navigator.of(dialogContext).pop();
+                    },
+                    icon: const Icon(Icons.delete_outline_rounded),
+                    label: const Text('Remove from level'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade700,
+                    ),
+                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final name = nameController.text.trim();
+                    if (name.isEmpty) {
+                      return;
+                    }
+
+                    Navigator.of(dialogContext).pop(
+                      CustomAssetData(
+                        id:
+                            existingAsset?.id ??
+                            DateTime.now().microsecondsSinceEpoch.toString(),
+                        assetId: existingAsset?.assetId,
+                        name: existingAsset?.name ?? name,
+                        type: selectedType,
+                        imageBase64:
+                            existingAsset?.imageBase64 ?? base64Encode(bytes),
+                        mimeType: existingAsset?.mimeType ?? mimeType,
+                        isCreatedByUser: existingAsset?.isCreatedByUser ?? true,
+                        isPublic: existingAsset?.isPublic ?? false,
+                        frameScale: frameScale,
+                        frameOffsetX: frameOffsetX,
+                        frameOffsetY: frameOffsetY,
+                      ),
+                    );
+                  },
+                  child: Text(isEditing ? 'Save settings' : 'Save asset'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).then((asset) {
+      nameController.dispose();
+      if (asset != null && isEditing) {
+        _updateCustomAssetSettings(asset);
+      }
+      return asset;
+    });
+  }
+
+  Future<bool> _confirmRemoveAssetFromLevel(
+    BuildContext context,
+    CustomAssetData asset,
+  ) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (confirmContext) {
+            return AlertDialog(
+              title: const Text('Remove from level?'),
+              content: Text(
+                'This will remove "${asset.name}" from the current level only. It will stay in your assets.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(confirmContext).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(confirmContext).pop(true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                  child: const Text('Remove from level'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Widget _buildAssetSlider({
+    required String label,
+    required double value,
+    required double min,
+    required double max,
+    required ValueChanged<double> onChanged,
+  }) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 82,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.clamp(min, max).toDouble(),
+            min: min,
+            max: max,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _nameWithoutExtension(String filename) {
+    final dotIndex = filename.lastIndexOf('.');
+    return dotIndex <= 0 ? filename : filename.substring(0, dotIndex);
+  }
+
+  String _mimeTypeForName(String filename) {
+    final lowerName = filename.toLowerCase();
+    if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lowerName.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    if (lowerName.endsWith('.gif')) {
+      return 'image/gif';
+    }
+    return 'image/png';
+  }
+
   int? _readInt(Object? value) {
     if (value is int) {
       return value;
@@ -1182,7 +1817,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       return false;
     }
     return payload.kind == _PayloadKind.boardPalette ||
-        payload.kind == _PayloadKind.boardItem;
+        payload.kind == _PayloadKind.boardItem ||
+        payload.kind == _PayloadKind.customAsset;
   }
 
   void _handleBoardDrop(_Payload payload, _Cell target) {
@@ -1194,6 +1830,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       case _PayloadKind.boardItem:
         if (payload.itemType != null && payload.sourceCell != null) {
           _placeItem(payload.itemType!, target, source: payload.sourceCell);
+        }
+      case _PayloadKind.customAsset:
+        if (payload.customAssetId != null) {
+          _placeCustomAsset(payload.customAssetId!, target);
         }
       case _PayloadKind.solutionBlock:
       case _PayloadKind.solutionTrayBlock:
@@ -1209,9 +1849,13 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       final movedObstacleStyle = source == null
           ? null
           : _obstacleStylesByCell[source];
+      final movedCustomAssetId = source == null
+          ? null
+          : _customAssetIdsByCell[source];
       if (source != null) {
         _items.remove(source);
         _obstacleStylesByCell.remove(source);
+        _customAssetIdsByCell.remove(source);
       }
       if (type == _BoardItemType.player || type == _BoardItemType.goal) {
         final removedCells = _items.entries
@@ -1221,11 +1865,60 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         _items.removeWhere((cell, item) => item == type && cell != target);
         for (final cell in removedCells) {
           _obstacleStylesByCell.remove(cell);
+          _customAssetIdsByCell.remove(cell);
         }
       }
       _items[target] = type;
+      if (movedCustomAssetId == null) {
+        _customAssetIdsByCell.remove(target);
+      } else {
+        _customAssetIdsByCell[target] = movedCustomAssetId;
+      }
       if (type == _BoardItemType.obstacle) {
         _obstacleStylesByCell[target] = movedObstacleStyle ?? _obstacleStyleId;
+      } else {
+        _obstacleStylesByCell.remove(target);
+      }
+    });
+    _syncTopViewGame(resetPlayer: true);
+    _stopCodeRun();
+  }
+
+  void _placeCustomAsset(String assetId, _Cell target) {
+    final asset = _customAssetById(assetId);
+    if (asset == null) {
+      return;
+    }
+    if (asset.type == CustomAssetType.background) {
+      setState(() {
+        _customBackgroundAssetId = asset.id;
+      });
+      _syncTopViewGame(resetPlayer: true);
+      return;
+    }
+    final type = switch (asset.type) {
+      CustomAssetType.character => _BoardItemType.player,
+      CustomAssetType.obstacle => _BoardItemType.obstacle,
+      CustomAssetType.collectable => _BoardItemType.collectable,
+      CustomAssetType.goal => _BoardItemType.goal,
+      CustomAssetType.background => _BoardItemType.obstacle,
+    };
+    setState(() {
+      if (type == _BoardItemType.player || type == _BoardItemType.goal) {
+        final removedCells = _items.entries
+            .where((entry) => entry.value == type && entry.key != target)
+            .map((entry) => entry.key)
+            .toList();
+        _items.removeWhere((cell, item) => item == type && cell != target);
+        for (final cell in removedCells) {
+          _obstacleStylesByCell.remove(cell);
+          _customAssetIdsByCell.remove(cell);
+        }
+      }
+      _items[target] = type;
+      _customAssetIdsByCell[target] = asset.id;
+      if (type == _BoardItemType.obstacle) {
+        _obstacleStylesByCell[target] = _obstacleStyleId;
       } else {
         _obstacleStylesByCell.remove(target);
       }
@@ -1242,6 +1935,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     setState(() {
       _items.remove(cell);
       _obstacleStylesByCell.remove(cell);
+      _customAssetIdsByCell.remove(cell);
     });
     _syncTopViewGame(resetPlayer: true);
     _stopCodeRun();
@@ -1420,6 +2114,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     setState(() {
       _items.clear();
       _obstacleStylesByCell.clear();
+      _customAssetIdsByCell.clear();
+      _customAssets.clear();
+      _customAssetImageBytes.clear();
+      _customBackgroundAssetId = null;
       _allowedBlocks.clear();
       _isRunningCode = false;
       _activeCodeLine = null;
@@ -1681,6 +2379,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 .map(_buildBoardPaletteItem)
                 .toList(),
           ),
+        ),
+        const SizedBox(height: 14),
+        _buildSidebarSection(
+          title: 'Custom assets',
+          child: _buildCustomAssetsPanel(),
         ),
         const SizedBox(height: 14),
         _buildSidebarSection(
@@ -2314,6 +3017,416 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
+  Widget _buildCustomAssetsPanel() {
+    final assets = _customAssets;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FilledButton.icon(
+          onPressed: widget.playMode ? null : _showAddAssetDialog,
+          icon: const Icon(Icons.add_photo_alternate_rounded),
+          label: const Text('Add asset'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+        if (assets.isEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Uploaded or saved assets will appear here.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.blueGrey.shade500),
+          ),
+        ] else ...[
+          const SizedBox(height: 12),
+          for (final asset in assets) ...[
+            _buildCustomAssetListItem(asset),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCustomAssetListItem(CustomAssetData asset) {
+    final bytes = _assetImageBytes(asset);
+    if (bytes == null) {
+      unawaited(_ensureAssetImageLoaded(asset));
+    }
+    final accent = _customAssetTypeColor(asset.type);
+    final isBackground = _customBackgroundAssetId == asset.id;
+    final item = InkWell(
+      onTap: widget.playMode
+          ? null
+          : () {
+              if (asset.type == CustomAssetType.background) {
+                return;
+              }
+            },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isBackground ? accent.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isBackground ? accent : Colors.blueGrey.shade100,
+            width: isBackground ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: _buildCustomAssetPreview(
+                asset: asset,
+                width: 44,
+                height: asset.type == CustomAssetType.background ? 30 : 44,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    asset.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    asset.type.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              tooltip: 'Asset settings',
+              onPressed: widget.playMode
+                  ? null
+                  : () => _showAssetEditorDialog(existingAsset: asset),
+              icon: const Icon(Icons.settings_rounded, size: 20),
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (widget.playMode) {
+      return item;
+    }
+
+    return Draggable<_Payload>(
+      data: _Payload.customAsset(asset.id),
+      maxSimultaneousDrags: 1,
+      dragAnchorStrategy: pointerDragAnchorStrategy,
+      feedback: Material(
+        color: Colors.transparent,
+        child: Opacity(
+          opacity: 0.9,
+          child: SizedBox(
+            width: 64,
+            height: asset.type == CustomAssetType.background ? 42 : 64,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _buildCustomAssetPreview(
+                  asset: asset,
+                  width: 64,
+                  height: asset.type == CustomAssetType.background ? 42 : 64,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+      childWhenDragging: Opacity(opacity: 0.45, child: item),
+      child: item,
+    );
+  }
+
+  Future<void> _showAddAssetDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Add asset'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildAssetChoiceTile(
+                icon: Icons.collections_bookmark_rounded,
+                title: 'Browse collections',
+                subtitle: 'Use your creations or saved assets.',
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  _showCollectionPickerDialog();
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildAssetChoiceTile(
+                icon: Icons.upload_file_rounded,
+                title: 'Upload new asset',
+                subtitle: 'Choose an image from this device.',
+                onTap: () {
+                  Navigator.of(dialogContext).pop();
+                  _pickAndCreateCustomAsset();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAssetChoiceTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      tileColor: Colors.blueGrey.shade50,
+      leading: Icon(icon, color: Colors.blue.shade700),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+      subtitle: Text(subtitle),
+    );
+  }
+
+  Future<void> _showCollectionPickerDialog() async {
+    final selectedAsset = await showDialog<CustomAssetData>(
+      context: context,
+      builder: (dialogContext) {
+        return DefaultTabController(
+          length: 2,
+          child: AlertDialog(
+            title: const Text('Asset collection'),
+            content: SizedBox(
+              width: 420,
+              height: 360,
+              child: Column(
+                children: [
+                  const TabBar(
+                    tabs: [
+                      Tab(text: 'Saved'),
+                      Tab(text: 'Creations'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildCollectionAssetList(
+                          _savedCustomAssets,
+                          dialogContext,
+                        ),
+                        _buildCollectionAssetList(
+                          _createdCustomAssets,
+                          dialogContext,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selectedAsset == null) {
+      return;
+    }
+    _useCustomAssetFromCollection(selectedAsset);
+  }
+
+  Widget _buildCollectionAssetList(
+    List<CustomAssetData> assets,
+    BuildContext dialogContext,
+  ) {
+    if (assets.isEmpty) {
+      return Center(
+        child: Text(
+          'No assets yet.',
+          style: TextStyle(color: Colors.blueGrey.shade500),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: assets.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final asset = assets[index];
+        return ListTile(
+          onTap: () => Navigator.of(dialogContext).pop(asset),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          tileColor: Colors.blueGrey.shade50,
+          leading: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: _buildCustomAssetPreview(
+              asset: asset,
+              width: 44,
+              height: 44,
+            ),
+          ),
+          title: Text(asset.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(asset.type.label),
+        );
+      },
+    );
+  }
+
+  Widget _buildCustomAssetPreview({
+    required CustomAssetData asset,
+    required double width,
+    required double height,
+  }) {
+    final bytes = _assetImageBytes(asset);
+    if (bytes == null) {
+      unawaited(_ensureAssetImageLoaded(asset));
+    }
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: bytes == null
+          ? ColoredBox(
+              color: Colors.blueGrey.shade50,
+              child: Icon(
+                Icons.image_not_supported_outlined,
+                color: Colors.blueGrey.shade400,
+              ),
+            )
+          : _buildFramedImagePreview(
+              bytes: bytes,
+              scale: asset.frameScale,
+              offsetX: asset.frameOffsetX,
+              offsetY: asset.frameOffsetY,
+            ),
+    );
+  }
+
+  Widget _buildFramedImagePreview({
+    required Uint8List bytes,
+    required double scale,
+    required double offsetX,
+    required double offsetY,
+  }) {
+    return _CustomAssetFrameImage(
+      bytes: bytes,
+      scale: scale,
+      offsetX: offsetX,
+      offsetY: offsetY,
+    );
+  }
+
+  Color _customAssetTypeColor(CustomAssetType type) {
+    switch (type) {
+      case CustomAssetType.character:
+        return const Color(0xFF2563EB);
+      case CustomAssetType.obstacle:
+        return const Color(0xFF64748B);
+      case CustomAssetType.collectable:
+        return const Color(0xFFF59E0B);
+      case CustomAssetType.goal:
+        return const Color(0xFFEF4444);
+      case CustomAssetType.background:
+        return const Color(0xFF0F766E);
+    }
+  }
+
+  double _frameAspectForAssetType(CustomAssetType type) {
+    return type == CustomAssetType.background ? _cols / _rows : 1;
+  }
+
+  Size _assetEditorPreviewSize(CustomAssetType type, Size screenSize) {
+    final maxDialogWidth = math.min(screenSize.width * 0.72, 560.0);
+    final maxDialogHeight = math.min(screenSize.height * 0.42, 360.0);
+    final aspect = _frameAspectForAssetType(type);
+
+    double targetWidth;
+    double targetHeight;
+    switch (type) {
+      case CustomAssetType.background:
+        targetWidth = math.min(maxDialogWidth, 520);
+        targetHeight = math.min(targetWidth / aspect, 220);
+        targetWidth = targetHeight * aspect;
+        break;
+      case CustomAssetType.character:
+        targetHeight = math.min(maxDialogHeight, 340);
+        targetWidth = targetHeight;
+        break;
+      case CustomAssetType.obstacle:
+      case CustomAssetType.goal:
+        targetHeight = math.min(maxDialogHeight, 300);
+        targetWidth = targetHeight;
+        break;
+      case CustomAssetType.collectable:
+        targetHeight = math.min(maxDialogHeight, 260);
+        targetWidth = targetHeight;
+        break;
+    }
+
+    if (targetWidth > maxDialogWidth) {
+      targetWidth = maxDialogWidth;
+      targetHeight = targetWidth / aspect;
+    }
+
+    return Size(targetWidth, targetHeight);
+  }
+
+  double _defaultFrameScaleForType(CustomAssetType type) {
+    switch (type) {
+      case CustomAssetType.character:
+        return 1.25;
+      case CustomAssetType.goal:
+      case CustomAssetType.obstacle:
+        return 1.05;
+      case CustomAssetType.background:
+        return 1;
+      case CustomAssetType.collectable:
+        return 1.2;
+    }
+  }
+
   Widget _buildInitialDirectionControl() {
     return SizedBox(
       width: double.infinity,
@@ -2459,6 +3572,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   Widget _buildBackgroundControl() {
     final selectedBackground = topViewBackgroundById(_backgroundId);
+    final activeCustomBackground = _customAssetById(_customBackgroundAssetId);
+    final selectedBackgroundId =
+        activeCustomBackground?.id ?? selectedBackground.id;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2472,8 +3588,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          key: ValueKey<String>('background-$_backgroundId'),
-          initialValue: selectedBackground.id,
+          key: ValueKey<String>('background-$selectedBackgroundId'),
+          initialValue: selectedBackgroundId,
           isExpanded: true,
           items: [
             for (final background in topViewBackgrounds)
@@ -2481,17 +3597,26 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 value: background.id,
                 child: _buildBackgroundMenuItem(background),
               ),
+            if (activeCustomBackground != null)
+              DropdownMenuItem<String>(
+                value: activeCustomBackground.id,
+                child: _buildCustomBackgroundMenuItem(activeCustomBackground),
+              ),
           ],
           onChanged: (backgroundId) {
-            if (backgroundId == null ||
-                backgroundId == _backgroundId ||
-                widget.playMode) {
+            if (backgroundId == null || widget.playMode) {
               return;
             }
 
             _stopCodeRun();
             setState(() {
-              _backgroundId = topViewBackgroundById(backgroundId).id;
+              final customBackground = _customAssetById(backgroundId);
+              if (customBackground?.type == CustomAssetType.background) {
+                _customBackgroundAssetId = customBackground!.id;
+              } else {
+                _backgroundId = topViewBackgroundById(backgroundId).id;
+                _customBackgroundAssetId = null;
+              }
             });
             _syncTopViewGame(resetPlayer: true);
           },
@@ -2503,16 +3628,6 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
-        ),
-        const SizedBox(height: 10),
-        _buildAssetPreviewCard(
-          assetPath: selectedBackground.assetPath,
-          label: localizedTopViewBackgroundLabel(
-            AppLanguage.of(context),
-            selectedBackground.id,
-          ),
-          fallbackIcon: Icons.landscape_rounded,
-          imageFit: BoxFit.cover,
         ),
       ],
     );
@@ -2565,63 +3680,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
-        const SizedBox(height: 10),
-        _buildAssetPreviewCard(
-          assetPath: selectedObstacle.assetPath,
-          label: localizedTopViewObstacleLabel(
-            AppLanguage.of(context),
-            selectedObstacle.id,
-          ),
-          fallbackIcon: Icons.terrain_rounded,
-          imageFit: BoxFit.contain,
-        ),
       ],
-    );
-  }
-
-  Widget _buildAssetPreviewCard({
-    required String assetPath,
-    required String label,
-    required IconData fallbackIcon,
-    required BoxFit imageFit,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.blueGrey.shade50,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.blueGrey.shade100),
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: SizedBox(
-              width: 52,
-              height: 52,
-              child: Image.asset(
-                assetPath,
-                fit: imageFit,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(fallbackIcon, color: Colors.blueGrey.shade400);
-                },
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.blueGrey.shade900,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2677,6 +3736,44 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCustomBackgroundMenuItem(CustomAssetData asset) {
+    final bytes = _assetImageBytes(asset);
+    if (bytes == null) {
+      unawaited(_ensureAssetImageLoaded(asset));
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: SizedBox(
+            width: 30,
+            height: 22,
+            child: bytes == null
+                ? ColoredBox(
+                    color: Colors.blueGrey.shade50,
+                    child: Icon(
+                      Icons.image_not_supported_outlined,
+                      size: 16,
+                      color: Colors.blueGrey.shade400,
+                    ),
+                  )
+                : _buildFramedImagePreview(
+                    bytes: bytes,
+                    scale: asset.frameScale,
+                    offsetX: asset.frameOffsetX,
+                    offsetY: asset.frameOffsetY,
+                  ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(asset.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         ),
       ],
     );
@@ -2809,6 +3906,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     required String label,
     required Color color,
     IconData? icon,
+    Uint8List? imageBytes,
     bool isInstruction = false,
   }) {
     return Container(
@@ -2829,7 +3927,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (icon != null) ...[
+          if (imageBytes != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(
+                imageBytes,
+                width: isInstruction ? 20 : 28,
+                height: isInstruction ? 20 : 28,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 4),
+          ] else if (icon != null) ...[
             Icon(icon, color: color, size: isInstruction ? 18 : 22),
             const SizedBox(height: 4),
           ],
@@ -3180,6 +4289,49 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   }
 }
 
+class _CustomAssetFrameImage extends StatelessWidget {
+  final Uint8List bytes;
+  final double scale;
+  final double offsetX;
+  final double offsetY;
+
+  const _CustomAssetFrameImage({
+    required this.bytes,
+    required this.scale,
+    required this.offsetX,
+    required this.offsetY,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final frameWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 0.0;
+        final frameHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : 0.0;
+
+        return ClipRect(
+          child: Transform.translate(
+            offset: Offset(
+              offsetX * frameWidth * 0.5,
+              offsetY * frameHeight * 0.5,
+            ),
+            child: Transform.scale(
+              scale: scale,
+              child: SizedBox.expand(
+                child: Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 const List<_CodeBlock> _codeBlocks = <_CodeBlock>[
   _CodeBlock(
     id: 'step',
@@ -3260,18 +4412,26 @@ class _BoardItemTypeParser {
   }
 }
 
-enum _PayloadKind { boardPalette, boardItem, solutionBlock, solutionTrayBlock }
+enum _PayloadKind {
+  boardPalette,
+  boardItem,
+  customAsset,
+  solutionBlock,
+  solutionTrayBlock,
+}
 
 class _Payload {
   final _PayloadKind kind;
   final _BoardItemType? itemType;
   final _Cell? sourceCell;
+  final String? customAssetId;
   final _CodeBlock? block;
 
   const _Payload._({
     required this.kind,
     this.itemType,
     this.sourceCell,
+    this.customAssetId,
     this.block,
   });
 
@@ -3283,6 +4443,8 @@ class _Payload {
         itemType: itemType,
         sourceCell: sourceCell,
       );
+  const _Payload.customAsset(String customAssetId)
+    : this._(kind: _PayloadKind.customAsset, customAssetId: customAssetId);
   const _Payload.solutionBlock(_CodeBlock block)
     : this._(kind: _PayloadKind.solutionBlock, block: block);
   const _Payload.solutionTrayBlock(_CodeBlock block)

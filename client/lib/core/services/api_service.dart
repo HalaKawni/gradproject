@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -354,6 +355,102 @@ class ApiService {
       }
     } catch (e) {
       return {'success': false, 'message': 'Get published project error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> uploadBuilderAsset({
+    required String authToken,
+    required String name,
+    required String type,
+    required String mimeType,
+    required String imageBase64,
+    bool isPublic = false,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/builder/assets',
+      authToken: authToken,
+      body: {
+        'name': name,
+        'type': type,
+        'mimeType': mimeType,
+        'imageBase64': imageBase64,
+        'isPublic': isPublic,
+      },
+      defaultSuccessMessage: 'Asset uploaded successfully',
+      defaultErrorMessage: 'Failed to upload asset',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getBuilderAssets({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/builder/assets',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch assets',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getBuilderAsset({
+    required String authToken,
+    required String assetId,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/builder/assets/$assetId',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch asset',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateBuilderAsset({
+    required String authToken,
+    required String assetId,
+    required Map<String, dynamic> assetJson,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/builder/assets/$assetId',
+      authToken: authToken,
+      body: assetJson,
+      defaultSuccessMessage: 'Asset updated successfully',
+      defaultErrorMessage: 'Failed to update asset',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteBuilderAsset({
+    required String authToken,
+    required String assetId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/builder/assets/$assetId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Asset deleted successfully',
+      defaultErrorMessage: 'Failed to delete asset',
+    );
+  }
+
+  static Future<Uint8List?> getBuilderAssetData({
+    required String authToken,
+    required String assetId,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/api/builder/assets/$assetId/data');
+      final response = await http.get(
+        url,
+        headers: _headersWithAuth(authToken),
+      );
+
+      if (_isSuccessful(response.statusCode)) {
+        return response.bodyBytes;
+      }
+
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 

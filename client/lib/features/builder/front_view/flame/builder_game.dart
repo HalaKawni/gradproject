@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../controllers/builder_controller.dart';
 import '../models/builder_playback_state.dart';
+import '../models/custom_asset_data.dart';
 import '../models/entity_data.dart';
 import '../models/logic_command.dart';
 import '../models/tile_data.dart';
@@ -70,6 +71,8 @@ class BuilderBoard extends PositionComponent
   final Map<String, _CharacterFrameSet> _characterFrames =
       <String, _CharacterFrameSet>{};
   final Map<String, ui.Image> _collectableImages = <String, ui.Image>{};
+  final Map<String, ui.Image> _customAssetImages = <String, ui.Image>{};
+  final Set<String> _customAssetImagesLoading = <String>{};
   List<ui.Image> _goalChestFrames = const <ui.Image>[];
   ui.Image? _backgroundImage;
   ui.Image? _groundTerrainImage;
@@ -270,11 +273,11 @@ class BuilderBoard extends PositionComponent
   @override
   void render(Canvas canvas) {
     _syncBoardSize();
+    _ensureCustomAssetImagesLoaded();
 
     _drawBackground(canvas);
     _drawTiles(canvas);
     _drawEntities(canvas);
-    _drawSelection(canvas);
     super.render(canvas);
   }
 
@@ -286,7 +289,13 @@ class BuilderBoard extends PositionComponent
         tileSize,
         tileSize,
       );
-      if (_isGroundTile(tile.type)) {
+      final customAsset = controller.customAssetById(
+        tile.config['customAssetId']?.toString(),
+      );
+      final customImage = _customAssetImages[customAsset?.id];
+      if (customAsset != null && customImage != null) {
+        _drawCustomAssetImage(canvas, rect, customAsset, customImage);
+      } else if (_isGroundTile(tile.type)) {
         _drawTileImage(
           canvas,
           rect,
@@ -326,17 +335,26 @@ class BuilderBoard extends PositionComponent
           rect,
           characterId: _characterIdForEntity(entity),
           facingDirection: _facingDirectionForEntity(entity),
+          customAssetId: entity.config['customAssetId']?.toString(),
         );
       } else if (entity.type == 'collectable') {
         _drawCollectable(canvas, rect, entity);
       } else if (entity.type == 'goal') {
-        _drawGoal(canvas, rect);
+        _drawGoal(canvas, rect, entity: entity);
       } else {
-        _drawBox(
-          canvas,
-          rect.deflate(tileSize * 0.18),
-          _entityColorForType(entity.type),
+        final customAsset = controller.customAssetById(
+          entity.config['customAssetId']?.toString(),
         );
+        final customImage = _customAssetImages[customAsset?.id];
+        if (customAsset != null && customImage != null) {
+          _drawCustomAssetImage(canvas, rect, customAsset, customImage);
+        } else {
+          _drawBox(
+            canvas,
+            rect.deflate(tileSize * 0.18),
+            _entityColorForType(entity.type),
+          );
+        }
       }
     }
 
@@ -350,49 +368,103 @@ class BuilderBoard extends PositionComponent
         facingDirection:
             _activeVisualSegment?.facingDirection ??
             playbackState.facingDirection,
+        customAssetId: _playerStartEntity?.config['customAssetId']?.toString(),
       );
     }
   }
 
-  void _drawSelection(Canvas canvas) {
-    if (controller.selectedX == null || controller.selectedY == null) {
+  void _drawBackground(Canvas canvas) {
+    final boardRect = Rect.fromLTWH(0, 0, boardWidth, boardHeight);
+    final customBackground = controller.customAssetById(
+      controller.project.backgroundAssetId,
+    );
+    final customBackgroundImage = _customAssetImages[customBackground?.id];
+    if (customBackground != null && customBackgroundImage != null) {
+      _drawRepeatedCustomBackground(
+        canvas,
+        boardRect,
+        customBackground,
+        customBackgroundImage,
+      );
       return;
     }
 
-    final rect = Rect.fromLTWH(
-      controller.selectedX! * tileSize,
-      controller.selectedY! * tileSize,
-      tileSize,
-      tileSize,
-    );
-
-    final fillPaint = Paint()
-      ..color = Colors.yellow.withValues(alpha: 0.18)
-      ..style = PaintingStyle.fill;
-
-    final borderPaint = Paint()
-      ..color = Colors.orange
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    canvas.drawRect(rect, fillPaint);
-    canvas.drawRect(rect, borderPaint);
-  }
-
-  void _drawBackground(Canvas canvas) {
-    final boardRect = Rect.fromLTWH(0, 0, boardWidth, boardHeight);
     final image = _backgroundImage;
     if (image == null) {
       canvas.drawRect(boardRect, Paint()..color = _backgroundColor);
       return;
     }
 
-    canvas.drawImageRect(
-      image,
-      _coverSourceRectForImage(image: image, destinationRect: boardRect),
-      boardRect,
-      Paint(),
-    );
+    _drawRepeatedBackgroundImage(canvas, boardRect, image);
+  }
+
+  void _drawRepeatedBackgroundImage(
+    Canvas canvas,
+    Rect boardRect,
+    ui.Image image,
+  ) {
+    final segmentWidth = _backgroundSegmentWidth(boardRect);
+    final paint = Paint()..filterQuality = FilterQuality.high;
+
+    canvas.save();
+    canvas.clipRect(boardRect);
+    for (
+      var left = boardRect.left;
+      left < boardRect.right;
+      left += segmentWidth
+    ) {
+      final segmentRect = Rect.fromLTWH(
+        left,
+        boardRect.top,
+        segmentWidth,
+        boardRect.height,
+      );
+      canvas.drawImageRect(
+        image,
+        _coverSourceRectForImage(image: image, destinationRect: segmentRect),
+        segmentRect,
+        paint,
+      );
+    }
+    canvas.restore();
+  }
+
+  void _drawRepeatedCustomBackground(
+    Canvas canvas,
+    Rect boardRect,
+    CustomAssetData asset,
+    ui.Image image,
+  ) {
+    final segmentWidth = _backgroundSegmentWidth(boardRect);
+
+    canvas.save();
+    canvas.clipRect(boardRect);
+    for (
+      var left = boardRect.left;
+      left < boardRect.right;
+      left += segmentWidth
+    ) {
+      _drawCustomAssetImage(
+        canvas,
+        Rect.fromLTWH(left, boardRect.top, segmentWidth, boardRect.height),
+        asset,
+        image,
+        clipToFrame: true,
+      );
+    }
+    canvas.restore();
+  }
+
+  double _backgroundSegmentWidth(Rect boardRect) {
+    final settings = controller.project.settings;
+    final viewportHeight = settings.viewportHeight <= 0
+        ? boardRect.height
+        : settings.viewportHeight;
+    final viewportWidth = settings.viewportWidth <= 0
+        ? boardRect.width
+        : settings.viewportWidth;
+    final scaledWidth = viewportWidth * (boardRect.height / viewportHeight);
+    return math.max(1, scaledWidth);
   }
 
   void _drawBox(Canvas canvas, Rect rect, Color color) {
@@ -425,13 +497,55 @@ class BuilderBoard extends PositionComponent
     );
   }
 
+  void _ensureCustomAssetImagesLoaded() {
+    for (final asset in controller.project.customAssets) {
+      if (_customAssetImages.containsKey(asset.id) ||
+          _customAssetImagesLoading.contains(asset.id)) {
+        continue;
+      }
+
+      final bytes = controller.assetImageBytes(asset);
+      if (bytes == null) {
+        controller.ensureAssetImageLoaded(asset);
+        continue;
+      }
+
+      _customAssetImagesLoading.add(asset.id);
+      decodeImageFromList(bytes)
+          .then((image) {
+            _customAssetImages[asset.id] = image;
+          })
+          .catchError((error) {
+            debugPrint('Failed to load custom asset ${asset.name}: $error');
+          })
+          .whenComplete(() {
+            _customAssetImagesLoading.remove(asset.id);
+          });
+    }
+  }
+
   void _drawPlayer(
     Canvas canvas,
     Rect tileRect, {
     BuilderPlaybackState? playbackState,
     required String characterId,
     required String facingDirection,
+    String? customAssetId,
   }) {
+    final customAsset = controller.customAssetById(customAssetId);
+    final customImage = _customAssetImages[customAssetId];
+    if (customAsset != null && customImage != null) {
+      _drawCustomAssetImage(
+        canvas,
+        tileRect,
+        customAsset,
+        customImage,
+        flipHorizontally:
+            facingDirection == BuilderController.playerFacingRight,
+      );
+      return;
+    }
+
     final character = builderCharacterById(characterId);
     final frame = _currentCharacterFrame(playbackState, characterId);
     if (frame == null) {
@@ -625,6 +739,15 @@ class BuilderBoard extends PositionComponent
   }
 
   void _drawCollectable(Canvas canvas, Rect tileRect, EntityData entity) {
+    final customAsset = controller.customAssetById(
+      entity.config['customAssetId']?.toString(),
+    );
+    final customImage = _customAssetImages[customAsset?.id];
+    if (customAsset != null && customImage != null) {
+      _drawCustomAssetImage(canvas, tileRect, customAsset, customImage);
+      return;
+    }
+
     final collectable = builderCollectableById(
       entity.config['item']?.toString(),
     );
@@ -648,7 +771,16 @@ class BuilderBoard extends PositionComponent
     );
   }
 
-  void _drawGoal(Canvas canvas, Rect tileRect) {
+  void _drawGoal(Canvas canvas, Rect tileRect, {EntityData? entity}) {
+    final customAsset = controller.customAssetById(
+      entity?.config['customAssetId']?.toString(),
+    );
+    final customImage = _customAssetImages[customAsset?.id];
+    if (customAsset != null && customImage != null) {
+      _drawCustomAssetImage(canvas, tileRect, customAsset, customImage);
+      return;
+    }
+
     if (_goalChestFrames.isEmpty) {
       _drawBox(canvas, tileRect.deflate(tileSize * 0.18), _goalColor);
       return;
@@ -666,6 +798,73 @@ class BuilderBoard extends PositionComponent
       Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
       imageRect,
       Paint(),
+    );
+  }
+
+  void _drawCustomAssetImage(
+    Canvas canvas,
+    Rect frameRect,
+    CustomAssetData asset,
+    ui.Image image, {
+    bool flipHorizontally = false,
+    bool clipToFrame = false,
+  }) {
+    final paint = Paint();
+    final imageRect = Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+    final fittedRect = _containDestinationRectForImage(
+      image: image,
+      frameRect: frameRect,
+      scale: asset.frameScale,
+      offsetX: asset.frameOffsetX,
+      offsetY: asset.frameOffsetY,
+    );
+
+    canvas.save();
+    if (clipToFrame) {
+      canvas.clipRect(frameRect);
+    }
+    if (flipHorizontally) {
+      canvas.translate(frameRect.left + frameRect.right, 0);
+      canvas.scale(-1, 1);
+    }
+    canvas.drawImageRect(image, imageRect, fittedRect, paint);
+    canvas.restore();
+  }
+
+  Rect _containDestinationRectForImage({
+    required ui.Image image,
+    required Rect frameRect,
+    required double scale,
+    required double offsetX,
+    required double offsetY,
+  }) {
+    final imageAspect = image.width / image.height;
+    final frameAspect = frameRect.width / frameRect.height;
+    var width = frameRect.width;
+    var height = frameRect.height;
+    if (imageAspect > frameAspect) {
+      width = frameRect.width;
+      height = width / imageAspect;
+    } else {
+      height = frameRect.height;
+      width = height * imageAspect;
+    }
+
+    width *= scale;
+    height *= scale;
+
+    return Rect.fromCenter(
+      center: frameRect.center.translate(
+        offsetX * frameRect.width * 0.5,
+        offsetY * frameRect.height * 0.5,
+      ),
+      width: width,
+      height: height,
     );
   }
 
@@ -853,6 +1052,16 @@ class BuilderBoard extends PositionComponent
   EntityData? get _goalEntity {
     for (final entity in controller.project.entities) {
       if (entity.type == 'goal') {
+        return entity;
+      }
+    }
+
+    return null;
+  }
+
+  EntityData? get _playerStartEntity {
+    for (final entity in controller.project.entities) {
+      if (entity.type == 'playerStart') {
         return entity;
       }
     }

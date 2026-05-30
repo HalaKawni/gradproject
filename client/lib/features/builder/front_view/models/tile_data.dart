@@ -2,11 +2,17 @@ class TileData {
   final String type;
   final int x;
   final int y;
+  final Map<String, dynamic> config;
 
-  const TileData({required this.type, required this.x, required this.y});
+  const TileData({
+    required this.type,
+    required this.x,
+    required this.y,
+    this.config = const {},
+  });
 
   Map<String, dynamic> toJson() {
-    return {'type': type, 'x': x, 'y': y};
+    return {'type': type, 'x': x, 'y': y, 'config': config};
   }
 
   factory TileData.fromJson(Map<String, dynamic> json) {
@@ -14,10 +20,21 @@ class TileData {
       type: json['type'] ?? 'floor',
       x: json['x'] ?? 0,
       y: json['y'] ?? 0,
+      config: Map<String, dynamic>.from(json['config'] ?? {}),
     );
   }
 
-  TileData copyWith({String? type, int? x, int? y}) {
-    return TileData(type: type ?? this.type, x: x ?? this.x, y: y ?? this.y);
+  TileData copyWith({
+    String? type,
+    int? x,
+    int? y,
+    Map<String, dynamic>? config,
+  }) {
+    return TileData(
+      type: type ?? this.type,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      config: config ?? this.config,
+    );
   }
 }
