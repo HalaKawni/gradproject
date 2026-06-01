@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../language/game_parser.dart';
 import '../language/game_runtime.dart';
+import '../language/game_diagnostics.dart';
 import '../models/fourth_demo_project.dart';
 
 class FourthDemoController extends ChangeNotifier {
@@ -17,6 +18,14 @@ class FourthDemoController extends ChangeNotifier {
   static const double _jumpVelocity = 430;
   static const double _defaultGravity = 980;
   static const double _groundControlSpeed = 260;
+  static const int maxInstructionsPerEvent = 1000;
+  static const int maxLoopIterations = 500;
+  static const Set<String> supportedBackgrounds = <String>{
+    'forest',
+    'sky',
+    'desert',
+    'green',
+  };
 
   FourthDemoProject project = FourthDemoProject.sample();
   FourthDemoStageTool stageTool = FourthDemoStageTool.select;
@@ -27,6 +36,7 @@ class FourthDemoController extends ChangeNotifier {
   bool exerciseComplete = false;
   String statusMessage = 'Press RUN, then use the right arrow key.';
   String? codeError;
+  List<GameDiagnostic> diagnostics = const <GameDiagnostic>[];
   String? draggingSpriteId;
   final GameParser _parser = const GameParser();
   final GameRuntime _runtime = const GameRuntime();
@@ -35,6 +45,8 @@ class FourthDemoController extends ChangeNotifier {
   final Set<LogicalKeyboardKey> _pressedKeys = <LogicalKeyboardKey>{};
   String? _continuousHorizontalSpriteId;
   double _continuousHorizontalVelocity = 0;
+  final Map<String, String> _loopSpriteVariables = <String, String>{};
+  int _instructionCount = 0;
 
   FourthDemoSprite? get selectedSprite => project.selectedSprite;
 
@@ -84,6 +96,10 @@ class FourthDemoController extends ChangeNotifier {
     final nextCode = Map<String, String>.from(project.codeBySpriteId);
     nextCode[project.selectedSpriteId] = code;
     project = project.copyWith(codeBySpriteId: nextCode);
+    if (codeError != null || diagnostics.isNotEmpty) {
+      codeError = null;
+      diagnostics = const <GameDiagnostic>[];
+    }
     if (notify) {
       notifyListeners();
     }
@@ -105,6 +121,15 @@ class FourthDemoController extends ChangeNotifier {
 
   void setPaletteTab(FourthDemoPaletteTab tab) {
     paletteTab = tab;
+    notifyListeners();
+  }
+
+  void dismissDiagnostics() {
+    if (diagnostics.isEmpty && codeError == null) {
+      return;
+    }
+    diagnostics = const <GameDiagnostic>[];
+    codeError = null;
     notifyListeners();
   }
 
@@ -141,17 +166,33 @@ class FourthDemoController extends ChangeNotifier {
       return false;
     }
 
-    final parsed = _parser.parse(code: selectedCode, targetSpriteId: sprite.id);
-    if (!parsed.isValid) {
-      codeError = parsed.diagnostic?.message;
-      statusMessage = parsed.diagnostic?.message ?? 'Check your code.';
-      isPlaying = false;
-      notifyListeners();
-      return false;
+    final parsedHandlers = <FourthDemoEventHandler>[];
+    for (final codeEntry in project.codeBySpriteId.entries) {
+      if (codeEntry.value.trim().isEmpty) {
+        continue;
+      }
+      final parsed = _parser.parse(
+        code: codeEntry.value,
+        targetSpriteId: codeEntry.key,
+        project: project,
+      );
+      if (!parsed.isValid) {
+        final diagnostic = parsed.diagnostic;
+        diagnostics = diagnostic == null
+            ? const <GameDiagnostic>[]
+            : <GameDiagnostic>[diagnostic];
+        codeError = diagnostic?.displayMessage;
+        statusMessage = codeError ?? 'Check your code.';
+        isPlaying = false;
+        notifyListeners();
+        return false;
+      }
+      parsedHandlers.addAll(parsed.handlers);
     }
 
-    project = project.copyWith(events: parsed.handlers);
+    project = project.copyWith(events: parsedHandlers);
     codeError = null;
+    diagnostics = const <GameDiagnostic>[];
     resetRuntime(keepMode: true);
     isPlaying = true;
     statusMessage = 'Running. Press an arrow key to move ${sprite.name}.';
@@ -173,6 +214,7 @@ class FourthDemoController extends ChangeNotifier {
     showPreviousSolution = false;
     exerciseComplete = false;
     codeError = null;
+    diagnostics = const <GameDiagnostic>[];
     statusMessage = 'Exercise restarted';
     notifyListeners();
   }
@@ -188,6 +230,7 @@ class FourthDemoController extends ChangeNotifier {
             x: sprite.startX,
             y: sprite.startY,
             visible: true,
+            currentAnimation: '',
           ),
         )
         .toList();
@@ -238,6 +281,35 @@ class FourthDemoController extends ChangeNotifier {
     _runHandlers('onClick', eventSpriteId: hit.id);
   }
 
+  void handleSwipe(String direction) {
+    if (!isPlaying) {
+      return;
+    }
+    _runHandlers('onSwipe', direction: direction);
+  }
+
+  void handleAnimationEnd(String spriteId, String animationName) {
+    if (!isPlaying) {
+      return;
+    }
+    _runHandlers(
+      'onAnimationEnd',
+      eventSpriteId: spriteId,
+      eventArgument: animationName,
+    );
+  }
+
+  void handleAnimationLoop(String spriteId, String animationName) {
+    if (!isPlaying) {
+      return;
+    }
+    _runHandlers(
+      'onAnimationLoop',
+      eventSpriteId: spriteId,
+      eventArgument: animationName,
+    );
+  }
+
   void handleUpdate([double dt = 1 / 60]) {
     if (!isPlaying) {
       return;
@@ -245,25 +317,27 @@ class FourthDemoController extends ChangeNotifier {
     _advanceMotions(dt);
     _advancePhysics(dt);
     _advanceContinuousHorizontalMovement(dt);
+    _runCollisionHandlers();
+    _runWorldBoundsHandlers();
     _runHandlers('onUpdate');
   }
 
   void beginDrag(Offset worldPosition) {
-    if (isPlaying ||
+    if (!isPlaying &&
         stageTool != FourthDemoStageTool.move &&
-            stageTool != FourthDemoStageTool.select) {
+        stageTool != FourthDemoStageTool.select) {
       return;
     }
     final hit = _spriteAt(worldPosition);
     draggingSpriteId = hit?.id;
-    if (hit != null) {
+    if (hit != null && !isPlaying) {
       selectSprite(hit.id);
     }
   }
 
   void dragTo(Offset worldPosition) {
     final id = draggingSpriteId;
-    if (id == null || isPlaying) {
+    if (id == null) {
       return;
     }
     final sprites = project.sprites.map((sprite) {
@@ -282,6 +356,10 @@ class FourthDemoController extends ChangeNotifier {
   }
 
   void endDrag() {
+    final id = draggingSpriteId;
+    if (isPlaying && id != null) {
+      _runHandlers('onDragEnd', eventSpriteId: id);
+    }
     draggingSpriteId = null;
     notifyListeners();
   }
@@ -604,6 +682,7 @@ class FourthDemoController extends ChangeNotifier {
       isPlaying = false;
       exerciseComplete = false;
       codeError = null;
+      diagnostics = const <GameDiagnostic>[];
       statusMessage = 'Imported project';
       notifyListeners();
       return true;
@@ -624,64 +703,246 @@ class FourthDemoController extends ChangeNotifier {
     String event, {
     LogicalKeyboardKey? key,
     String? eventSpriteId,
+    String? eventArgument,
+    String? direction,
+    Set<String> directions = const <String>{},
   }) {
     final handlers = project.events.where((handler) => handler.event == event);
     for (final handler in handlers) {
       if (eventSpriteId != null && handler.targetSpriteId != eventSpriteId) {
         continue;
       }
+      if (eventArgument != null &&
+          handler.argument.isNotEmpty &&
+          _normalizeSpriteLookup(handler.argument) !=
+              _normalizeSpriteLookup(eventArgument)) {
+        continue;
+      }
+      _instructionCount = 0;
       for (final action in handler.actions) {
-        _runAction(handler.targetSpriteId, action, key);
+        if (!_runAction(
+          handler.targetSpriteId,
+          action,
+          key,
+          direction: direction,
+          directions: directions,
+        )) {
+          break;
+        }
       }
     }
     _handleCollections();
   }
 
-  void _runAction(
+  bool _runAction(
     String spriteId,
     FourthDemoAction action,
-    LogicalKeyboardKey? key,
-  ) {
-    if (action.type == FourthDemoActionType.ifCondition) {
-      final shouldRun = _runtime.evaluateCondition(
-        action.condition,
-        GameRuntimeContext(
-          project: project,
-          currentSpriteId: spriteId,
-          key: key,
-        ),
+    LogicalKeyboardKey? key, {
+    String? direction,
+    Set<String> directions = const <String>{},
+  }) {
+    _instructionCount += 1;
+    if (_instructionCount > maxInstructionsPerEvent) {
+      _runtimeError(
+        'Event stopped because it exceeded the safe instruction limit.',
+        action,
       );
-      if (shouldRun) {
-        for (final child in action.actions) {
-          _runAction(spriteId, child, key);
-        }
-      } else {
-        for (final child in action.elseActions) {
-          _runAction(spriteId, child, key);
-        }
-      }
-      return;
+      return false;
     }
 
-    if (action.type == FourthDemoActionType.setBackground) {
-      project = project.copyWith(
-        settings: project.settings.copyWith(background: action.text),
-      );
-      statusMessage = 'Background set to ${action.text}.';
-      notifyListeners();
-      return;
+    final context = GameRuntimeContext(
+      project: project,
+      currentSpriteId: spriteId,
+      key: key,
+      direction: direction,
+      directions: directions,
+      spriteVariables: _loopSpriteVariables,
+      sourceSpan: action.sourceSpan,
+    );
+
+    switch (action.type) {
+      case FourthDemoActionType.ifCondition:
+        final result = _runtime.evaluateConditionSafe(
+          action.condition,
+          context,
+        );
+        if (!result.success) {
+          _recordRuntimeDiagnostic(result.diagnostic);
+          return false;
+        }
+        final branch = result.value ? action.actions : action.elseActions;
+        for (final child in branch) {
+          if (!_runAction(
+            spriteId,
+            child,
+            key,
+            direction: direction,
+            directions: directions,
+          )) {
+            return false;
+          }
+        }
+        return true;
+      case FourthDemoActionType.repeatTimes:
+        for (var index = 0; index < action.count; index += 1) {
+          for (final child in action.actions) {
+            if (!_runAction(
+              spriteId,
+              child,
+              key,
+              direction: direction,
+              directions: directions,
+            )) {
+              return false;
+            }
+          }
+        }
+        return true;
+      case FourthDemoActionType.repeatForever:
+        for (var index = 0; index < maxLoopIterations; index += 1) {
+          for (final child in action.actions) {
+            if (!_runAction(
+              spriteId,
+              child,
+              key,
+              direction: direction,
+              directions: directions,
+            )) {
+              return false;
+            }
+          }
+        }
+        _runtimeError(
+          'Loop stopped because it exceeded the safe limit.',
+          action,
+        );
+        return false;
+      case FourthDemoActionType.until:
+        for (var index = 0; index < maxLoopIterations; index += 1) {
+          final result = _runtime.evaluateConditionSafe(
+            action.condition,
+            context,
+          );
+          if (!result.success) {
+            _recordRuntimeDiagnostic(result.diagnostic);
+            return false;
+          }
+          if (result.value) {
+            return true;
+          }
+          for (final child in action.actions) {
+            if (!_runAction(
+              spriteId,
+              child,
+              key,
+              direction: direction,
+              directions: directions,
+            )) {
+              return false;
+            }
+          }
+        }
+        _runtimeError(
+          'until stopped because it exceeded the safe limit.',
+          action,
+        );
+        return false;
+      case FourthDemoActionType.forEachSprite:
+        final previous = _loopSpriteVariables[action.variableName];
+        for (final sprite in project.sprites) {
+          _loopSpriteVariables[action.variableName] = sprite.id;
+          for (final child in action.actions) {
+            if (!_runAction(
+              spriteId,
+              child,
+              key,
+              direction: direction,
+              directions: directions,
+            )) {
+              if (previous == null) {
+                _loopSpriteVariables.remove(action.variableName);
+              } else {
+                _loopSpriteVariables[action.variableName] = previous;
+              }
+              return false;
+            }
+          }
+        }
+        if (previous == null) {
+          _loopSpriteVariables.remove(action.variableName);
+        } else {
+          _loopSpriteVariables[action.variableName] = previous;
+        }
+        return true;
+      case FourthDemoActionType.functionCall:
+        final handlers = project.events.where(
+          (handler) =>
+              handler.event == 'function:${action.text}' &&
+              handler.targetSpriteId == spriteId,
+        );
+        if (handlers.isEmpty) {
+          _runtimeError(
+            'Function "${action.text}" was not found for this sprite.',
+            action,
+            hint: 'Define ${action.text} = () => in this sprite code.',
+          );
+          return false;
+        }
+        for (final handler in handlers) {
+          for (final child in handler.actions) {
+            final diagnosticsBefore = diagnostics.length;
+            if (!_runAction(
+              spriteId,
+              child,
+              key,
+              direction: direction,
+              directions: directions,
+            )) {
+              return diagnostics.length > diagnosticsBefore ? false : true;
+            }
+          }
+        }
+        return true;
+      case FourthDemoActionType.returnValue:
+        return false;
+      case FourthDemoActionType.setBackground:
+        if (!supportedBackgrounds.contains(action.text.trim().toLowerCase())) {
+          _runtimeError(
+            'Background "${action.text}" was not found.',
+            action,
+            hint: 'Use one of: ${supportedBackgrounds.join(', ')}.',
+          );
+          return false;
+        }
+        project = project.copyWith(
+          settings: project.settings.copyWith(
+            background: action.text.trim().toLowerCase(),
+          ),
+        );
+        statusMessage = 'Background set to ${action.text}.';
+        notifyListeners();
+        return true;
+      default:
+        break;
     }
 
     final index = _spriteIndexForAction(spriteId, action);
     if (index == -1) {
-      codeError = "I can't find a sprite named ${action.receiver}.";
-      statusMessage = codeError!;
-      notifyListeners();
-      return;
+      _runtimeError(
+        'Sprite "${action.receiver}" was not found.',
+        action,
+        hint: 'Check the sprite name in the Sprites panel.',
+      );
+      return false;
     }
     final sprite = project.sprites[index];
-    if (sprite.destroyed || !sprite.enabled) {
-      return;
+    if (sprite.destroyed ||
+        (!sprite.enabled && action.type != FourthDemoActionType.enable)) {
+      _runtimeError(
+        'Action failed because sprite "${sprite.name}" is destroyed or disabled.',
+        action,
+      );
+      return false;
     }
     FourthDemoSprite next = sprite;
     var shouldNotify = false;
@@ -693,7 +954,7 @@ class FourthDemoController extends ChangeNotifier {
         if (_isAirborne(sprite)) {
           _setAirVelocity(
             sprite,
-            direction.dx * _groundControlSpeed * speed * amount.sign,
+            direction.dx * _groundControlSpeed * speed * amount,
           );
           next = sprite.copyWith(
             facing: _facingForHorizontal(direction.dx, sprite.facing),
@@ -703,7 +964,7 @@ class FourthDemoController extends ChangeNotifier {
         if (_canUseContinuousHorizontalMovement(key, direction)) {
           _setContinuousHorizontalMovement(
             sprite,
-            direction.dx * _groundControlSpeed * speed * amount.sign,
+            direction.dx * _groundControlSpeed * speed * amount,
           );
           next = sprite.copyWith(
             facing: _facingForHorizontal(direction.dx, sprite.facing),
@@ -743,6 +1004,39 @@ class FourthDemoController extends ChangeNotifier {
         next = sprite.copyWith(enabled: true);
       case FourthDemoActionType.setScale:
         next = sprite.copyWith(scale: action.amount);
+      case FourthDemoActionType.addAnimation:
+        final frames = action.target
+            .split(',')
+            .map((part) => int.tryParse(part.trim()))
+            .whereType<int>()
+            .toList();
+        final animation = FourthDemoAnimationDefinition(
+          name: action.text,
+          frames: frames,
+          fps: action.amount,
+          loop: action.condition == 'true',
+        );
+        next = sprite.copyWith(
+          animations: <FourthDemoAnimationDefinition>[
+            ...sprite.animations.where((item) => item.name != animation.name),
+            animation,
+          ],
+        );
+      case FourthDemoActionType.startAnimation:
+        if (!sprite.animations.any(
+          (animation) => animation.name == action.text,
+        )) {
+          _runtimeError(
+            'Animation "${action.text}" was not found.',
+            action,
+            hint:
+                'Add it first using @addAnimation "${action.text}", [0, 1], 8, true.',
+          );
+          return false;
+        }
+        next = sprite.copyWith(currentAnimation: action.text);
+      case FourthDemoActionType.stopAnimation:
+        next = sprite.copyWith(currentAnimation: '');
       case FourthDemoActionType.say:
         statusMessage = action.text.isEmpty ? 'Hello!' : action.text;
         shouldNotify = true;
@@ -750,9 +1044,20 @@ class FourthDemoController extends ChangeNotifier {
       case FourthDemoActionType.repeat:
       case FourthDemoActionType.times:
       case FourthDemoActionType.loop:
+      case FourthDemoActionType.repeatTimes:
+      case FourthDemoActionType.repeatForever:
+      case FourthDemoActionType.until:
+      case FourthDemoActionType.forEachSprite:
+      case FourthDemoActionType.functionCall:
+      case FourthDemoActionType.returnValue:
       case FourthDemoActionType.ifTouching:
       case FourthDemoActionType.ifCondition:
       case FourthDemoActionType.setBackground:
+      case FourthDemoActionType.getX:
+      case FourthDemoActionType.getY:
+      case FourthDemoActionType.getRotation:
+      case FourthDemoActionType.getDistanceFrom:
+      case FourthDemoActionType.getScale:
         statusMessage = 'That block is saved for the next lesson.';
         shouldNotify = true;
     }
@@ -762,6 +1067,7 @@ class FourthDemoController extends ChangeNotifier {
     if (shouldNotify) {
       notifyListeners();
     }
+    return true;
   }
 
   Offset _directionForRotation(double rotation) {
@@ -785,12 +1091,48 @@ class FourthDemoController extends ChangeNotifier {
         (sprite) => sprite.id == currentSpriteId,
       );
     }
+    final variableSpriteId = _loopSpriteVariables[action.receiver];
+    if (variableSpriteId != null) {
+      return project.sprites.indexWhere(
+        (sprite) => sprite.id == variableSpriteId,
+      );
+    }
     final receiver = _normalizeSpriteLookup(action.receiver);
     return project.sprites.indexWhere(
       (sprite) =>
           _normalizeSpriteLookup(sprite.id) == receiver ||
           _normalizeSpriteLookup(sprite.name) == receiver,
     );
+  }
+
+  void _runtimeError(String message, FourthDemoAction action, {String? hint}) {
+    _recordRuntimeDiagnostic(
+      action.sourceSpan == null
+          ? GameDiagnostic(
+              message: message,
+              line: 1,
+              column: 1,
+              type: GameDiagnosticType.runtime,
+              hint: hint,
+            )
+          : GameDiagnostic.fromSpan(
+              message: message,
+              span: action.sourceSpan!,
+              type: GameDiagnosticType.runtime,
+              hint: hint,
+            ),
+    );
+  }
+
+  void _recordRuntimeDiagnostic(GameDiagnostic? diagnostic) {
+    if (diagnostic == null) {
+      return;
+    }
+    diagnostics = <GameDiagnostic>[...diagnostics, diagnostic];
+    codeError = diagnostic.displayMessage;
+    statusMessage = diagnostic.displayMessage;
+    isPlaying = false;
+    notifyListeners();
   }
 
   FourthDemoSprite _moveSpriteTo(
@@ -822,18 +1164,16 @@ class FourthDemoController extends ChangeNotifier {
       return sprite;
     }
 
-    final horizontalDirection = _horizontalInputDirection();
-    final speed = _speedMultiplier(sprite.speed);
     final horizontalVelocity = _continuousHorizontalSpriteId == sprite.id
         ? _continuousHorizontalVelocity
-        : horizontalDirection * _groundControlSpeed * speed;
+        : 0.0;
     body
       ..velocity = Offset(horizontalVelocity, -_jumpVelocity)
       ..grounded = false;
     _motions.remove(sprite.id);
 
     return sprite.copyWith(
-      facing: _facingForHorizontal(horizontalDirection, sprite.facing),
+      facing: _facingForHorizontal(horizontalVelocity, sprite.facing),
     );
   }
 
@@ -1035,6 +1375,50 @@ class FourthDemoController extends ChangeNotifier {
     }
   }
 
+  void _runCollisionHandlers() {
+    for (final a in project.sprites) {
+      if (!a.visible || a.destroyed || !a.enabled) {
+        continue;
+      }
+      for (final b in project.sprites) {
+        if (identical(a, b) || !b.visible || b.destroyed || !b.enabled) {
+          continue;
+        }
+        if (_intersects(a, b)) {
+          _runHandlers('onCollide', eventSpriteId: a.id, eventArgument: b.name);
+        }
+      }
+    }
+  }
+
+  void _runWorldBoundsHandlers() {
+    for (final sprite in project.sprites) {
+      if (!sprite.visible || sprite.destroyed || !sprite.enabled) {
+        continue;
+      }
+      final directions = <String>{};
+      if (sprite.x <= 0) {
+        directions.add('left');
+      }
+      if (sprite.y <= 0) {
+        directions.add('up');
+      }
+      if (sprite.x + sprite.width >= project.settings.worldWidth) {
+        directions.add('right');
+      }
+      if (sprite.y + sprite.height >= project.settings.worldHeight) {
+        directions.add('down');
+      }
+      if (directions.isNotEmpty) {
+        _runHandlers(
+          'onCollideWithWorldBounds',
+          eventSpriteId: sprite.id,
+          directions: directions,
+        );
+      }
+    }
+  }
+
   FourthDemoSprite? _spriteAt(Offset worldPosition) {
     for (final sprite in project.sprites.reversed) {
       final rect = Rect.fromLTWH(
@@ -1093,19 +1477,6 @@ class FourthDemoController extends ChangeNotifier {
       sprite.startY,
       project.settings.worldHeight - sprite.height,
     );
-  }
-
-  double _horizontalInputDirection() {
-    final movingRight =
-        _pressedKeys.contains(LogicalKeyboardKey.arrowRight) ||
-        _pressedKeys.contains(LogicalKeyboardKey.keyD);
-    final movingLeft =
-        _pressedKeys.contains(LogicalKeyboardKey.arrowLeft) ||
-        _pressedKeys.contains(LogicalKeyboardKey.keyA);
-    if (movingRight == movingLeft) {
-      return 0;
-    }
-    return movingRight ? 1 : -1;
   }
 
   double _horizontalDirectionForKey(LogicalKeyboardKey key) {

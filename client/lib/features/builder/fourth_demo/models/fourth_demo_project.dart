@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../front_view/shared/builder_character.dart';
 import '../../front_view/shared/builder_collectable.dart';
+import '../language/game_diagnostics.dart';
 
 enum FourthDemoStageTool { select, move, brush, eraser }
 
@@ -22,22 +23,36 @@ enum FourthDemoActionType {
   jump,
   setX,
   setY,
+  getX,
+  getY,
   setRotation,
+  getRotation,
   setSpeed,
   setAllowGravity,
+  getDistanceFrom,
   show,
   hide,
   destroy,
   disable,
   enable,
   setScale,
+  getScale,
   setBackground,
+  addAnimation,
+  startAnimation,
+  stopAnimation,
   say,
   wait,
   repeat,
   ifCondition,
   times,
   loop,
+  repeatTimes,
+  repeatForever,
+  until,
+  forEachSprite,
+  functionCall,
+  returnValue,
   ifTouching,
 }
 
@@ -355,6 +370,7 @@ class FourthDemoSprite {
   final bool destroyed;
   final bool enabled;
   final String currentAnimation;
+  final List<FourthDemoAnimationDefinition> animations;
   final double speed;
   final int colorValue;
 
@@ -381,6 +397,7 @@ class FourthDemoSprite {
     this.destroyed = false,
     this.enabled = true,
     this.currentAnimation = '',
+    this.animations = const <FourthDemoAnimationDefinition>[],
     this.speed = 32,
     this.colorValue = 0xFF66B64A,
   });
@@ -406,6 +423,7 @@ class FourthDemoSprite {
     bool? destroyed,
     bool? enabled,
     String? currentAnimation,
+    List<FourthDemoAnimationDefinition>? animations,
     double? speed,
     int? colorValue,
   }) {
@@ -432,6 +450,7 @@ class FourthDemoSprite {
       destroyed: destroyed ?? this.destroyed,
       enabled: enabled ?? this.enabled,
       currentAnimation: currentAnimation ?? this.currentAnimation,
+      animations: animations ?? this.animations,
       speed: speed ?? this.speed,
       colorValue: colorValue ?? this.colorValue,
     );
@@ -461,6 +480,7 @@ class FourthDemoSprite {
       destroyed: destroyed,
       enabled: enabled,
       currentAnimation: currentAnimation,
+      animations: animations,
       speed: speed,
       colorValue: colorValue,
     );
@@ -490,6 +510,7 @@ class FourthDemoSprite {
       'destroyed': destroyed,
       'enabled': enabled,
       'currentAnimation': currentAnimation,
+      'animations': animations.map((animation) => animation.toJson()).toList(),
       'speed': speed,
       'colorValue': colorValue,
     };
@@ -533,8 +554,51 @@ class FourthDemoSprite {
       destroyed: json['destroyed'] == true,
       enabled: json['enabled'] != false,
       currentAnimation: json['currentAnimation']?.toString() ?? '',
+      animations: (json['animations'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map(
+            (item) => FourthDemoAnimationDefinition.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList(),
       speed: (json['speed'] as num?)?.toDouble() ?? 32,
       colorValue: (json['colorValue'] as num?)?.toInt() ?? 0xFF66B64A,
+    );
+  }
+}
+
+class FourthDemoAnimationDefinition {
+  final String name;
+  final List<int> frames;
+  final double fps;
+  final bool loop;
+
+  const FourthDemoAnimationDefinition({
+    required this.name,
+    required this.frames,
+    required this.fps,
+    required this.loop,
+  });
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'name': name,
+      'frames': frames,
+      'fps': fps,
+      'loop': loop,
+    };
+  }
+
+  factory FourthDemoAnimationDefinition.fromJson(Map<String, dynamic> json) {
+    return FourthDemoAnimationDefinition(
+      name: json['name']?.toString() ?? '',
+      frames: (json['frames'] as List? ?? const <Object>[])
+          .whereType<num>()
+          .map((frame) => frame.toInt())
+          .toList(),
+      fps: (json['fps'] as num?)?.toDouble() ?? 8,
+      loop: json['loop'] != false,
     );
   }
 }
@@ -543,11 +607,13 @@ class FourthDemoEventHandler {
   final String event;
   final String targetSpriteId;
   final List<FourthDemoAction> actions;
+  final String argument;
 
   const FourthDemoEventHandler({
     required this.event,
     required this.targetSpriteId,
     required this.actions,
+    this.argument = '',
   });
 
   Map<String, dynamic> toJson() {
@@ -555,6 +621,7 @@ class FourthDemoEventHandler {
       'event': event,
       'targetSpriteId': targetSpriteId,
       'actions': actions.map((action) => action.toJson()).toList(),
+      'argument': argument,
     };
   }
 
@@ -562,6 +629,7 @@ class FourthDemoEventHandler {
     return FourthDemoEventHandler(
       event: json['event']?.toString() ?? 'onStart',
       targetSpriteId: json['targetSpriteId']?.toString() ?? 'polar',
+      argument: json['argument']?.toString() ?? '',
       actions: (json['actions'] as List? ?? const <Object>[])
           .whereType<Map>()
           .map(
@@ -582,6 +650,9 @@ class FourthDemoAction {
   final String condition;
   final List<FourthDemoAction> actions;
   final List<FourthDemoAction> elseActions;
+  final int count;
+  final String variableName;
+  final GameSourceSpan? sourceSpan;
 
   const FourthDemoAction({
     required this.type,
@@ -592,6 +663,9 @@ class FourthDemoAction {
     this.condition = '',
     this.actions = const <FourthDemoAction>[],
     this.elseActions = const <FourthDemoAction>[],
+    this.count = 0,
+    this.variableName = '',
+    this.sourceSpan,
   });
 
   Map<String, dynamic> toJson() {
@@ -604,6 +678,9 @@ class FourthDemoAction {
       'condition': condition,
       'actions': actions.map((action) => action.toJson()).toList(),
       'elseActions': elseActions.map((action) => action.toJson()).toList(),
+      'count': count,
+      'variableName': variableName,
+      if (sourceSpan != null) 'sourceSpan': sourceSpan!.toJson(),
     };
   }
 
@@ -632,6 +709,13 @@ class FourthDemoAction {
                 FourthDemoAction.fromJson(Map<String, dynamic>.from(item)),
           )
           .toList(),
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      variableName: json['variableName']?.toString() ?? '',
+      sourceSpan: json['sourceSpan'] is Map
+          ? GameSourceSpan.fromJson(
+              Map<String, dynamic>.from(json['sourceSpan'] as Map),
+            )
+          : null,
     );
   }
 }

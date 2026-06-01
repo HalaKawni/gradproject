@@ -46,6 +46,7 @@ class GameLanguageSpec {
     '@enable',
     '@setScale',
     '@getScale',
+    '@say',
     '@addAnimation',
     '@startAnimation',
     '@stopAnimation',
@@ -62,18 +63,6 @@ class GameLanguageSpec {
       label: 'jump',
       insertText: '@jump()',
       detail: 'Jump upward.',
-      category: GameCommandCategory.movement,
-    ),
-    GameCommand(
-      label: 'getX',
-      insertText: '@getX()',
-      detail: 'Read x position.',
-      category: GameCommandCategory.movement,
-    ),
-    GameCommand(
-      label: 'getY',
-      insertText: '@getY()',
-      detail: 'Read y position.',
       category: GameCommandCategory.movement,
     ),
     GameCommand(
@@ -95,12 +84,6 @@ class GameLanguageSpec {
       category: GameCommandCategory.movement,
     ),
     GameCommand(
-      label: 'getRotation',
-      insertText: '@getRotation()',
-      detail: 'Read rotation.',
-      category: GameCommandCategory.movement,
-    ),
-    GameCommand(
       label: 'setSpeed',
       insertText: '@setSpeed 1',
       detail: 'Set speed multiplier.',
@@ -112,13 +95,6 @@ class GameLanguageSpec {
       detail: 'Toggle gravity.',
       category: GameCommandCategory.movement,
     ),
-    GameCommand(
-      label: 'getDistanceFrom',
-      insertText: '@getDistanceFrom spriteName',
-      detail: 'Distance to another sprite.',
-      category: GameCommandCategory.movement,
-    ),
-
     GameCommand(
       label: 'onStart',
       insertText: '@onStart = () =>\n    @setX 100\n    @setY 100',
@@ -159,7 +135,7 @@ class GameLanguageSpec {
     GameCommand(
       label: 'onSwipe',
       insertText:
-          '@onSwipe = (direction) =>\n    if direction == swipe.right\n        @step 1',
+          '@onSwipe = (direction) =>\n    if direction == "right"\n        @step 1',
       detail: 'Run on swipe.',
       category: GameCommandCategory.events,
       opensBlock: true,
@@ -254,12 +230,6 @@ class GameLanguageSpec {
       category: GameCommandCategory.display,
     ),
     GameCommand(
-      label: 'getScale',
-      insertText: '@getScale()',
-      detail: 'Read scale.',
-      category: GameCommandCategory.display,
-    ),
-    GameCommand(
       label: 'say',
       insertText: '@say "Hello!"',
       detail: 'Show a message.',
@@ -285,7 +255,7 @@ class GameLanguageSpec {
     ),
     GameCommand(
       label: 'game.setBackground',
-      insertText: 'game.setBackground "backgroundName"',
+      insertText: 'game.setBackground "forest"',
       detail: 'Change background.',
       category: GameCommandCategory.display,
     ),
@@ -341,8 +311,8 @@ class GameLanguageSpec {
     ),
     GameCommand(
       label: 'return',
-      insertText: 'return value',
-      detail: 'Return value.',
+      insertText: 'return',
+      detail: 'Stop the current function or block.',
       category: GameCommandCategory.control,
     ),
 
@@ -350,6 +320,18 @@ class GameLanguageSpec {
       label: 'not',
       insertText: 'not',
       detail: 'Boolean not.',
+      category: GameCommandCategory.operators,
+    ),
+    GameCommand(
+      label: 'true',
+      insertText: 'true',
+      detail: 'Boolean true.',
+      category: GameCommandCategory.operators,
+    ),
+    GameCommand(
+      label: 'false',
+      insertText: 'false',
+      detail: 'Boolean false.',
       category: GameCommandCategory.operators,
     ),
     GameCommand(
@@ -371,6 +353,12 @@ class GameLanguageSpec {
       category: GameCommandCategory.operators,
     ),
     GameCommand(
+      label: '!=',
+      insertText: '!=',
+      detail: 'Not equals.',
+      category: GameCommandCategory.operators,
+    ),
+    GameCommand(
       label: '<',
       insertText: '<',
       detail: 'Less than.',
@@ -383,15 +371,15 @@ class GameLanguageSpec {
       category: GameCommandCategory.operators,
     ),
     GameCommand(
-      label: '+=',
-      insertText: '+=',
-      detail: 'Add assignment.',
+      label: '<=',
+      insertText: '<=',
+      detail: 'Less than or equal.',
       category: GameCommandCategory.operators,
     ),
     GameCommand(
-      label: '-=',
-      insertText: '-=',
-      detail: 'Subtract assignment.',
+      label: '>=',
+      insertText: '>=',
+      detail: 'Greater than or equal.',
       category: GameCommandCategory.operators,
     ),
   ];

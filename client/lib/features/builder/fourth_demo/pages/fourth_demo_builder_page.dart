@@ -20,6 +20,7 @@ import '../flame/fourth_demo_game.dart';
 import '../language/game_code_controller.dart';
 import '../language/game_code_indenter.dart';
 import '../language/game_command.dart';
+import '../language/game_diagnostics.dart';
 import '../language/game_language_spec.dart';
 import '../models/fourth_demo_project.dart';
 
@@ -38,6 +39,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   late final GameCodeController codeController;
   late final TextEditingController titleController;
   final FocusNode stageFocusNode = FocusNode();
+  final FocusNode codeFocusNode = FocusNode();
   final List<InstructionSection> instructionSections = <InstructionSection>[];
   bool _syncingCodeFromController = false;
   bool _updatingCodeFromEditor = false;
@@ -48,11 +50,14 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     super.initState();
     controller = FourthDemoController()..addListener(_handleControllerChanged);
     game = FourthDemoGame(controller: controller);
-    codeController = GameCodeController(
-      text: controller.selectedCode,
-      language: coffeescript,
-      modifiers: const [TabModifier()],
-    );
+    codeController =
+        GameCodeController(
+            text: controller.selectedCode,
+            language: coffeescript,
+            modifiers: const [TabModifier()],
+          )
+          ..projectContext = controller.project
+          ..addListener(_handleCodeControllerChanged);
     titleController = TextEditingController(text: controller.project.title)
       ..addListener(_handleTitleChanged);
     instructionSections.addAll(_defaultInstructionSections());
@@ -63,11 +68,14 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     controller.removeListener(_handleControllerChanged);
     controller.dispose();
     game.onRemove();
-    codeController.dispose();
+    codeController
+      ..removeListener(_handleCodeControllerChanged)
+      ..dispose();
     titleController
       ..removeListener(_handleTitleChanged)
       ..dispose();
     stageFocusNode.dispose();
+    codeFocusNode.dispose();
     super.dispose();
   }
 
@@ -116,6 +124,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       );
       _syncingCodeFromController = false;
     }
+    codeController.projectContext = controller.project;
     setState(() {});
   }
 
@@ -128,6 +137,20 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       return;
     }
 
+    _syncCodeToProject(value);
+  }
+
+  void _handleCodeControllerChanged() {
+    if (_syncingCodeFromController || _updatingCodeFromEditor) {
+      return;
+    }
+    _syncCodeToProject(codeController.text);
+  }
+
+  void _syncCodeToProject(String value) {
+    if (value == controller.selectedCode) {
+      return;
+    }
     _updatingCodeFromEditor = true;
     try {
       controller.updateSelectedCode(value, notify: false);
@@ -137,6 +160,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   }
 
   void _runCode() {
+    _syncCodeToProject(codeController.text);
     if (!controller.runCode()) {
       return;
     }
@@ -238,6 +262,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
               child: _CodeColumn(
                 controller: controller,
                 codeController: codeController,
+                codeFocusNode: codeFocusNode,
                 onCodeChanged: _handleCodeChanged,
                 onRun: _runCode,
               ),
@@ -438,13 +463,15 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
 
 class _CodeColumn extends StatelessWidget {
   final FourthDemoController controller;
-  final CodeController codeController;
+  final GameCodeController codeController;
+  final FocusNode codeFocusNode;
   final ValueChanged<String> onCodeChanged;
   final VoidCallback onRun;
 
   const _CodeColumn({
     required this.controller,
     required this.codeController,
+    required this.codeFocusNode,
     required this.onCodeChanged,
     required this.onRun,
   });
@@ -462,10 +489,27 @@ class _CodeColumn extends StatelessWidget {
         children: [
           _CodeHeader(controller: controller, onRun: onRun),
           Expanded(
-            child: _CodeEditor(
-              controller: controller,
-              codeController: codeController,
-              onCodeChanged: onCodeChanged,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _CodeEditor(
+                    controller: controller,
+                    codeController: codeController,
+                    codeFocusNode: codeFocusNode,
+                    onCodeChanged: onCodeChanged,
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: _DiagnosticsPanel(
+                    controller: controller,
+                    codeController: codeController,
+                    codeFocusNode: codeFocusNode,
+                  ),
+                ),
+              ],
             ),
           ),
           _FunctionPalette(
@@ -505,17 +549,6 @@ class _CodeHeader extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
             ),
           ),
-          if (controller.codeError != null)
-            Flexible(
-              child: Text(
-                controller.codeError!,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFFD94836),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: controller.isPlaying ? controller.stop : onRun,
@@ -539,50 +572,369 @@ class _CodeHeader extends StatelessWidget {
   }
 }
 
-class _CodeEditor extends StatelessWidget {
+class _CodeEditor extends StatefulWidget {
   final FourthDemoController controller;
-  final CodeController codeController;
+  final GameCodeController codeController;
+  final FocusNode codeFocusNode;
   final ValueChanged<String> onCodeChanged;
 
   const _CodeEditor({
     required this.controller,
     required this.codeController,
+    required this.codeFocusNode,
     required this.onCodeChanged,
   });
+
+  @override
+  State<_CodeEditor> createState() => _CodeEditorState();
+}
+
+class _CodeEditorState extends State<_CodeEditor> {
+  static const double _gutterWidth = 46;
+  static const double _editorFontSize = 16;
+  static const double _editorLineHeightFactor = 1.45;
+  static const double _editorLineHeight =
+      _editorFontSize * _editorLineHeightFactor;
+  static const double _editorVerticalPadding = 16;
+  double _verticalScrollOffset = 0;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       color: const Color(0xFFEEF6FA),
-      child: CodeTheme(
-        data: CodeThemeData(styles: atomOneLightTheme),
-        child: CodeField(
-          controller: codeController,
-          expands: true,
-          minLines: null,
-          maxLines: null,
-          readOnly: controller.isPlaying,
-          wrap: false,
-          background: const Color(0xFFEEF6FA),
-          cursorColor: const Color(0xFF24465A),
-          gutterStyle: const GutterStyle(
-            width: 48,
-            textStyle: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 14,
-              color: Color(0xFF6A8291),
-            ),
-            background: Color(0xFFDDEBF2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LineNumberGutter(
+            controller: widget.codeController,
+            scrollOffset: _verticalScrollOffset,
+            width: _gutterWidth,
+            lineHeight: _editorLineHeight,
+            topPadding: _editorVerticalPadding,
           ),
-          padding: const EdgeInsets.all(14),
-          textStyle: const TextStyle(
+          Expanded(
+            child: CodeTheme(
+              data: CodeThemeData(styles: atomOneLightTheme),
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (notification) {
+                    if (notification.metrics.axis != Axis.vertical) {
+                      return false;
+                    }
+                    final nextOffset = notification.metrics.pixels;
+                    if ((nextOffset - _verticalScrollOffset).abs() > 0.5) {
+                      setState(() => _verticalScrollOffset = nextOffset);
+                    }
+                    return false;
+                  },
+                  child: CodeField(
+                    controller: widget.codeController,
+                    focusNode: widget.codeFocusNode,
+                    expands: true,
+                    minLines: null,
+                    maxLines: null,
+                    readOnly: widget.controller.isPlaying,
+                    wrap: false,
+                    background: const Color(0xFFEEF6FA),
+                    cursorColor: const Color(0xFF24465A),
+                    gutterStyle: GutterStyle.none,
+                    padding: const EdgeInsets.all(14),
+                    textStyle: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: _editorFontSize,
+                      height: _editorLineHeightFactor,
+                      color: Color(0xFF24465A),
+                    ),
+                    onChanged: widget.onCodeChanged,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LineNumberGutter extends StatelessWidget {
+  final GameCodeController controller;
+  final double scrollOffset;
+  final double width;
+  final double lineHeight;
+  final double topPadding;
+
+  const _LineNumberGutter({
+    required this.controller,
+    required this.scrollOffset,
+    required this.width,
+    required this.lineHeight,
+    required this.topPadding,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      color: const Color(0xFFDDEBF2),
+      child: ClipRect(
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            return CustomPaint(
+              painter: _LineNumberPainter(
+                lineCount: controller.text.split('\n').length,
+                scrollOffset: scrollOffset,
+                lineHeight: lineHeight,
+                topPadding: topPadding,
+              ),
+              child: const SizedBox.expand(),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _LineNumberPainter extends CustomPainter {
+  final int lineCount;
+  final double scrollOffset;
+  final double lineHeight;
+  final double topPadding;
+
+  const _LineNumberPainter({
+    required this.lineCount,
+    required this.scrollOffset,
+    required this.lineHeight,
+    required this.topPadding,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const rightPadding = 8.0;
+    final firstLine = math.max(
+      0,
+      ((scrollOffset - topPadding) / lineHeight).floor() - 1,
+    );
+    final lastLine = math.min(
+      lineCount - 1,
+      ((scrollOffset + size.height - topPadding) / lineHeight).ceil() + 1,
+    );
+
+    for (var index = firstLine; index <= lastLine; index += 1) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: '${index + 1}',
+          style: const TextStyle(
             fontFamily: 'monospace',
             fontSize: 16,
             height: 1.45,
-            color: Color(0xFF24465A),
+            color: Color(0xFF6A8291),
           ),
-          onChanged: onCodeChanged,
         ),
+        textAlign: TextAlign.right,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: size.width - rightPadding);
+      final y =
+          topPadding -
+          scrollOffset +
+          index * lineHeight +
+          (lineHeight - painter.height) / 2;
+      painter.paint(
+        canvas,
+        Offset(size.width - rightPadding - painter.width, y),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineNumberPainter oldDelegate) {
+    return oldDelegate.lineCount != lineCount ||
+        oldDelegate.scrollOffset != scrollOffset ||
+        oldDelegate.lineHeight != lineHeight ||
+        oldDelegate.topPadding != topPadding;
+  }
+}
+
+class _DiagnosticsPanel extends StatelessWidget {
+  final FourthDemoController controller;
+  final GameCodeController codeController;
+  final FocusNode codeFocusNode;
+
+  const _DiagnosticsPanel({
+    required this.controller,
+    required this.codeController,
+    required this.codeFocusNode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final diagnostics = controller.diagnostics;
+    if (diagnostics.isEmpty && controller.codeError == null) {
+      return const SizedBox.shrink();
+    }
+    final visibleDiagnostics = diagnostics.isEmpty
+        ? <GameDiagnostic>[
+            GameDiagnostic(
+              message: controller.codeError ?? 'Check your code.',
+              line: 1,
+            ),
+          ]
+        : diagnostics;
+
+    return Material(
+      elevation: 8,
+      shadowColor: const Color(0x553A241D),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 96),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Column(
+            children: [
+              for (final entry in visibleDiagnostics.asMap().entries)
+                _DiagnosticTile(
+                  diagnostic: entry.value,
+                  prominent: entry.key == 0,
+                  onDismiss: controller.dismissDiagnostics,
+                  onGoToLine: () {
+                    codeController.moveCursorToLineColumn(
+                      entry.value.line,
+                      entry.value.column,
+                    );
+                    codeFocusNode.requestFocus();
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DiagnosticTile extends StatelessWidget {
+  final GameDiagnostic diagnostic;
+  final bool prominent;
+  final VoidCallback onGoToLine;
+  final VoidCallback onDismiss;
+
+  const _DiagnosticTile({
+    required this.diagnostic,
+    required this.prominent,
+    required this.onGoToLine,
+    required this.onDismiss,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (diagnostic.severity) {
+      GameDiagnosticSeverity.error => const Color(0xFFD94836),
+      GameDiagnosticSeverity.warning => const Color(0xFFD58A00),
+      GameDiagnosticSeverity.info => const Color(0xFF2B78C2),
+    };
+    final background = switch (diagnostic.severity) {
+      GameDiagnosticSeverity.error => const Color(0xFFFFF0ED),
+      GameDiagnosticSeverity.warning => const Color(0xFFFFF7DF),
+      GameDiagnosticSeverity.info => const Color(0xFFEFF6FF),
+    };
+    final title = switch (diagnostic.type) {
+      GameDiagnosticType.syntax => 'Syntax error',
+      GameDiagnosticType.validation => 'Validation error',
+      GameDiagnosticType.runtime => 'Runtime error',
+    };
+
+    return Container(
+      margin: EdgeInsets.only(bottom: prominent ? 6 : 4),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: color, width: 4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            diagnostic.severity == GameDiagnosticSeverity.error
+                ? Icons.error_outline
+                : Icons.info_outline,
+            color: color,
+            size: 18,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$title - Line ${diagnostic.line}, Column ${diagnostic.column}',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: prominent ? 13 : 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  diagnostic.message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF2D3748),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (diagnostic.hint != null && diagnostic.hint!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Hint: ${diagnostic.hint}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF5B6777),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: onGoToLine,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 30),
+                  foregroundColor: color,
+                ),
+                child: const Text('Go to line'),
+              ),
+              IconButton(
+                tooltip: 'Dismiss',
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close, size: 18),
+                color: color,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 30),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -590,7 +942,7 @@ class _CodeEditor extends StatelessWidget {
 
 class _FunctionPalette extends StatefulWidget {
   final FourthDemoController controller;
-  final CodeController codeController;
+  final GameCodeController codeController;
 
   const _FunctionPalette({
     required this.controller,
@@ -859,23 +1211,43 @@ class _StagePanelState extends State<_StagePanel> {
                                       details.localPosition,
                                     );
                                 controller.handleClick(worldPosition);
-                                controller.beginDrag(worldPosition);
-                                controller.endDrag();
+                                if (!controller.isPlaying) {
+                                  controller.beginDrag(worldPosition);
+                                  controller.endDrag();
+                                }
                               },
                               onPanStart: (details) {
                                 widget.focusNode.requestFocus();
-                                controller.beginDrag(
-                                  widget.game.worldPositionFromCanvas(
-                                    details.localPosition,
-                                  ),
-                                );
+                                final worldPosition = widget.game
+                                    .worldPositionFromCanvas(
+                                      details.localPosition,
+                                    );
+                                controller.beginDrag(worldPosition);
                               },
                               onPanUpdate: (details) => controller.dragTo(
                                 widget.game.worldPositionFromCanvas(
                                   details.localPosition,
                                 ),
                               ),
-                              onPanEnd: (_) => controller.endDrag(),
+                              onPanEnd: (details) {
+                                if (controller.draggingSpriteId != null) {
+                                  controller.endDrag();
+                                  return;
+                                }
+                                if (controller.isPlaying) {
+                                  final direction = _swipeDirection(
+                                    details.velocity.pixelsPerSecond,
+                                  );
+                                  if (direction != null) {
+                                    controller.handleSwipe(direction);
+                                  }
+                                }
+                              },
+                              onPanCancel: () {
+                                if (controller.draggingSpriteId != null) {
+                                  controller.endDrag();
+                                }
+                              },
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(4),
                                 child: GameWidget(game: widget.game),
@@ -925,6 +1297,17 @@ class _StagePanelState extends State<_StagePanel> {
         ),
       ),
     );
+  }
+
+  String? _swipeDirection(Offset velocity) {
+    const minimumVelocity = 240.0;
+    if (velocity.distance < minimumVelocity) {
+      return null;
+    }
+    if (velocity.dx.abs() >= velocity.dy.abs()) {
+      return velocity.dx > 0 ? 'right' : 'left';
+    }
+    return velocity.dy > 0 ? 'down' : 'up';
   }
 }
 
@@ -2149,11 +2532,11 @@ class _TabButton extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: active
-            ? const BorderRadius.only(
-                bottomLeft: Radius.circular(14),
-                bottomRight: Radius.circular(14),
-              )
-            : BorderRadius.zero,
+              ? const BorderRadius.only(
+                  bottomLeft: Radius.circular(14),
+                  bottomRight: Radius.circular(14),
+                )
+              : BorderRadius.zero,
           child: SizedBox(
             height: 54,
             child: Center(

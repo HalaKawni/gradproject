@@ -24,7 +24,9 @@ class FourthDemoGame extends FlameGame {
   final Map<String, ui.Image> _assetImages = <String, ui.Image>{};
   final Map<String, _CharacterFrameSet> _characterFrames =
       <String, _CharacterFrameSet>{};
-  ui.Image? _forestBackground;
+  final Map<String, ui.Image> _backgroundImages = <String, ui.Image>{};
+  final Map<String, _SpriteAnimationState> _spriteAnimations =
+      <String, _SpriteAnimationState>{};
   double _animationElapsedMs = 0;
 
   FourthDemoGame({required this.controller});
@@ -53,6 +55,7 @@ class FourthDemoGame extends FlameGame {
   void update(double dt) {
     super.update(dt);
     _animationElapsedMs += dt * Duration.millisecondsPerSecond;
+    _advanceSpriteAnimations(dt);
     controller.handleUpdate(dt);
   }
 
@@ -94,7 +97,7 @@ class FourthDemoGame extends FlameGame {
       project.settings.worldHeight,
     );
     canvas.clipRect(world);
-    _drawBackground(canvas, world);
+    _drawBackground(canvas, world, project.settings.background);
     _drawTiles(canvas, project);
     for (final sprite in project.sprites) {
       if (!sprite.visible || sprite.destroyed) {
@@ -113,8 +116,9 @@ class FourthDemoGame extends FlameGame {
     }
   }
 
-  void _drawBackground(Canvas canvas, Rect world) {
-    final image = _forestBackground;
+  void _drawBackground(Canvas canvas, Rect world, String backgroundName) {
+    final background = backgroundName.trim().toLowerCase();
+    final image = _backgroundImages[background];
     if (image != null) {
       paintImage(
         canvas: canvas,
@@ -126,6 +130,24 @@ class FourthDemoGame extends FlameGame {
       return;
     }
 
+    switch (background) {
+      case 'desert':
+        _drawDesertBackground(canvas, world);
+        return;
+      case 'green':
+        _drawGreenBackground(canvas, world);
+        return;
+      case 'sky':
+        _drawSkyBackground(canvas, world);
+        return;
+      case 'forest':
+      default:
+        _drawForestFallback(canvas, world);
+        return;
+    }
+  }
+
+  void _drawForestFallback(Canvas canvas, Rect world) {
     canvas.drawRect(world, Paint()..color = const Color(0xFFB7DFF2));
     canvas.drawCircle(
       Offset(world.width * 0.83, world.height * 0.2),
@@ -145,6 +167,68 @@ class FourthDemoGame extends FlameGame {
         Paint()..color = const Color(0xFF2F6B22).withValues(alpha: 0.22),
       );
     }
+  }
+
+  void _drawSkyBackground(Canvas canvas, Rect world) {
+    canvas.drawRect(world, Paint()..color = const Color(0xFFAEDDF8));
+    canvas.drawCircle(
+      Offset(world.width * 0.78, world.height * 0.22),
+      34,
+      Paint()..color = const Color(0xFFFFDD67),
+    );
+    final cloud = Paint()..color = Colors.white.withValues(alpha: 0.84);
+    for (final center in <Offset>[
+      Offset(world.width * 0.22, world.height * 0.25),
+      Offset(world.width * 0.52, world.height * 0.18),
+    ]) {
+      canvas.drawOval(
+        Rect.fromCenter(center: center, width: 86, height: 32),
+        cloud,
+      );
+      canvas.drawCircle(center.translate(-26, -4), 18, cloud);
+      canvas.drawCircle(center.translate(18, -9), 22, cloud);
+    }
+  }
+
+  void _drawDesertBackground(Canvas canvas, Rect world) {
+    canvas.drawRect(world, Paint()..color = const Color(0xFFFFD98A));
+    canvas.drawCircle(
+      Offset(world.width * 0.82, world.height * 0.18),
+      34,
+      Paint()..color = const Color(0xFFFFF0A3),
+    );
+    _drawHill(
+      canvas,
+      world,
+      Paint()..color = const Color(0xFFE3A95D),
+      0.72,
+      34,
+    );
+    _drawHill(
+      canvas,
+      world,
+      Paint()..color = const Color(0xFFC98945),
+      0.82,
+      28,
+    );
+  }
+
+  void _drawGreenBackground(Canvas canvas, Rect world) {
+    canvas.drawRect(world, Paint()..color = const Color(0xFFCDEFD2));
+    _drawHill(
+      canvas,
+      world,
+      Paint()..color = const Color(0xFF7BC46F),
+      0.62,
+      62,
+    );
+    _drawHill(
+      canvas,
+      world,
+      Paint()..color = const Color(0xFF3FA65D),
+      0.78,
+      44,
+    );
   }
 
   void _drawHill(
@@ -217,6 +301,7 @@ class FourthDemoGame extends FlameGame {
       sprite.assetId.isEmpty ? defaultBuilderCharacterId : sprite.assetId,
     );
     final image =
+        _scriptedPlayerFrame(sprite, character.id) ??
         _currentPlayerFrame(
           character.id,
           isWalking: controller.isSpriteWalking(sprite),
@@ -512,6 +597,89 @@ class FourthDemoGame extends FlameGame {
     return frames[frameIndex];
   }
 
+  ui.Image? _scriptedPlayerFrame(FourthDemoSprite sprite, String characterId) {
+    if (sprite.currentAnimation.isEmpty) {
+      return null;
+    }
+    final animation = sprite.animations
+        .where((item) => item.name == sprite.currentAnimation)
+        .firstOrNull;
+    if (animation == null || animation.frames.isEmpty || animation.fps <= 0) {
+      return null;
+    }
+    final frameSet =
+        _characterFrames[builderCharacterById(characterId).id] ??
+        _characterFrames[defaultBuilderCharacterId];
+    if (frameSet == null) {
+      return null;
+    }
+    final sourceFrames = frameSet.walk.isNotEmpty
+        ? frameSet.walk
+        : frameSet.idle;
+    if (sourceFrames.isEmpty) {
+      return null;
+    }
+
+    final state = _spriteAnimations[sprite.id];
+    final elapsed = state?.elapsedSeconds ?? 0;
+    final rawFrame = (elapsed * animation.fps).floor();
+    final sequenceIndex = animation.loop
+        ? rawFrame % animation.frames.length
+        : rawFrame.clamp(0, animation.frames.length - 1).toInt();
+    final frameIndex = animation.frames[sequenceIndex]
+        .clamp(0, sourceFrames.length - 1)
+        .toInt();
+    return sourceFrames[frameIndex];
+  }
+
+  void _advanceSpriteAnimations(double dt) {
+    if (!controller.isPlaying) {
+      return;
+    }
+    final activeSpriteIds = <String>{};
+    for (final sprite in controller.project.sprites.toList()) {
+      if (sprite.currentAnimation.isEmpty) {
+        _spriteAnimations.remove(sprite.id);
+        continue;
+      }
+      activeSpriteIds.add(sprite.id);
+      final animation = sprite.animations
+          .where((item) => item.name == sprite.currentAnimation)
+          .firstOrNull;
+      if (animation == null || animation.frames.isEmpty || animation.fps <= 0) {
+        _spriteAnimations.remove(sprite.id);
+        continue;
+      }
+      final state = _animationStateFor(sprite.id, animation.name)
+        ..elapsedSeconds += dt;
+      final durationSeconds = animation.frames.length / animation.fps;
+      if (durationSeconds <= 0) {
+        continue;
+      }
+      if (animation.loop) {
+        final completedLoops = (state.elapsedSeconds / durationSeconds).floor();
+        if (completedLoops > state.completedLoops) {
+          state.completedLoops = completedLoops;
+          controller.handleAnimationLoop(sprite.id, animation.name);
+        }
+      } else if (!state.ended && state.elapsedSeconds >= durationSeconds) {
+        state.ended = true;
+        controller.handleAnimationEnd(sprite.id, animation.name);
+      }
+    }
+    _spriteAnimations.removeWhere((id, _) => !activeSpriteIds.contains(id));
+  }
+
+  _SpriteAnimationState _animationStateFor(String spriteId, String name) {
+    final current = _spriteAnimations[spriteId];
+    if (current != null && current.name == name) {
+      return current;
+    }
+    final next = _SpriteAnimationState(name);
+    _spriteAnimations[spriteId] = next;
+    return next;
+  }
+
   Future<void> _loadPlayerFrames() async {
     for (final character in builderCharacters) {
       final frames = await _loadCharacterFrames(character);
@@ -585,9 +753,12 @@ class FourthDemoGame extends FlameGame {
   }
 
   Future<void> _loadBackgroundImage() async {
-    _forestBackground = await _loadImage(
+    final forest = await _loadImage(
       'game_builder/background/backgroundColorForest.png',
     );
+    if (forest != null) {
+      _backgroundImages['forest'] = forest;
+    }
   }
 
   Future<ui.Image?> _loadImage(String assetPath) async {
@@ -619,4 +790,13 @@ class _CharacterFrameSet {
   final List<ui.Image> walk;
 
   const _CharacterFrameSet({required this.idle, required this.walk});
+}
+
+class _SpriteAnimationState {
+  final String name;
+  double elapsedSeconds = 0;
+  int completedLoops = 0;
+  bool ended = false;
+
+  _SpriteAnimationState(this.name);
 }

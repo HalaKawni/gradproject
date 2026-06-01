@@ -3,6 +3,7 @@ import 'package:flutter_code_editor/flutter_code_editor.dart';
 
 import 'game_autocomplete_engine.dart';
 import 'game_code_indenter.dart';
+import '../models/fourth_demo_project.dart';
 
 class GameCodeController extends CodeController {
   GameCodeController({
@@ -13,6 +14,7 @@ class GameCodeController extends CodeController {
 
   static const GameCodeIndenter _indenter = GameCodeIndenter();
   static const GameAutocompleteEngine _autocomplete = GameAutocompleteEngine();
+  FourthDemoProject? projectContext;
 
   @override
   set value(TextEditingValue newValue) {
@@ -60,6 +62,7 @@ class GameCodeController extends CodeController {
     final suggestions = _autocomplete.suggestionsFor(
       text,
       selection.baseOffset,
+      project: projectContext,
     );
 
     if (suggestions.isEmpty) {
@@ -68,6 +71,26 @@ class GameCodeController extends CodeController {
     }
 
     popupController.show(suggestions);
+  }
+
+  void moveCursorToLineColumn(int line, int column) {
+    final safeLine = line < 1 ? 1 : line;
+    final safeColumn = column < 1 ? 1 : column;
+    final lines = text.split('\n');
+    var offset = 0;
+    for (var index = 0; index < safeLine - 1 && index < lines.length; index++) {
+      offset += lines[index].length + 1;
+    }
+    if (lines.isNotEmpty) {
+      final lineIndex = (safeLine - 1).clamp(0, lines.length - 1).toInt();
+      offset += (safeColumn - 1).clamp(0, lines[lineIndex].length).toInt();
+    }
+    value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(
+        offset: offset.clamp(0, text.length).toInt(),
+      ),
+    );
   }
 
   TextRange? _completionPrefixRange() {
