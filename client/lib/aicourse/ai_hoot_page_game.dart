@@ -1,13 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js' as js;
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:ui_web' as ui_web;
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import 'blocks_flutter_page.dart';
+import 'package:client/aicourse/blocks_flutter_page.dart';
+import 'package:client/services/game_api_service.dart';
 
 
 // Put these uploaded images in your Flutter project at:
@@ -20,7 +30,10 @@ class CodeMonkeyScratchAssets {
   static const String toolErase = 'assets/images/erase.png';
   static const String toolPaint = 'assets/images/paint.png';
   static const String uploadMonkey = 'assets/images/upload_monkey.png';
+  static const String arrowRight = 'assets/images/sprites/next_step.png';
 }
+
+const String _kGameId = 'ai-hoot';
 
 /// Drop this file in: client/lib/codemonkey_scratch_page.dart
 /// Then open it with:
@@ -29,11 +42,49 @@ class CodeMonkeyScratchAssets {
 /// This is a CodeMonkey/Scratch-style builder page that matches the layout in
 /// your screenshot: left lesson panel, middle block workspace, right game stage,
 /// and sprite settings panel. It uses your uploaded PNG assets.
+class _SavedAiModel {
+  const _SavedAiModel({required this.name, required this.classNames});
+  final String name;
+  final List<String> classNames;
+}
+
 class CodeMonkeyScratchPage extends StatefulWidget {
-  const CodeMonkeyScratchPage({super.key});
+  const CodeMonkeyScratchPage({super.key, this.exerciseNumber = 1, this.savedModels = const []});
+
+  final int exerciseNumber;
+  final List<_SavedAiModel> savedModels;
 
   @override
   State<CodeMonkeyScratchPage> createState() => _CodeMonkeyScratchPageState();
+}
+
+List<double> _parsePrediction(dynamic raw) {
+  if (raw == null) return [];
+  if (raw is String) {
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      return decoded.map((v) => (v as num).toDouble()).toList();
+    } catch (_) {}
+  }
+  if (raw is js.JsArray) {
+    try {
+      return raw.toList().map<double>((v) {
+        if (v is num) return v.toDouble();
+        return double.tryParse(v.toString()) ?? 0.0;
+      }).toList();
+    } catch (_) {}
+  }
+  if (raw is js.JsObject) {
+    try {
+      final len = (raw['length'] as num?)?.toInt() ?? 0;
+      return List<double>.generate(len, (i) {
+        final v = raw[i];
+        if (v is num) return v.toDouble();
+        return double.tryParse(v.toString()) ?? 0.0;
+      });
+    } catch (_) {}
+  }
+  return [];
 }
 
 class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
@@ -52,6 +103,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   ];
 
   String _selectedCategory = 'Movement';
+  bool _paletteOpen = true;
   bool _isRunning = false;
 
   // Stage logical coordinates. These are mapped to pixels in the stage widget.
@@ -64,12 +116,158 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   // owl.png is a horizontal spritesheet with 5 walking frames.
   // This index chooses which frame is shown on the stage.
   int _owlFrame = 0;
+  bool _owlVisible = true;
+  double _owlSpeed = 62.0; // pixels per Step block
+  final Map<String, dynamic> _variables = {};
+
+  Timer? _onPredictionTimer;
+  bool _predictionBusy = false;
+  Timer? _onUpdateTimer;
+  bool _updateBusy = false;
+
+  List<String> _aiClassNames = ['Class 1', 'Class 2'];
+  List<String> get _textWidgetNames => _stageWidgets
+      .where((w) => w.type == _GameWidgetType.text)
+      .map((w) => w.name)
+      .toList();
+  bool _modelSaved = false;
+  bool _modelSelected = false;
+  _SavedAiModel? _savedModel;
+
+  bool _isFullscreen = false;
+
+  // Game settings (Game tab)
+  int _worldWidth = 600;
+  int _worldHeight = 400;
+  String _cameraTarget = 'None';
+  double _gravity = 1800;
+  String _physics = 'ARCADE';
 
   String _selectedObjectId = 'oliver';
-  final Map<String, List<_ScratchBlockData>> _objectWorkspaces = {
-    'oliver': [_ScratchBlockData.event('On Run')],
-  };
-  List<_ScratchBlockData> get _workspaceBlocks => _objectWorkspaces[_selectedObjectId]!;
+  late final Map<String, List<_WorkspaceEntry>> _objectWorkspaces;
+  List<_WorkspaceEntry> get _workspaceEntries => _objectWorkspaces[_selectedObjectId]!;
+
+  @override
+  void dispose() {
+    _onPredictionTimer?.cancel();
+    _onUpdateTimer?.cancel();
+    super.dispose();
+  }
+
+  // ── Progress persistence ────────────────────────────────────────────────────
+
+  Future<void> _loadAndResumeProgress() async {
+    if (!mounted) return;
+    try {
+      final progress = await GameApiService.getProgress(_kGameId);
+      final resumeLevel = (progress['currentLevel'] as num?)?.toInt() ?? 1;
+      if (!mounted) return;
+      if (resumeLevel > 1 && resumeLevel <= 9) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CodeMonkeyScratchPage(
+              exerciseNumber: resumeLevel,
+              savedModels: widget.savedModels,
+            ),
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCurrentExercise() async {
+    try {
+      await GameApiService.saveLevelResult(
+        gameId: _kGameId,
+        level: widget.exerciseNumber,
+        stars: 3,
+        score: 100,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _handleReset() async {
+    try {
+      await GameApiService.resetProgress(_kGameId);
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const CodeMonkeyScratchPage(exerciseNumber: 1)),
+    );
+  }
+
+  void _navigateToExercise(int n) {
+    if (n < 1 || n > 9) return;
+    final allSaved = [
+      ...widget.savedModels,
+      if (_savedModel != null) _savedModel!,
+    ];
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CodeMonkeyScratchPage(exerciseNumber: n, savedModels: allSaved),
+      ),
+    );
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.exerciseNumber == 5) {
+      _objectWorkspaces = {
+        'oliver': [
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.controlC('Loop'), position: const Offset(20, 47)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Step', value: '1'), position: const Offset(42, 80)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: 'raise hands'), position: const Offset(20, 136)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Jump', value: '1'), position: const Offset(42, 169)),
+          _WorkspaceEntry(block: _ScratchBlockData.eventC('On Update'), position: const Offset(240, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.widgetBlock('Set text:', value: 'text', value2: 'raise hands', value2Dropdown: true), position: const Offset(262, 47)),
+        ],
+      };
+      if (widget.savedModels.isNotEmpty) {
+        _aiClassNames = List.from(widget.savedModels.first.classNames);
+        _modelSaved = true;
+        _modelSelected = true;
+        _savedModel = widget.savedModels.first;
+      }
+    } else if (widget.exerciseNumber == 4) {
+      _objectWorkspaces = {
+        'oliver': [
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.controlC('Loop'), position: const Offset(20, 47)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Step', value: '1'), position: const Offset(42, 80)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: 'raise hands'), position: const Offset(20, 131)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Jump', value: '1'), position: const Offset(42, 164)),
+        ],
+      };
+      if (widget.savedModels.isNotEmpty) {
+        _aiClassNames = List.from(widget.savedModels.first.classNames);
+        _modelSaved = true;
+        _modelSelected = true;
+        _savedModel = widget.savedModels.first;
+      }
+    } else if (widget.exerciseNumber == 3) {
+      _objectWorkspaces = {
+        'oliver': [
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.controlC('Loop'), position: const Offset(20, 47)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Step', value: '1'), position: const Offset(42, 80)),
+        ],
+      };
+    } else {
+      _objectWorkspaces = {
+        'oliver': [_WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14))],
+      };
+    }
+    if (widget.exerciseNumber == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadAndResumeProgress());
+    }
+  }
 
   final List<_SpriteAssetData> _projectSprites = <_SpriteAssetData>[];
   final List<_AddedGameWidget> _stageWidgets = [];
@@ -77,31 +275,33 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   void _onWidgetAdded(_AddedGameWidget w) {
     setState(() {
       _stageWidgets.add(w);
+      // "On Run" hat canvasHeight=38, bottom connector at dy+(38-5)=47
+      const Offset onRunConnector = Offset(20, 47);
       if (w.type == _GameWidgetType.timer) {
         _objectWorkspaces[w.id] = [
-          _ScratchBlockData.event('On Run'),
-          _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '1'),
-          _ScratchBlockData.endEvent('On End'),
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '1'), position: onRunConnector),
+          _WorkspaceEntry(block: _ScratchBlockData.endEvent('On End'), position: const Offset(20, 130)),
         ];
       } else if (w.type == _GameWidgetType.button) {
         _objectWorkspaces[w.id] = [
-          _ScratchBlockData.event('On Run'),
-          _ScratchBlockData.endEvent('On Click'),
-          _ScratchBlockData.endEvent('On Down'),
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.endEvent('On Click'), position: const Offset(20, 130)),
+          _WorkspaceEntry(block: _ScratchBlockData.endEvent('On Down'), position: const Offset(250, 130)),
         ];
       } else if (w.type == _GameWidgetType.dialog) {
         _objectWorkspaces[w.id] = [
-          _ScratchBlockData.event('On Run'),
-          _ScratchBlockData.endEvent('On Confirm'),
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.endEvent('On Confirm'), position: const Offset(20, 130)),
         ];
       } else if (w.type == _GameWidgetType.webcam) {
         _objectWorkspaces[w.id] = [
-          _ScratchBlockData.event('On Run'),
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
         ];
       } else {
         _objectWorkspaces[w.id] = [
-          _ScratchBlockData.event('On Run'),
-          _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '0'),
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.widgetBlock('Set ${w.type.name}: ${w.name} To', value: '0'), position: onRunConnector),
         ];
       }
     });
@@ -151,7 +351,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
         return [
           _ScratchBlockData.widgetBlock('Set counter:', value: 'To', value2: '1'),
           _ScratchBlockData.widgetBlock('Change counter:', value: 'By', value2: '1'),
-          _ScratchBlockData.widgetBlock('Set text:', value: 'To', value2: '“  ”'),
+          _ScratchBlockData.widgetBlock('Set text:', value: 'text', value2: 'raise hands', value2Dropdown: true),
           _ScratchBlockData.widgetBlock('Set timer:', value: 'To', value2: '1'),
           _ScratchBlockData.widgetBlock('Start clock:', value: ''),
           _ScratchBlockData.widgetReporter('Get', value: 'Value'),
@@ -236,110 +436,461 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
     }
   }
 
+  // ── Execution engine ───────────────────────────────────────────────────────
+
+  void _stopProgram() {
+    if (!_isRunning) return;
+    _onPredictionTimer?.cancel();
+    _onPredictionTimer = null;
+    _onUpdateTimer?.cancel();
+    _onUpdateTimer = null;
+    setState(() { _isRunning = false; _owlFrame = 0; });
+  }
+
   Future<void> _runProgram() async {
     if (_isRunning) return;
-    setState(() => _isRunning = true);
-
-    // Start from the screenshot-like bottom-left position.
     setState(() {
-      _owlX = 36;
-      _owlY = 315;
-      _owlFrame = 0;
+      _isRunning = true;
+      _owlX = 36; _owlY = 315; _owlFrame = 0;
+      _owlScale = 1.0; _owlRotation = 0.0; _owlOpacity = 1.0;
+      _owlVisible = true; _owlSpeed = 62.0;
+      _variables.clear();
     });
-    await Future<void>.delayed(const Duration(milliseconds: 350));
+    _startPredictionPolling();
+    _startOnUpdateLoop();
+    await _execChain(_execOuterChain());
+    _onPredictionTimer?.cancel();
+    _onPredictionTimer = null;
+    _onUpdateTimer?.cancel();
+    _onUpdateTimer = null;
+    if (mounted) setState(() { _isRunning = false; _owlFrame = 0; });
+  }
 
-    for (final block in _workspaceBlocks) {
-      if (!_isRunning) break;
-      await _executeBlock(block);
-      await Future<void>.delayed(const Duration(milliseconds: 180));
+  void _startPredictionPolling() {
+    _onPredictionTimer?.cancel();
+    _predictionBusy = false;
+    if (!kIsWeb) return;
+    final oliverWs = List<_WorkspaceEntry>.from(_objectWorkspaces['oliver'] ?? []);
+    if (!oliverWs.any((e) => e.block.label == 'On Prediction')) return;
+    // Clear stale keypoints from the training session so prediction only fires
+    // when fresh keypoints arrive from the stage webcam camera.
+    js.context['_lastKeypoints'] = js.JsArray();
+    _onPredictionTimer = Timer.periodic(const Duration(milliseconds: 250), (_) async {
+      if (!mounted || !_isRunning || _predictionBusy) return;
+      final predRaw = js.context.callMethod('getLastPrediction', []);
+      if (predRaw == null) return;
+      final confidences = _parsePrediction(predRaw);
+      if (confidences.isEmpty) return;
+      double maxConf = 0; int maxIdx = 0;
+      for (int i = 0; i < confidences.length; i++) {
+        if (confidences[i] > maxConf) { maxConf = confidences[i]; maxIdx = i; }
+      }
+      // Require ≥4 out of 5 KNN votes (0.8) to avoid false-positive triggers.
+      if (maxConf < 0.75) return;
+      if (maxIdx >= _aiClassNames.length) return;
+      final detectedClass = _aiClassNames[maxIdx].toLowerCase().trim();
+      final ws = List<_WorkspaceEntry>.from(_objectWorkspaces['oliver'] ?? []);
+      for (final entry in ws) {
+        if (entry.block.label != 'On Prediction') continue;
+        final blockClass = (entry.editedValue ?? entry.block.value ?? '').toLowerCase().trim();
+        if (blockClass != detectedClass) continue;
+        _predictionBusy = true;
+        try {
+          await _execChain(_execInnerChain(entry, ws));
+        } finally {
+          _predictionBusy = false;
+        }
+        break;
+      }
+    });
+  }
+
+  void _startOnUpdateLoop() {
+    _onUpdateTimer?.cancel();
+    _updateBusy = false;
+    _onUpdateTimer = Timer.periodic(const Duration(milliseconds: 100), (_) async {
+      if (!mounted || !_isRunning || _updateBusy) return;
+      final hasOnUpdate = _objectWorkspaces.values.any(
+        (ws) => ws.any((e) => e.block.label == 'On Update'),
+      );
+      if (!hasOnUpdate) return;
+      _updateBusy = true;
+      try {
+        for (final ws in _objectWorkspaces.values) {
+          for (final entry in List<_WorkspaceEntry>.from(ws)) {
+            if (!_isRunning || !mounted) return;
+            if (entry.block.label != 'On Update') continue;
+            await _execChain(_execInnerChain(entry, ws));
+          }
+        }
+      } finally {
+        _updateBusy = false;
+      }
+    });
+  }
+
+  // Find a Predict reporter block in the same workspace as [host].
+  // Prefers the closest block by Euclidean distance; returns any match if only one exists.
+  _WorkspaceEntry? _findInlinePredict(_WorkspaceEntry host) {
+    List<_WorkspaceEntry>? hostWs;
+    for (final ws in _objectWorkspaces.values) {
+      if (ws.contains(host)) { hostWs = ws; break; }
     }
+    final entries = hostWs ?? _workspaceEntries;
+    _WorkspaceEntry? best;
+    double bestDist = double.infinity;
+    for (final e in entries) {
+      if (e == host) continue;
+      if (e.block.label == 'Predict' && e.block.shape == _ScratchBlockShape.reporter) {
+        final dist = (e.position - host.position).distance;
+        if (dist < bestDist) { bestDist = dist; best = e; }
+      }
+    }
+    return best;
+  }
 
-    if (mounted) {
-      setState(() {
-        _isRunning = false;
-        _owlFrame = 0;
-      });
+  // Evaluate a Predict reporter: returns formatted percentage string (e.g. "77%").
+  String _evalPredict(String className) {
+    if (!kIsWeb) return '0%';
+    try {
+      final raw = js.context.callMethod('getLastPrediction', []);
+      if (raw == null) return '0%';
+      final confidences = _parsePrediction(raw); // top-level helper
+      if (confidences.isEmpty) return '0%';
+      for (int i = 0; i < _aiClassNames.length && i < confidences.length; i++) {
+        if (_aiClassNames[i].toLowerCase().trim() == className.toLowerCase().trim()) {
+          return '${(confidences[i] * 100).round()}%';
+        }
+      }
+      final maxConf = confidences.reduce(math.max);
+      return '${(maxConf * 100).round()}%';
+    } catch (_) {
+      return '0%';
     }
   }
 
+  void _setWidgetText(String widgetName, String text) {
+    for (final w in _stageWidgets) {
+      if (w.type == _GameWidgetType.text &&
+          w.name.toLowerCase().trim() == widgetName.toLowerCase().trim()) {
+        setState(() => w.text = text);
+        return;
+      }
+    }
+  }
+
+  // Walking animation — cycles through 5 sprite frames while moving horizontally.
   Future<void> _walkOneStep({required double distance}) async {
+    const spriteSize = 74.0;
     const frameCount = 5;
     const ticks = 10;
-    const tickDuration = Duration(milliseconds: 55);
-
     final double dx = distance / ticks;
-
+    final double maxX = _worldWidth.toDouble() - spriteSize;
     for (var tick = 0; tick < ticks; tick++) {
       if (!mounted || !_isRunning) return;
-
       setState(() {
-        _owlX += dx;
+        _owlX = (_owlX + dx).clamp(0.0, maxX);
         _owlFrame = tick % frameCount;
       });
-
-      await Future<void>.delayed(tickDuration);
+      await Future<void>.delayed(const Duration(milliseconds: 55));
     }
+    if (mounted) setState(() => _owlFrame = 0);
+  }
 
-    if (mounted) {
-      setState(() => _owlFrame = 0);
+  // ── Chain builders ─────────────────────────────────────────────────────────
+
+  // Total height of a block as the execution engine sees it (matches workspace snap math).
+  double _execBlockHeight(_WorkspaceEntry entry, [List<_WorkspaceEntry>? ws]) {
+    final entries = ws ?? _workspaceEntries;
+    final isCBlock = entry.block.shape == _ScratchBlockShape.cBlock &&
+        entry.block.kind != _ScratchBlockKind.event &&
+        entry.block.kind != _ScratchBlockKind.endEvent;
+    if (!isCBlock) return 38.0; // stackH(33) + nd(5)
+    // C-block: header + inner content + footer
+    const stackH = 33.0; const footH = 13.0; const nd = 5.0;
+    final innerX = entry.position.dx + 22;
+    double innerTotal = 0;
+    for (final e in entries) {
+      if (e == entry) continue;
+      if ((e.position.dx - innerX).abs() < 14) innerTotal += 38.0;
+    }
+    return stackH + math.max(30.0, innerTotal) + footH + nd;
+  }
+
+  // Find the block immediately below `from` in the outer chain.
+  _WorkspaceEntry? _execNextEntry(_WorkspaceEntry from) {
+    final bottomY = from.position.dy + _execBlockHeight(from) - 5.0;
+    final fromX = from.position.dx;
+    _WorkspaceEntry? best; double bestDist = 15.0;
+    for (final e in _workspaceEntries) {
+      if (e == from) continue;
+      final dy = (e.position.dy - bottomY).abs();
+      if ((e.position.dx - fromX).abs() < 14 && dy < bestDist) {
+        bestDist = dy; best = e;
+      }
+    }
+    return best;
+  }
+
+  // Ordered list of blocks in the outer chain following "On Run".
+  List<_WorkspaceEntry> _execOuterChain() {
+    _WorkspaceEntry? root;
+    for (final e in _workspaceEntries) {
+      if (e.block.kind == _ScratchBlockKind.event) { root = e; break; }
+    }
+    if (root == null) return [];
+    final chain = <_WorkspaceEntry>[];
+    final visited = <_WorkspaceEntry>{root};
+    _WorkspaceEntry? cur = _execNextEntry(root);
+    while (cur != null && !visited.contains(cur)) {
+      visited.add(cur); chain.add(cur); cur = _execNextEntry(cur);
+    }
+    return chain;
+  }
+
+  // Ordered list of blocks inside the inner slot of a C-block.
+  // Accepts an optional [ws] to use a specific workspace (e.g. Oliver's) instead of the selected one.
+  List<_WorkspaceEntry> _execInnerChain(_WorkspaceEntry cBlock, [List<_WorkspaceEntry>? ws]) {
+    final entries = ws ?? _workspaceEntries;
+    final innerX = cBlock.position.dx + 22;
+    final topY = cBlock.position.dy + 33; // stackH
+    _WorkspaceEntry? first; double bestDist = 30.0;
+    for (final e in entries) {
+      if (e == cBlock) continue;
+      final dy = (e.position.dy - topY).abs();
+      if ((e.position.dx - innerX).abs() < 30 && dy < bestDist) {
+        bestDist = dy; first = e;
+      }
+    }
+    if (first == null) return [];
+    final chain = <_WorkspaceEntry>[first];
+    final visited = <_WorkspaceEntry>{first};
+    _WorkspaceEntry? cur = first;
+    while (cur != null) {
+      final bottomY = cur.position.dy + _execBlockHeight(cur, entries) - 5.0;
+      _WorkspaceEntry? next; double nextDist = 30.0;
+      for (final e in entries) {
+        if (e == cBlock || visited.contains(e)) continue;
+        final dy = (e.position.dy - bottomY).abs();
+        if ((e.position.dx - innerX).abs() < 30 && dy < nextDist) {
+          nextDist = dy; next = e;
+        }
+      }
+      if (next == null) break;
+      chain.add(next); visited.add(next); cur = next;
+    }
+    return chain;
+  }
+
+  // Execute an ordered list of block entries sequentially.
+  Future<void> _execChain(List<_WorkspaceEntry> chain) async {
+    for (final entry in chain) {
+      if (!_isRunning || !mounted) return;
+      await _execEntry(entry);
     }
   }
 
-  Future<void> _executeBlock(_ScratchBlockData block) async {
-    switch (block.label) {
+  double _n(String? v, [double fallback = 0]) =>
+      double.tryParse(v?.trim() ?? '') ?? fallback;
+
+  // ── Block executor ─────────────────────────────────────────────────────────
+
+  Future<void> _execEntry(_WorkspaceEntry entry) async {
+    if (!_isRunning || !mounted) return;
+    final b = entry.block;
+    final n1 = _n(entry.editedValue ?? b.value);
+    final n2 = _n(entry.editedValue2 ?? b.value2);
+
+    switch (b.label) {
+
+      // ── Movement ──────────────────────────────────────────────────────────
       case 'Step':
-        // CodeMonkey-style walking:
-        // one Step block moves the owl a small distance, while owl.png cycles
-        // through its 5 walking frames. The position and frame change together.
-        await _walkOneStep(distance: 62);
-        break;
+        await _walkOneStep(distance: n1 * _owlSpeed);
+
       case 'Jump':
-        setState(() => _owlY -= 70);
-        await Future<void>.delayed(const Duration(milliseconds: 260));
-        setState(() => _owlY += 70);
-        await Future<void>.delayed(const Duration(milliseconds: 260));
-        break;
+        final jh = n1 * 70; final jd = (260 * n1).clamp(80.0, 5000.0).toInt();
+        setState(() => _owlY -= jh);
+        await Future.delayed(Duration(milliseconds: jd));
+        if (!mounted || !_isRunning) return;
+        setState(() => _owlY += jh);
+        await Future.delayed(Duration(milliseconds: jd));
+
       case 'Set X':
-        setState(() => _owlX = double.tryParse(block.value ?? '300') ?? 300);
-        await Future<void>.delayed(const Duration(milliseconds: 430));
+        setState(() => _owlX = n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Set Y':
+        setState(() => _owlY = n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Change X By':
+        setState(() => _owlX += n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Change Y By':
+        setState(() => _owlY += n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Set Rotation':
+        setState(() => _owlRotation = n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Change Rotation By':
+        setState(() => _owlRotation += n1);
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Set Speed':
+        _owlSpeed = (n1 * 62.0).clamp(1.0, 1000.0);
+
+      case 'Set Allow Gravity':
+        // Physics not simulated — stored for future use.
         break;
+
+      // ── Display ───────────────────────────────────────────────────────────
+      case 'Show':
+        setState(() => _owlVisible = true);
+
+      case 'Hide':
+        setState(() => _owlVisible = false);
+
+      case 'Destroy':
+        setState(() { _owlVisible = false; _isRunning = false; });
+
+      case 'Disable':
+      case 'Enable':
+        break; // UI interaction toggle — no runtime effect yet.
+
+      case 'Set Scale':
+        setState(() => _owlScale = n1.clamp(0.01, 10.0));
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      case 'Set Opacity':
+        setState(() => _owlOpacity = n1.clamp(0.0, 1.0));
+        await Future.delayed(const Duration(milliseconds: 50));
+
+      // ── Control ───────────────────────────────────────────────────────────
       case 'Wait':
-        await Future<void>.delayed(Duration(milliseconds: ((double.tryParse(block.value ?? '1') ?? 1) * 1000).round()));
+        await Future.delayed(Duration(
+            milliseconds: (n1 * 1000).clamp(0.0, 30000.0).toInt()));
+
+      case 'Loop':
+        final inner = _execInnerChain(entry);
+        while (_isRunning && mounted) {
+          await _execChain(inner);
+          // Prevent busy-spin when inner is empty.
+          if (inner.isEmpty) await Future.delayed(const Duration(milliseconds: 50));
+        }
+
+      case 'Repeat':
+        final times = n1.toInt().clamp(0, 10000);
+        final inner = _execInnerChain(entry);
+        for (int i = 0; i < times && _isRunning && mounted; i++) {
+          await _execChain(inner);
+        }
+
+      case 'if':
+        // Boolean reporter evaluation not yet wired — always executes inner chain.
+        await _execChain(_execInnerChain(entry));
+
+      // ── Variables ─────────────────────────────────────────────────────────
+      case 'Set variable:':
+        _variables['variable'] = n2 != 0 ? n2 : b.value2 ?? 0;
+
+      case 'Change variable:':
+        _variables['variable'] =
+            ((_variables['variable'] ?? 0) as num) + (n2 != 0 ? n2 : 1);
+
+      // ── Game & Sounds ─────────────────────────────────────────────────────
+      case 'Reset Game':
+        setState(() {
+          _owlX = 36; _owlY = 315; _owlFrame = 0;
+          _owlScale = 1.0; _owlRotation = 0.0; _owlOpacity = 1.0;
+          _owlVisible = true; _owlSpeed = 62.0;
+          _variables.clear();
+        });
+
+      case 'Pause Game':
+        setState(() => _isRunning = false);
+
+      case 'Unpause Game':
+        setState(() => _isRunning = true);
+
+      case 'Play':
+        break; // Audio playback not implemented.
+
+      case 'Set Background':
+        break; // Background asset swap not implemented.
+
+      case 'Get Game Time':
+        break; // Reporter — value returned via variable system in future.
+
+      // ── Widgets ───────────────────────────────────────────────────────────
+      case 'Set counter:':
+      case 'Change counter:':
+      case 'Set timer:':
+      case 'Start clock:':
         break;
+
+      case 'Set text:': {
+        final widgetName = (entry.editedValue ?? b.value ?? '').trim();
+        final String textValue;
+        if (b.value2Dropdown) {
+          final className = (entry.editedValue2 ?? b.value2 ?? '').trim();
+          textValue = _evalPredict(className);
+        } else {
+          final inlinePredict = _findInlinePredict(entry);
+          if (inlinePredict != null) {
+            final className = (inlinePredict.editedValue ?? inlinePredict.block.value ?? '').trim();
+            textValue = _evalPredict(className);
+          } else {
+            final raw = (entry.editedValue2 ?? b.value2 ?? '').trim();
+            textValue = raw.startsWith('"') && raw.endsWith('"')
+                ? raw.substring(1, raw.length - 1)
+                : raw;
+          }
+        }
+        _setWidgetText(widgetName, textValue);
+      }
+
+      // ── AI ────────────────────────────────────────────────────────────────
+      case 'Predict':
+      case 'On Prediction':
+        break;
+
       default:
-        await Future<void>.delayed(const Duration(milliseconds: 120));
+        await Future.delayed(const Duration(milliseconds: 50));
     }
   }
 
-  void _addBlock(_ScratchBlockData block) {
-    if (block.kind == _ScratchBlockKind.event) {
+  void _addBlock(_ScratchBlockData block, {Offset position = const Offset(80, 80)}) {
+    if (block.kind == _ScratchBlockKind.event && block.shape != _ScratchBlockShape.cBlock) {
       setState(() {
-        _workspaceBlocks
+        _workspaceEntries
           ..clear()
-          ..add(block);
+          ..add(_WorkspaceEntry(block: block, position: const Offset(20, 14)));
       });
       return;
     }
     if (block.kind == _ScratchBlockKind.endEvent) {
       setState(() {
-        _workspaceBlocks.removeWhere((b) => b.kind == _ScratchBlockKind.endEvent);
-        _workspaceBlocks.add(block);
+        _workspaceEntries.removeWhere((e) => e.block.kind == _ScratchBlockKind.endEvent);
+        _workspaceEntries.add(_WorkspaceEntry(block: block, position: position));
       });
       return;
     }
-    setState(() => _workspaceBlocks.add(block));
+    setState(() => _workspaceEntries.add(_WorkspaceEntry(block: block, position: position)));
   }
 
   void _removeBlock(int index) {
     if (index == 0) return;
-    setState(() => _workspaceBlocks.removeAt(index));
+    setState(() => _workspaceEntries.removeAt(index));
   }
 
   void _clearProgram() {
     setState(() {
-      _workspaceBlocks
+      _workspaceEntries
         ..clear()
-        ..add(_ScratchBlockData.event('On Run'));
+        ..add(_WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)));
       if (_selectedObjectId == 'oliver') {
         _owlX = 36;
         _owlY = 315;
@@ -390,9 +941,11 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFE9EEF2),
-      body: Column(
+      body: Stack(
         children: [
-          const _TopBar(),
+          Column(
+        children: [
+          _TopBar(exerciseNumber: widget.exerciseNumber),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -403,7 +956,25 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                   height: constraints.maxHeight,
                   child: Row(
                     children: [
-                      const Expanded(flex: 28, child: _LessonPanel()),
+                      Expanded(flex: 28, child: _LessonPanel(
+                        workspaceEntries: _workspaceEntries,
+                        isRunning: _isRunning,
+                        exerciseNumber: widget.exerciseNumber,
+                        exerciseSteps: _stepsForExercise(widget.exerciseNumber),
+                        aiClassNames: _aiClassNames,
+                        modelSaved: _modelSaved,
+                        modelSelected: _modelSelected,
+                        worldWidth: _worldWidth,
+                        cameraTarget: _cameraTarget,
+                        onNextExercise: () async {
+                          await _saveCurrentExercise();
+                          if (!mounted) return;
+                          _navigateToExercise(widget.exerciseNumber + 1);
+                        },
+                        onPrevExercise: () => _navigateToExercise(widget.exerciseNumber - 1),
+                        onReset: _handleReset,
+                        onAllCompleted: _saveCurrentExercise,
+                      )),
                       Container(width: 2, color: const Color(0xFFD0D0D0)),
                       Expanded(
                         flex: 38,
@@ -411,7 +982,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           selectedCategory: _selectedCategory,
                           categories: _categories,
                           paletteBlocks: _paletteBlocks,
-                          workspaceBlocks: _workspaceBlocks,
+                          workspaceEntries: _workspaceEntries,
                           isRunning: _isRunning,
                           activeObjectName: _selectedObjectId == 'oliver'
                               ? 'Oliver'
@@ -420,12 +991,23 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                               ? null
                               : _stageWidgets.firstWhere((w) => w.id == _selectedObjectId, orElse: () => _stageWidgets.first).assetPath,
                           onRun: _runProgram,
+                          onStop: _stopProgram,
                           onClear: _clearProgram,
                           onSelectCategory: (category) {
-                            setState(() => _selectedCategory = category);
+                            setState(() {
+                              if (_selectedCategory == category) {
+                                _paletteOpen = !_paletteOpen;
+                              } else {
+                                _selectedCategory = category;
+                                _paletteOpen = true;
+                              }
+                            });
                           },
-                          onAddBlock: _addBlock,
+                          paletteOpen: _paletteOpen,
+                          onAddBlock: (block, pos) => _addBlock(block, position: pos),
                           onRemoveBlock: _removeBlock,
+                          aiClassNames: _aiClassNames,
+                          textWidgetNames: _textWidgetNames,
                         ),
                       ),
                       Container(width: 2, color: const Color(0xFF9A9A9A)),
@@ -438,17 +1020,41 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           owlRotation: _owlRotation,
                           owlOpacity: _owlOpacity,
                           owlFrame: _owlFrame,
+                          owlVisible: _owlVisible,
                           isRunning: _isRunning,
+                          exerciseNumber: widget.exerciseNumber,
                           projectSprites: _projectSprites,
                           stageWidgets: _stageWidgets,
+                          selectedObjectId: _selectedObjectId,
                           onAddSpritePressed: () => _showAddSpriteDialog(context),
                           onOliverSettingsChanged: _onOliverSettingsChanged,
+                          onOliverSelected: () => setState(() => _selectedObjectId = 'oliver'),
                           onSpriteDeleted: _onSpriteDeleted,
                           onSpriteDuplicated: _onSpriteDuplicated,
                           onWidgetAdded: _onWidgetAdded,
                           onWidgetRemoved: _onWidgetRemoved,
                           onWidgetSelected: _onWidgetSelected,
                           onWidgetChanged: _onWidgetChanged,
+                          onAiClassNamesChanged: (names) => setState(() {
+                            _aiClassNames = names;
+                            if (widget.exerciseNumber == 3 && names.isNotEmpty) _modelSelected = true;
+                          }),
+                          onModelSaved: (model) => setState(() { _modelSaved = true; _savedModel = model; }),
+                          savedModels: [
+                            ...widget.savedModels,
+                            if (_savedModel != null) _savedModel!,
+                          ],
+                          worldWidth: _worldWidth,
+                          worldHeight: _worldHeight,
+                          cameraTarget: _cameraTarget,
+                          gravity: _gravity,
+                          physics: _physics,
+                          onWorldWidthChanged: (v) => setState(() => _worldWidth = v),
+                          onWorldHeightChanged: (v) => setState(() => _worldHeight = v),
+                          onCameraTargetChanged: (v) => setState(() => _cameraTarget = v),
+                          onGravityChanged: (v) => setState(() => _gravity = v),
+                          onPhysicsChanged: (v) => setState(() => _physics = v),
+                          onFullscreen: () => setState(() => _isFullscreen = true),
                         ),
                       ),
                     ],
@@ -465,18 +1071,166 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
           ),
         ],
       ),
+          if (_isFullscreen) Positioned.fill(
+            child: _FullscreenStage(
+              owlX: _owlX,
+              owlY: _owlY,
+              owlScale: _owlScale,
+              owlRotation: _owlRotation,
+              owlOpacity: _owlOpacity,
+              owlFrame: _owlFrame,
+              owlVisible: _owlVisible,
+              isRunning: _isRunning,
+              stageWidgets: _stageWidgets,
+              worldWidth: _worldWidth,
+              worldHeight: _worldHeight,
+              cameraTarget: _cameraTarget,
+              onExit: () => setState(() => _isFullscreen = false),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+// ─── Fullscreen stage overlay ─────────────────────────────────────────────────
+
+class _FullscreenStage extends StatelessWidget {
+  const _FullscreenStage({
+    required this.owlX,
+    required this.owlY,
+    required this.owlScale,
+    required this.owlRotation,
+    required this.owlOpacity,
+    required this.owlFrame,
+    required this.owlVisible,
+    required this.isRunning,
+    required this.stageWidgets,
+    required this.onExit,
+    this.worldWidth = 600,
+    this.worldHeight = 400,
+    this.cameraTarget = 'None',
+  });
+
+  final double owlX;
+  final double owlY;
+  final double owlScale;
+  final double owlRotation;
+  final double owlOpacity;
+  final int owlFrame;
+  final bool owlVisible;
+  final bool isRunning;
+  final List<_AddedGameWidget> stageWidgets;
+  final VoidCallback onExit;
+  final int worldWidth;
+  final int worldHeight;
+  final String cameraTarget;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spriteSize = 96.0;
+        final maxTop = math.max(0.0, constraints.maxHeight - spriteSize - 8);
+        // Scale owlY from world-height coordinate space to fullscreen height
+        final double scaledY = (owlY / worldHeight.toDouble()) * constraints.maxHeight;
+        final top = scaledY.clamp(0.0, maxTop);
+
+        final bool followCam = cameraTarget == 'Oliver';
+        final double viewCenterX = constraints.maxWidth / 2 - spriteSize / 2;
+        final double maxScroll = math.max(0.0, worldWidth - constraints.maxWidth);
+        final double cameraOffset = followCam
+            ? (owlX - viewCenterX).clamp(0.0, maxScroll)
+            : 0.0;
+        final double displayLeft = followCam ? viewCenterX : owlX;
+
+        return ClipRect(
+          child: Stack(
+            children: [
+              // Background
+              Positioned(
+                left: -cameraOffset,
+                top: 0,
+                bottom: 0,
+                width: constraints.maxWidth + worldWidth,
+                child: const _StarryNightBackground(),
+              ),
+              // Oliver — no border in fullscreen
+              if (owlVisible)
+                AnimatedPositioned(
+                  left: displayLeft,
+                  top: top,
+                  duration: const Duration(milliseconds: 70),
+                  curve: Curves.linear,
+                  child: Opacity(
+                    opacity: owlOpacity.clamp(0.0, 1.0),
+                    child: Transform.scale(
+                      scale: owlScale,
+                      child: Transform.rotate(
+                        angle: (owlRotation * math.pi / 180) + (isRunning ? -.05 : -.16),
+                        child: _OwlSpriteFrame(frame: owlFrame, height: spriteSize),
+                      ),
+                    ),
+                  ),
+                ),
+              // Stage widget overlays
+              for (int i = 0; i < stageWidgets.length; i++)
+                if (stageWidgets[i].show)
+                  if (stageWidgets[i].type == _GameWidgetType.dialog)
+                    Positioned(
+                      top: 18, left: 18, right: 18, bottom: 60,
+                      child: Opacity(
+                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
+                      ),
+                    )
+                  else
+                    Positioned(
+                      top: 12.0 + i * 52,
+                      left: 12,
+                      child: Opacity(
+                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
+                      ),
+                    ),
+              // Exit fullscreen button
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: onExit,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.fullscreen_exit, color: Colors.white, size: 24),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _TopBar extends StatelessWidget {
-  const _TopBar();
+  const _TopBar({this.exerciseNumber = 1});
+
+  final int exerciseNumber;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 59,
-      color: const Color(0xFF3B2118),
+      color: const Color.fromARGB(255, 252, 183, 199),
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
@@ -489,7 +1243,7 @@ class _TopBar extends StatelessWidget {
               border: Border.all(color: const Color(0xFF140B07), width: 2),
             ),
             alignment: Alignment.center,
-            child: const Text('🐵', style: TextStyle(fontSize: 27)),
+            child: const Text('', style: TextStyle(fontSize: 27)),
           ),
           const SizedBox(width: 8),
           const Text(
@@ -513,9 +1267,9 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 24),
-          const Text(
-            'AI IS A HOOT: EXERCISE #1',
-            style: TextStyle(
+          Text(
+            'AI IS A HOOT: EXERCISE #$exerciseNumber',
+            style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w800,
               fontSize: 16,
@@ -543,8 +1297,404 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _LessonPanel extends StatelessWidget {
-  const _LessonPanel();
+// ─── Exercise / instruction data ────────────────────────────────────────────
+
+class _Bullet {
+  const _Bullet(this.text, {this.sub = false, this.numbered = 0});
+  final String text;
+  final bool sub;      // sub-bullet (○)
+  final int numbered;  // > 0 means numbered (1, 2, 3...)
+}
+
+class _ExerciseStep {
+  const _ExerciseStep({
+    required this.heading,
+    required this.bullets,
+    required this.validate,
+    this.isRunStep = false,
+    this.isStopStep = false,
+    this.requiredAiClassName,
+    this.aiClassIndex,
+    this.autoCheck = false,
+    this.validateSettings,
+  });
+  final String heading;
+  final List<_Bullet> bullets;
+  final bool Function(List<_WorkspaceEntry>) validate;
+  final bool isRunStep;
+  final bool isStopStep;
+  final String? requiredAiClassName;
+  final int? aiClassIndex;
+  final bool autoCheck;
+  final bool Function(int worldWidth, String cameraTarget)? validateSettings;
+}
+
+final List<_ExerciseStep> _exercise1Steps = [
+  _ExerciseStep(
+    heading: "Let's start with moving Oliver.",
+    bullets: const [
+      _Bullet('Drag a Step block from the Movement library'),
+      _Bullet('Attach it to the On Run block', sub: true),
+    ],
+    validate: (entries) => entries.any((e) => e.block.label == 'Step'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Oliver barely moved! We will now make Oliver keep on moving.',
+    bullets: const [
+      _Bullet('Remove the Step block from the On Run block.', numbered: 1),
+      _Bullet('Drag a Loop block from the Control library', numbered: 2),
+      _Bullet('Attach it to the On Run block', sub: true),
+      _Bullet('Drag a Step block from the Movement library', numbered: 3),
+      _Bullet('Attach it inside the Loop block', sub: true),
+    ],
+    validate: (entries) =>
+        entries.any((e) => e.block.label == 'Loop') &&
+        entries.any((e) => e.block.label == 'Step'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN! and see what happens.',
+    bullets: const [_Bullet('Does the owl stop? Why?', sub: true)],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise2Steps = [
+  _ExerciseStep(
+    heading: 'We will use an AI model.',
+    bullets: const [
+      _Bullet('Click on Add New Model in the AI - Pose tab'),
+      _Bullet('You can name your model, making it simpler to locate it at a later time'),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Name the first class: raise hands.',
+    bullets: const [
+      _Bullet('Replace Class 1 with raise hands'),
+    ],
+    validate: (_) => false,
+    requiredAiClassName: 'raise hands',
+    aiClassIndex: 0,
+  ),
+  _ExerciseStep(
+    heading: 'Record poses for the raise hands class by:',
+    bullets: const [
+      _Bullet('Click on Record', numbered: 1),
+      _Bullet('Click on the timer icon', numbered: 2),
+      _Bullet('Click to record', numbered: 3),
+      _Bullet('The camera will start taking pictures in 5 seconds', sub: true),
+      _Bullet('Raise your hands', numbered: 4),
+      _Bullet('Make sure to move a little to take many versions of your pose', numbered: 5),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Name the second class: stand.',
+    bullets: const [
+      _Bullet('Replace Class 2 with stand'),
+    ],
+    validate: (_) => false,
+    requiredAiClassName: 'stand',
+    aiClassIndex: 1,
+  ),
+  _ExerciseStep(
+    heading: 'Record poses for the stand class by:',
+    bullets: const [
+      _Bullet('Click on Record', numbered: 1),
+      _Bullet('Click on the timer icon', numbered: 2),
+      _Bullet('Click to record', numbered: 3),
+      _Bullet('The camera will start taking pictures in 5 seconds', sub: true),
+      _Bullet('Stand straight', numbered: 4),
+      _Bullet('Make sure to move a little to take many versions of your pose', numbered: 5),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Now you are ready to train the model.',
+    bullets: const [
+      _Bullet('Click on Train Model'),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Test and save your model.',
+    bullets: const [
+      _Bullet('The model can now identify the two poses you recorded.'),
+      _Bullet('Test it by posing raising hands and standing', numbered: 1),
+      _Bullet('See that the percentage is above 95% for each pose', sub: true),
+      _Bullet('Press Save', numbered: 2),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN! to test your AI model.',
+    bullets: const [_Bullet('Does the owl respond to your pose?', sub: true)],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise3Steps = [
+  _ExerciseStep(
+    heading: 'Choose the AI model you created in the previous exercise by clicking on it.',
+    bullets: const [],
+    validate: (_) => false,
+  ),
+  _ExerciseStep(
+    heading: 'Add the Webcam widget from the Widgets tab on the right.',
+    bullets: const [
+      _Bullet('Keep the default name webcam', sub: true),
+      _Bullet('Drag the webcam to the upper area of the game', sub: true),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on the owl sprite to bring up its code.',
+    bullets: const [
+      _Bullet('Drag an On Prediction block from the AI library', numbered: 1),
+      _Bullet('Change the dropdown to raise hands', sub: true),
+    ],
+    validate: (entries) => entries.any((e) => e.block.label == 'On Prediction'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Drag a Jump block from the Movement library.',
+    bullets: const [
+      _Bullet('Attach it inside the On Prediction block', sub: true),
+    ],
+    validate: (entries) => entries.any((e) => e.block.label == 'Jump'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [_Bullet('Make Oliver jump over the tiles', sub: true)],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise4Steps = [
+  _ExerciseStep(
+    heading: "Let's display the percentage.",
+    bullets: const [
+      _Bullet('Click on the owl sprite to bring up its code'),
+      _Bullet('Drag an On Update block from the Events library', numbered: 1),
+      _Bullet('This block runs every game frame (30-60 times/sec)', sub: true),
+      _Bullet('Drag a Set text: block from the Widgets library', numbered: 2),
+      _Bullet('Place it inside the On Update block', sub: true),
+      _Bullet('Drag a Predict block from the AI library', numbered: 3),
+      _Bullet('Attach it to the Set text: block', sub: true),
+      _Bullet('Change the dropdown to raise hands', sub: true),
+    ],
+    validate: (entries) =>
+        entries.any((e) => e.block.label == 'On Update') &&
+        entries.any((e) => e.block.label == 'Set text:') &&
+        entries.any((e) => e.block.label == 'Predict'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [
+      _Bullet('Strike different poses and see that only when the prediction is 95% or higher Oliver jumps.', sub: true),
+      _Bullet('Move Oliver all the way to the right', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise5Steps = [
+  _ExerciseStep(
+    heading: 'Go to the Game tab on the lower-right side of the screen.',
+    bullets: const [
+      _Bullet('Change world\'s width to', numbered: 1),
+      _Bullet('3600', sub: true),
+    ],
+    validate: (_) => false,
+    validateSettings: (w, _) => w == 3600,
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [
+      _Bullet('Notice that Oliver disappears after walking across the screen', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on Stop.',
+    bullets: const [],
+    validate: (_) => false,
+    isStopStep: true,
+  ),
+  _ExerciseStep(
+    heading: 'We need to set the camera to follow Oliver:',
+    bullets: const [
+      _Bullet('Set the Camera target to', numbered: 1),
+      _Bullet('Oliver', sub: true),
+    ],
+    validate: (_) => false,
+    validateSettings: (_, t) => t == 'Oliver',
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [
+      _Bullet('Check that now we follow Oliver as it moves', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+List<_ExerciseStep> _stepsForExercise(int n) =>
+    n == 5 ? _exercise5Steps :
+    n == 4 ? _exercise4Steps :
+    n == 3 ? _exercise3Steps :
+    n == 2 ? _exercise2Steps : _exercise1Steps;
+
+// ─── Lesson panel ────────────────────────────────────────────────────────────
+
+class _LessonPanel extends StatefulWidget {
+  const _LessonPanel({
+    required this.workspaceEntries,
+    required this.isRunning,
+    required this.exerciseNumber,
+    required this.exerciseSteps,
+    required this.onNextExercise,
+    required this.onPrevExercise,
+    required this.onReset,
+    this.aiClassNames = const [],
+    this.modelSaved = false,
+    this.modelSelected = false,
+    this.worldWidth = 600,
+    this.cameraTarget = 'None',
+    this.onAllCompleted,
+  });
+  final List<_WorkspaceEntry> workspaceEntries;
+  final bool isRunning;
+  final int exerciseNumber;
+  final List<_ExerciseStep> exerciseSteps;
+  final VoidCallback onNextExercise;
+  final VoidCallback onPrevExercise;
+  final VoidCallback onReset;
+  final List<String> aiClassNames;
+  final bool modelSaved;
+  final bool modelSelected;
+  final int worldWidth;
+  final String cameraTarget;
+  final VoidCallback? onAllCompleted;
+
+  @override
+  State<_LessonPanel> createState() => _LessonPanelState();
+}
+
+class _LessonPanelState extends State<_LessonPanel> {
+  int _completedSteps = 0;
+  bool _showError = false;
+
+  @override
+  void didUpdateWidget(_LessonPanel old) {
+    super.didUpdateWidget(old);
+    // Auto-advance step 0 when a model is selected (exercise 3)
+    if (!old.modelSelected && widget.modelSelected && _completedSteps == 0) {
+      setState(() { _completedSteps = 1; _showError = false; });
+      _checkAllComplete();
+      return;
+    }
+    // Auto-complete all steps when model is saved
+    if (!old.modelSaved && widget.modelSaved) {
+      setState(() { _completedSteps = widget.exerciseSteps.length; _showError = false; });
+      _checkAllComplete();
+      return;
+    }
+    // Auto-advance run step
+    if (!old.isRunning && widget.isRunning &&
+        _completedSteps < widget.exerciseSteps.length &&
+        widget.exerciseSteps[_completedSteps].isRunStep) {
+      setState(() { _completedSteps++; _showError = false; });
+      _checkAllComplete();
+      return;
+    }
+    // Auto-advance stop step
+    if (old.isRunning && !widget.isRunning &&
+        _completedSteps < widget.exerciseSteps.length &&
+        widget.exerciseSteps[_completedSteps].isStopStep) {
+      setState(() { _completedSteps++; _showError = false; });
+      _checkAllComplete();
+      return;
+    }
+    // Auto-advance AI class name step when name matches
+    _tryAutoAdvance();
+    // Defer workspace-block auto-advance to post-frame so setState isn't
+    // called during the widget update/build phase (avoids framework.dart:5340).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _tryWorkspaceAutoAdvance();
+    });
+  }
+
+  void _checkAllComplete() {
+    if (_completedSteps >= widget.exerciseSteps.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.onAllCompleted?.call();
+      });
+    }
+  }
+
+  void _tryAutoAdvance() {
+    if (_completedSteps >= widget.exerciseSteps.length) return;
+    final step = widget.exerciseSteps[_completedSteps];
+    if (step.requiredAiClassName != null && step.aiClassIndex != null) {
+      final idx = step.aiClassIndex!;
+      if (widget.aiClassNames.length > idx &&
+          widget.aiClassNames[idx].toLowerCase().trim() ==
+              step.requiredAiClassName!.toLowerCase()) {
+        setState(() { _completedSteps++; _showError = false; });
+        _checkAllComplete();
+      }
+    }
+    if (step.autoCheck == true && step.validateSettings != null) {
+      if (step.validateSettings!(widget.worldWidth, widget.cameraTarget)) {
+        setState(() { _completedSteps++; _showError = false; });
+        _checkAllComplete();
+      }
+    }
+  }
+
+  void _tryWorkspaceAutoAdvance() {
+    if (!mounted) return;
+    if (_completedSteps >= widget.exerciseSteps.length) return;
+    final step = widget.exerciseSteps[_completedSteps];
+    // Use != true for null-safe bool check (dart2js can produce null for
+    // bool fields on non-const objects that omit the optional parameter).
+    if (step.autoCheck != true) return;
+    if (step.validate(widget.workspaceEntries) != true) return;
+    setState(() { _completedSteps++; _showError = false; });
+    _checkAllComplete();
+    _tryAutoAdvance();
+    _tryWorkspaceAutoAdvance();
+  }
+
+  void _onCheck() {
+    if (_completedSteps >= widget.exerciseSteps.length) return;
+    final step = widget.exerciseSteps[_completedSteps];
+    if (step.validate(widget.workspaceEntries) == true) {
+      setState(() {
+        _completedSteps++;
+        _showError = false;
+      });
+      _checkAllComplete();
+      _tryAutoAdvance();
+      _tryWorkspaceAutoAdvance();
+    } else {
+      setState(() => _showError = true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -552,15 +1702,16 @@ class _LessonPanel extends StatelessWidget {
       color: Colors.white,
       child: Column(
         children: [
+          // ── top nav bar ──
           Container(
-            height: 94,
+            height: 70,
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 51),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
                 Expanded(
                   child: Container(
-                    height: 52,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       border: Border.all(color: const Color(0xFFDDDDDD)),
@@ -568,152 +1719,1824 @@ class _LessonPanel extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        SizedBox(
-                          width: 25,
-                          child: Icon(Icons.arrow_left, color: Colors.amber.shade200),
-                        ),
-                        Container(width: 1, color: const Color(0xFFE4E4E4)),
-                        const Expanded(
-                          child: Center(
-                            child: Text(
-                              'Exercise 1 of 9',
-                              style: TextStyle(fontSize: 16, color: Color(0xFF203246)),
+                        GestureDetector(
+                          onTap: widget.exerciseNumber > 1 ? widget.onPrevExercise : null,
+                          child: SizedBox(
+                            width: 25,
+                            child: Icon(
+                              Icons.arrow_left,
+                              color: widget.exerciseNumber > 1
+                                  ? Colors.amber.shade600
+                                  : Colors.amber.shade200,
                             ),
                           ),
                         ),
-                        const Icon(Icons.keyboard_arrow_down, color: Color(0xFF26A766), size: 20),
                         Container(width: 1, color: const Color(0xFFE4E4E4)),
-                        SizedBox(
-                          width: 25,
-                          child: Icon(Icons.arrow_right, color: Colors.amber.shade600),
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              'Exercise ${widget.exerciseNumber} of 9',
+                              style: const TextStyle(fontSize: 15, color: Color(0xFF203246)),
+                            ),
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down, color: Color(0xFF26A766), size: 18),
+                        Container(width: 1, color: const Color(0xFFE4E4E4)),
+                        GestureDetector(
+                          onTap: widget.exerciseNumber < 9 ? widget.onNextExercise : null,
+                          child: SizedBox(
+                            width: 25,
+                            child: Icon(
+                              Icons.arrow_right,
+                              color: widget.exerciseNumber < 9
+                                  ? Colors.amber.shade600
+                                  : Colors.amber.shade200,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 58),
+                const SizedBox(width: 10),
                 const _SquareIconButton(icon: Icons.volume_up),
-                const SizedBox(width: 16),
-                const _SquareIconButton(icon: Icons.cached),
+                const SizedBox(width: 8),
+                _SquareIconButton(icon: Icons.cached, onPressed: widget.onReset),
               ],
             ),
           ),
-          Container(
-            height: 38,
-            color: const Color(0xFFD9EEF8),
-            alignment: Alignment.center,
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
-                SizedBox(width: 7),
-                Text(
-                  'Show my previous solution',
-                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 16),
-                ),
-              ],
-            ),
-          ),
+          // ── scrollable body ──
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(29, 26, 34, 32),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.exerciseNumber == 5)
+                    const _Exercise5OverviewContent()
+                  else if (widget.exerciseNumber == 4)
+                    const _Exercise4OverviewContent()
+                  else if (widget.exerciseNumber == 3)
+                    const _Exercise3OverviewContent()
+                  else if (widget.exerciseNumber == 2)
+                    const _Exercise2OverviewContent()
+                  else
+                    const _Exercise1OverviewContent(),
+                  const SizedBox(height: 20),
+                  // ── INSTRUCTIONS header ──
                   Row(
                     children: [
-                      const Icon(Icons.track_changes, size: 38, color: Color(0xFF2E2722)),
-                      const SizedBox(width: 12),
+                      const Text('🚩', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
                       const Text(
-                        'OVERVIEW',
+                        'INSTRUCTIONS',
                         style: TextStyle(
                           color: Color(0xFF78AD50),
-                          fontSize: 25,
+                          fontSize: 18,
                           fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
+                          letterSpacing: 1.1,
                         ),
                       ),
                       const Spacer(),
-                      Container(height: 1.4, width: 130, color: const Color(0xFF78AD50)),
+                      Container(height: 1.4, width: 60, color: const Color(0xFF78AD50)),
                     ],
                   ),
-                  const SizedBox(height: 27),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Nice to Meet You, Oliver.',
-                          style: TextStyle(
-                            color: Color(0xFF101926),
-                            fontSize: 15.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                  const SizedBox(height: 12),
+                  // ── steps ──
+                  for (int i = 0; i < widget.exerciseSteps.length; i++) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _buildStep(i),
+                  ],
+                  // ── great job banner ──
+                  if (_completedSteps >= widget.exerciseSteps.length && !widget.isRunning) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEBF9F1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF30A96A), width: 2),
                       ),
-                      const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 16)),
-                      const SizedBox(width: 5),
-                      Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+                      child: Column(
+                        children: [
+                          const Text('🎉', style: TextStyle(fontSize: 36)),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Great Job!',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1A6E3C),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'You completed Exercise ${widget.exerciseNumber}!',
+                            style: const TextStyle(fontSize: 14, color: Color(0xFF1A6E3C)),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: widget.onNextExercise,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF30A96A),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 13),
+                            ),
+                            icon: const Icon(Icons.arrow_forward, size: 20),
+                            label: const Text(
+                              'NEXT',
+                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep(int i) {
+    final step = widget.exerciseSteps[i];
+    final isDone = i < _completedSteps;
+    final isActive = i == _completedSteps;
+
+    if (isDone) {
+      return _StepCard(
+        bulletColor: const Color(0xFF30A96A),
+        bulletIcon: Icons.check_circle,
+        backgroundColor: const Color(0xFFEBF9F1),
+        borderColor: const Color(0xFF30A96A),
+        heading: step.heading,
+        bullets: step.bullets,
+        showBullets: true,
+        headingStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF1A6E3C)),
+        bulletStyle: const TextStyle(fontSize: 13, color: Color(0xFF1A6E3C)),
+      );
+    }
+
+    if (isActive) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _StepCard(
+            bulletColor: const Color(0xFFF5B500),
+            bulletIcon: Icons.star,
+            backgroundColor: Colors.white,
+            borderColor: const Color(0xFFF5B500),
+            heading: step.heading,
+            bullets: step.bullets,
+            showBullets: true,
+            headingStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF0D1B2A)),
+            bulletStyle: const TextStyle(fontSize: 13, color: Color(0xFF333333)),
+          ),
+          if (!step.isRunStep) ...[
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _onCheck,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF30A96A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                  ),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('CHECK', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                ),
+                if (_showError) ...[
+                  const SizedBox(width: 12),
+                  const Flexible(child: Text(
+                    'Not quite — check the workspace!',
+                    style: TextStyle(color: Color(0xFFB94040), fontSize: 12.5),
+                  )),
+                ],
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+
+    // locked
+    return _StepCard(
+      bulletColor: const Color(0xFFBBBBBB),
+      bulletIcon: Icons.star_outline,
+      backgroundColor: const Color(0xFFF4F4F4),
+      borderColor: const Color(0xFFDDDDDD),
+      heading: step.heading,
+      bullets: step.bullets,
+      showBullets: false,
+      headingStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFFAAAAAA)),
+      bulletStyle: const TextStyle(fontSize: 13, color: Color(0xFFAAAAAA)),
+    );
+  }
+}
+
+class _StepCard extends StatelessWidget {
+  const _StepCard({
+    required this.bulletColor,
+    required this.bulletIcon,
+    required this.backgroundColor,
+    required this.borderColor,
+    required this.heading,
+    required this.bullets,
+    required this.showBullets,
+    required this.headingStyle,
+    required this.bulletStyle,
+  });
+
+  final Color bulletColor;
+  final IconData bulletIcon;
+  final Color backgroundColor;
+  final Color borderColor;
+  final String heading;
+  final List<_Bullet> bullets;
+  final bool showBullets;
+  final TextStyle headingStyle;
+  final TextStyle bulletStyle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor, width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(bulletIcon, color: bulletColor, size: 22),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(heading, style: headingStyle),
+                if (showBullets) ...[
+                  const SizedBox(height: 8),
+                  for (final b in bullets)
+                    _BulletRow(bullet: b, style: bulletStyle),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BulletRow extends StatelessWidget {
+  const _BulletRow({required this.bullet, required this.style});
+  final _Bullet bullet;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final indent = bullet.sub ? 18.0 : 0.0;
+    final prefix = bullet.numbered > 0
+        ? '${bullet.numbered}. '
+        : bullet.sub
+            ? '○ '
+            : '• ';
+    return Padding(
+      padding: EdgeInsets.only(left: indent, top: 3),
+      child: Text(prefix + bullet.text, style: style),
+    );
+  }
+}
+
+class _CodeExampleBox extends StatelessWidget {
+  const _CodeExampleBox();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF4A90D9), width: 1.4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ScratchBlock(block: _ScratchBlockData.event('On Run')),
+              _ScratchBlock(block: _ScratchBlockData.controlC('Loop')),
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: _ScratchBlock(block: _ScratchBlockData.movement('Step', value: '1')),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 12,
+          top: -12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2665B5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'CODE EXAMPLE',
+              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+// ── Exercise overview content widgets ────────────────────────────────────────
+
+class _Exercise1OverviewContent extends StatelessWidget {
+  const _Exercise1OverviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          color: const Color(0xFFD9EEF8),
+          alignment: Alignment.center,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
+              SizedBox(width: 7),
+              Text('Show my previous solution',
+                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 15)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+            const SizedBox(width: 10),
+            const Text('OVERVIEW',
+                style: TextStyle(
+                    color: Color(0xFF78AD50),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+            const Spacer(),
+            Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Builder(builder: (ctx) {
+          return Row(
+            children: [
+              const Expanded(
+                child: Text('Nice to Meet You, Oliver.',
+                    style: TextStyle(
+                        color: Color(0xFF101926),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
+              ),
+              const Text('Listen',
+                  style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+              const SizedBox(width: 5),
+              Icon(Icons.speaker_notes_outlined,
+                  color: Colors.green.shade400),
+            ],
+          );
+        }),
+        const SizedBox(height: 12),
+        const Text(
+          "It's going to be an exciting night! We are going to learn\n"
+          'how to build an AI-based game to move Oliver, the owl,\n'
+          'between obstacles and get to the end of the route.\n\n'
+          'The player will use different postures to change the size\n'
+          'of the owl so it can go below or over tiles.\n'
+          'This is the game you will create at the end of course:',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          height: 220,
+          decoration: BoxDecoration(
+            color: const Color(0xFF24343D),
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: const Color(0xFFE1E1E1), width: 4),
+          ),
+          child: Stack(
+            children: [
+              const Positioned.fill(child: _StarryNightBackground(compact: true)),
+              Positioned(
+                left: 118,
+                top: 60,
+                child: Container(
+                  width: 70,
+                  height: 74,
+                  color: const Color(0xFFB24432),
+                  child: CustomPaint(painter: _BrickPainter()),
+                ),
+              ),
+              const Positioned(
+                  right: 10, bottom: 6, child: _OwlSpriteFrame(frame: 0, height: 48)),
+              const Positioned(
+                  left: 18,
+                  top: 70,
+                  child: Text('00:32',
+                      style: TextStyle(color: Colors.white, fontSize: 14))),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+            children: [
+              TextSpan(text: 'A '),
+              WidgetSpan(child: _InlineCodeBlock('Loop')),
+              TextSpan(
+                  text: ' block repeats the blocks inside it over and over\nfor as long as the game runs.\n\n'),
+              TextSpan(text: 'The '),
+              WidgetSpan(child: _InlineCodeBlock('Step')),
+              TextSpan(
+                  text: ' block makes the Owl move.\n• The number in the step block defines how far the sprite moves.'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        const _CodeExampleBox(),
+      ],
+    );
+  }
+}
+
+class _Exercise2OverviewContent extends StatelessWidget {
+  const _Exercise2OverviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          color: const Color(0xFFD9EEF8),
+          alignment: Alignment.center,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
+              SizedBox(width: 7),
+              Text('Show my previous solution',
+                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 15)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+            const SizedBox(width: 10),
+            const Text('OVERVIEW',
+                style: TextStyle(
+                    color: Color(0xFF78AD50),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+            const Spacer(),
+            Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Builder(builder: (ctx) {
+          return Row(
+            children: [
+              const Expanded(
+                child: Text('AI to the Rescue',
+                    style: TextStyle(
+                        color: Color(0xFF101926),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800)),
+              ),
+              const Text('Listen',
+                  style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+              const SizedBox(width: 5),
+              Icon(Icons.speaker_notes_outlined,
+                  color: Colors.green.shade400),
+            ],
+          );
+        }),
+        const SizedBox(height: 12),
+        const Text(
+          'In this exercise, we will create an AI model that will later be used to control the game.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 6),
+        const _BulletRow(
+          bullet: _Bullet('The AI model will identify gestures; also known as human poses.'),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'We will use an application to train the AI model. We will train the AI model to differentiate between two different poses:',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 6),
+        const _BulletRow(
+          bullet: _Bullet('raising hands', numbered: 1),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const _BulletRow(
+          bullet: _Bullet('standing straight', numbered: 2),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 20),
+        const _DeepDiveBox(
+          question: 'How do AI models learn?',
+          shortText:
+              'AI models learn by getting trained on datasets.\nA dataset is a big collection of data on a specific topic. The AI model is trained to recognize different poses. The dataset holds the positions of the different parts of the body.\nFor example, it can recognize if my arms are up or if I place my hands on my shoulders.',
+          longText:
+              '\n\nWe are recording the same pose many times in order to gather data for the dataset. Then, we train the AI model on our dataset. You should move a little when recording to get a wider coverage of the position. This will make your model recognize a posture better, and you won\'t have to stand in the exact same place as when you recorded it.',
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise3OverviewContent extends StatelessWidget {
+  const _Exercise3OverviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          color: const Color(0xFFD9EEF8),
+          alignment: Alignment.center,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
+              SizedBox(width: 7),
+              Text('Show my previous solution',
+                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 15)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+            const SizedBox(width: 10),
+            const Text('OVERVIEW',
+                style: TextStyle(
+                    color: Color(0xFF78AD50),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+            const Spacer(),
+            Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Expanded(
+              child: Text('Add the Model',
+                  style: TextStyle(
+                      color: Color(0xFF101926),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800)),
+            ),
+            const Text('Listen',
+                style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+            const SizedBox(width: 5),
+            Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+          ],
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'After training the model, the model can identify two different poses:',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 6),
+        const _BulletRow(
+          bullet: _Bullet('raising hands', numbered: 1),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const _BulletRow(
+          bullet: _Bullet('standing', numbered: 2),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Now, we will add the AI model to the game so that the owl can do different things for each pose.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 12),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+            children: [
+              TextSpan(text: 'The AI model is used with the '),
+              WidgetSpan(child: _InlineCodeBlock('On Prediction')),
+              TextSpan(
+                text: ' block. This is an event block that allows us to identify real-time events during the game. The event will identify the pose and perform the blocks inside it.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'When we raise our hands, the owl will jump. We will not make Oliver do something when we stand; it will continue to step.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 24),
+        const _CodeExampleBox3(),
+      ],
+    );
+  }
+}
+
+class _CodeExampleBox3 extends StatelessWidget {
+  const _CodeExampleBox3();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF4A90D9), width: 1.4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ScratchBlock(block: _ScratchBlockData.event('On Run')),
+              _ScratchBlock(block: _ScratchBlockData.controlC('Loop')),
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: _ScratchBlock(block: _ScratchBlockData.movement('Step', value: '1')),
+              ),
+              const SizedBox(height: 14),
+              _ScratchBlock(block: _ScratchBlockData.aiC('On Prediction', value: 'raise hands')),
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: _ScratchBlock(block: _ScratchBlockData.movement('Jump', value: '1')),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 12,
+          top: -12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2665B5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'CODE EXAMPLE',
+              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise4OverviewContent extends StatelessWidget {
+  const _Exercise4OverviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 38,
+          color: const Color(0xFFD9EEF8),
+          alignment: Alignment.center,
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF50C47D), size: 23),
+              SizedBox(width: 7),
+              Text('Show my previous solution',
+                  style: TextStyle(color: Color(0xFF2F75B5), fontSize: 15)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+            const SizedBox(width: 10),
+            const Text('OVERVIEW',
+                style: TextStyle(
+                    color: Color(0xFF78AD50),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+            const Spacer(),
+            Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            const Expanded(
+              child: Text("What's the Prediction?",
+                  style: TextStyle(
+                      color: Color(0xFF101926),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800)),
+            ),
+            const Text('Listen',
+                style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+            const SizedBox(width: 5),
+            Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+          ],
+        ),
+        const SizedBox(height: 12),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+            children: [
+              TextSpan(text: 'The '),
+              WidgetSpan(child: _InlineCodeBlock('Predict')),
+              TextSpan(
+                text: ' block returns the confidence percentage of your AI model for a given pose class. Use it inside ',
+              ),
+              WidgetSpan(child: _InlineCodeBlock('On Update')),
+              TextSpan(
+                text: ' to continuously display the prediction in a text widget on the stage.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'On Update runs every game frame (30–60 times per second), so the text widget will update in real time as you move.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 24),
+        const _CodeExampleBox4(),
+      ],
+    );
+  }
+}
+
+class _CodeExampleBox4 extends StatelessWidget {
+  const _CodeExampleBox4();
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF4A90D9), width: 1.4),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ScratchBlock(block: _ScratchBlockData.eventC('On Update')),
+              Padding(
+                padding: const EdgeInsets.only(left: 20),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ScratchBlock(
+                        block: _ScratchBlockData.widgetBlock('Set text:', value: 'text', value2: 'To'),
+                      ),
+                      const SizedBox(width: 4),
+                      _ScratchBlock(block: _ScratchBlockData.aiReporter('Predict', value: 'raise hands')),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    "It's going to be an exciting night! We are going to learn\n"
-                    'how to build an AI-based game to move Oliver, the owl,\n'
-                    'between obstacles and get to the end of the route.\n\n'
-                    'The player will use different postures to change the size\n'
-                    'of the owl so it can go below or over tiles.\n'
-                    'This is the game you will create at the end of course:',
-                    style: TextStyle(fontSize: 16, height: 1.42, color: Color(0xFF0D1B2A)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 12,
+          top: -12,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2665B5),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'CODE EXAMPLE',
+              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise5OverviewContent extends StatelessWidget {
+  const _Exercise5OverviewContent();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+            const SizedBox(width: 10),
+            const Text('OVERVIEW',
+                style: TextStyle(
+                    color: Color(0xFF78AD50),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2)),
+            const Spacer(),
+            Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+          ],
+        ),
+        const SizedBox(height: 14),
+        const Text('Enlarge the World',
+            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        const Text(
+          'In this exercise, we are going to enlarge the game area and set the camera to follow Oliver as it moves around the world.',
+          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 10),
+        const Text('From the Game tab, you can change some of the game\'s properties. For example:',
+            style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
+        const SizedBox(height: 6),
+        _BulletRow(
+          bullet: const _Bullet('World size'),
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13),
+        ),
+        _BulletRow(
+          bullet: const _Bullet('Camera target'),
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _DeepDiveBox extends StatefulWidget {
+  const _DeepDiveBox({
+    required this.question,
+    required this.shortText,
+    required this.longText,
+  });
+
+  final String question;
+  final String shortText;
+  final String longText;
+
+  @override
+  State<_DeepDiveBox> createState() => _DeepDiveBoxState();
+}
+
+class _DeepDiveBoxState extends State<_DeepDiveBox> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF00AABB), width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── teal header with chevron notch ──
+          ClipPath(
+            clipper: _ChevronClipper(),
+            child: Container(
+              width: double.infinity,
+              color: const Color(0xFF00AABB),
+              padding: const EdgeInsets.fromLTRB(14, 10, 40, 10),
+              child: const Text(
+                'DEEP DIVE',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: 1.2),
+              ),
+            ),
+          ),
+          // ── content ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.question,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1A1A2E))),
+                const SizedBox(height: 10),
+                Text(
+                  _expanded
+                      ? widget.shortText + widget.longText
+                      : widget.shortText,
+                  style: const TextStyle(
+                      fontSize: 13.5,
+                      height: 1.5,
+                      color: Color(0xFF444444)),
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Text(
+                    _expanded ? 'Read Less' : 'Read More',
+                    style: const TextStyle(
+                        color: Color(0xFF00AABB),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(height: 14),
-                  Container(
-                    height: 285,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF24343D),
-                      borderRadius: BorderRadius.circular(3),
-                      border: Border.all(color: const Color(0xFFE1E1E1), width: 4),
-                    ),
-                    child: Stack(
-                      children: [
-                        const Positioned.fill(child: _StarryNightBackground(compact: true)),
-                        Positioned(
-                          left: 118,
-                          top: 83,
-                          child: Container(
-                            width: 90,
-                            height: 96,
-                            color: const Color(0xFFB24432),
-                            child: CustomPaint(painter: _BrickPainter()),
-                          ),
-                        ),
-                        Positioned(
-                          right: 10,
-                          bottom: 6,
-                          child: const _OwlSpriteFrame(frame: 0, height: 58),
-                        ),
-                        const Positioned(
-                          left: 23,
-                          top: 92,
-                          child: Text('00:32', style: TextStyle(color: Colors.white, fontSize: 16)),
-                        ),
-                      ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChevronClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    const notchW = 22.0;
+    const notchH = 18.0;
+    final mid = size.height / 2;
+    return Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width - notchW, 0)
+      ..lineTo(size.width, mid)
+      ..lineTo(size.width - notchW, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> old) => false;
+}
+
+// ── AI Model dialog ──────────────────────────────────────────────────────────
+
+enum _TrainingState { idle, training, done }
+
+class _AiModelClass {
+  _AiModelClass(this.name);
+  String name;
+  bool collapsed = false;
+}
+
+class _NewAiModelDialog extends StatefulWidget {
+  const _NewAiModelDialog({this.onClassNamesChanged, this.onClose, this.onSaved});
+  final ValueChanged<List<String>>? onClassNamesChanged;
+  final VoidCallback? onClose;
+  final ValueChanged<_SavedAiModel>? onSaved;
+
+  @override
+  State<_NewAiModelDialog> createState() => _NewAiModelDialogState();
+}
+
+class _NewAiModelDialogState extends State<_NewAiModelDialog> {
+  final _nameCtrl = TextEditingController();
+  final List<_AiModelClass> _classes = [
+    _AiModelClass('Class 1'),
+    _AiModelClass('Class 2'),
+  ];
+
+  final Map<int, int> _sampleCounts = {};
+  _TrainingState _trainingState = _TrainingState.idle;
+  double _trainingProgress = 0.0;
+  Timer? _progressTimer;
+
+  bool get _canTrain {
+    for (int i = 0; i < _classes.length; i++) {
+      if ((_sampleCounts[i] ?? 0) == 0) return false;
+    }
+    return _classes.isNotEmpty;
+  }
+
+  void _trainModel() {
+    if (!_canTrain) return;
+    setState(() {
+      _trainingState = _TrainingState.training;
+      _trainingProgress = 0.0;
+    });
+    if (kIsWeb) {
+      js.context.callMethod('trainPoseModel', [_classes.length]);
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+        if (!mounted) { t.cancel(); return; }
+        final prog = (js.context.callMethod('getTrainingProgress', []) as num).toDouble();
+        setState(() => _trainingProgress = prog);
+        if (prog >= 1.0) {
+          t.cancel();
+          setState(() => _trainingState = _TrainingState.done);
+        }
+      });
+    } else {
+      // Non-web: simulate 1.5s training
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 30), (t) {
+        if (!mounted) { t.cancel(); return; }
+        final next = _trainingProgress + (1 / 50);
+        setState(() => _trainingProgress = next.clamp(0.0, 1.0));
+        if (next >= 1.0) {
+          t.cancel();
+          setState(() => _trainingState = _TrainingState.done);
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    _nameCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 100, vertical: 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+          maxWidth: 960,
+        ),
+        child: DefaultTextStyle.merge(
+          style: const TextStyle(fontFamily: 'Chennai'),
+          child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── header ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'NEW AI MODEL - POSE',
+                      style: TextStyle(
+                        fontFamily: 'Chennai',
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF3DBE7A),
+                        letterSpacing: 0.4,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  RichText(
-                    text: const TextSpan(
-                      style: TextStyle(fontSize: 16, height: 1.42, color: Color(0xFF0D1B2A)),
-                      children: [
-                        TextSpan(text: 'A '),
-                        WidgetSpan(child: _InlineCodeBlock('Loop')),
-                        TextSpan(text: ' block repeats the blocks inside it over and over\nfor as long as the game runs.\n\n'),
-                        TextSpan(text: 'The '),
-                        WidgetSpan(child: _InlineCodeBlock('Step')),
-                        TextSpan(text: ' block makes the Owl move.'),
-                      ],
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 22, color: Color(0xFF666666)),
+                    onPressed: () => widget.onClose?.call(),
+                    padding: EdgeInsets.zero,
                   ),
                 ],
+              ),
+            ),
+            const Divider(color: Color(0xFF3DBE7A), thickness: 1.4, indent: 24, endIndent: 24, height: 14),
+            // ── model name field ──
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 6, 24, 14),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          hintText: 'give your model a name',
+                          hintStyle: TextStyle(color: Color(0xFFAAAAAA), fontSize: 15),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.only(right: 10),
+                      child: Icon(Icons.edit, color: Color(0xFF3DBE7A), size: 20),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // ── scrollable content ──
+            Flexible(
+              child: SingleChildScrollView(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // left: class list
+                        SizedBox(
+                          width: 560,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (int i = 0; i < _classes.length; i++) ...[
+                                _AiModelClassCard(
+                                  aiClass: _classes[i],
+                                  classIndex: i,
+                                  onDelete: () {
+                                    if (kIsWeb) js.context.callMethod('clearPoseSamples', [i]);
+                                    setState(() {
+                                      _classes.removeAt(i);
+                                      _sampleCounts.remove(i);
+                                      _trainingState = _TrainingState.idle;
+                                    });
+                                  },
+                                  onToggle: () => setState(() => _classes[i].collapsed = !_classes[i].collapsed),
+                                  onNameChanged: (v) {
+                                    setState(() => _classes[i].name = v);
+                                    widget.onClassNamesChanged?.call(_classes.map((c) => c.name).toList());
+                                  },
+                                  onSampleCountChanged: (count) {
+                                    setState(() {
+                                      _sampleCounts[i] = count;
+                                      if (_trainingState == _TrainingState.done) {
+                                        _trainingState = _TrainingState.idle;
+                                      }
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              // dashed add class button
+                              CustomPaint(
+                                painter: _DashedBorderPainter(color: const Color(0xFF3DBE7A), strokeWidth: 1.5, dash: 7, gap: 5, radius: 8),
+                                child: GestureDetector(
+                                  onTap: () => setState(() => _classes.add(_AiModelClass('Class ${_classes.length + 1}'))),
+                                  child: Container(
+                                    width: 560,
+                                    padding: const EdgeInsets.symmetric(vertical: 16),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.add, color: Color(0xFF3DBE7A), size: 20),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'ADD ANOTHER CLASS',
+                                          style: TextStyle(
+                                            color: Color(0xFF3DBE7A),
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 24),
+                        // arrow + TRAINING + arrow + PREVIEW (vertically centered)
+                        Center(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const _AiArrow(),
+                              const SizedBox(width: 16),
+                              _TrainingPanel(
+                                canTrain: _canTrain,
+                                isTraining: _trainingState == _TrainingState.training,
+                                isDone: _trainingState == _TrainingState.done,
+                                progress: _trainingProgress,
+                                onTrain: _trainModel,
+                              ),
+                              const SizedBox(width: 16),
+                              const _AiArrow(),
+                              const SizedBox(width: 16),
+                              _PreviewSavePanel(
+                                isDone: _trainingState == _TrainingState.done,
+                                classNames: _classes.map((c) => c.name).toList(),
+                                onSaved: widget.onSaved == null ? null : () {
+                                  widget.onSaved!(_SavedAiModel(
+                                    name: _nameCtrl.text.isEmpty ? 'My Model' : _nameCtrl.text,
+                                    classNames: _classes.map((c) => c.name).toList(),
+                                  ));
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiModelClassCard extends StatefulWidget {
+  const _AiModelClassCard({
+    required this.aiClass,
+    required this.classIndex,
+    required this.onDelete,
+    required this.onToggle,
+    required this.onNameChanged,
+    this.onSampleCountChanged,
+  });
+
+  final _AiModelClass aiClass;
+  final int classIndex;
+  final VoidCallback onDelete;
+  final VoidCallback onToggle;
+  final ValueChanged<String> onNameChanged;
+  final ValueChanged<int>? onSampleCountChanged;
+
+  @override
+  State<_AiModelClassCard> createState() => _AiModelClassCardState();
+}
+
+class _AiModelClassCardState extends State<_AiModelClassCard> {
+  bool _editing = false;
+  late final TextEditingController _ctrl;
+
+  // Camera state
+  bool _showCamera = false;
+  bool _holdMode = true;
+  html.MediaStream? _stream;
+  html.VideoElement? _videoEl;
+  html.CanvasElement? _poseCanvasEl;
+  html.CanvasElement? _captureCanvas;
+  late final String _viewId;
+  bool _viewRegistered = false;
+
+  // Recording state
+  bool _isRecording = false;
+  int _countdown = 0;
+  Timer? _countdownTimer;
+  Timer? _captureTimer;
+  Timer? _autoStopTimer;
+
+  bool _detectorReady = false;
+  Timer? _detectorCheckTimer;
+
+  // Samples
+  final List<String> _sampleUrls = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.aiClass.name);
+    _viewId = 'cam-${identityHashCode(this)}';
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _captureTimer?.cancel();
+    _autoStopTimer?.cancel();
+    _detectorCheckTimer?.cancel();
+    if (kIsWeb) js.context.callMethod('stopPoseDraw', []);
+    _stream?.getTracks().forEach((t) => t.stop());
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _startCamera() async {
+    if (!kIsWeb) {
+      setState(() { _showCamera = true; _detectorReady = true; });
+      return;
+    }
+    if (!_viewRegistered) {
+      _viewRegistered = true;
+      _videoEl = html.VideoElement()
+        ..autoplay = true
+        ..muted = true
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+
+      _poseCanvasEl = html.CanvasElement()
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.pointerEvents = 'none';
+
+      final container = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.overflow = 'hidden'
+        ..append(_videoEl!)
+        ..append(_poseCanvasEl!);
+
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (_) => container);
+    }
+    try {
+      _stream = await html.window.navigator.mediaDevices!
+          .getUserMedia({'video': true, 'audio': false});
+      _videoEl!.srcObject = _stream;
+      js.context.callMethod('startPoseDraw', [_videoEl, _poseCanvasEl]);
+      // Poll until the pose detector model is loaded (async JS, takes a few seconds)
+      _detectorCheckTimer?.cancel();
+      _detectorCheckTimer = Timer.periodic(const Duration(milliseconds: 400), (t) {
+        if (!mounted) { t.cancel(); return; }
+        if (js.context['_poseDetector'] != null) {
+          t.cancel();
+          setState(() => _detectorReady = true);
+        }
+      });
+    } catch (_) {}
+    if (mounted) setState(() => _showCamera = true);
+  }
+
+  // Start 5-second countdown then auto-record
+  void _startCountdown() {
+    if (_isRecording || _countdown > 0) return;
+    setState(() => _countdown = 5);
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (_countdown <= 1) {
+        t.cancel();
+        setState(() => _countdown = 0);
+        _beginCapture();
+      } else {
+        setState(() => _countdown--);
+      }
+    });
+  }
+
+  void _beginCapture() {
+    if (_isRecording) return;
+    _captureCanvas ??= html.CanvasElement(width: 224, height: 224);
+    setState(() => _isRecording = true);
+    _captureTimer = Timer.periodic(const Duration(milliseconds: 80), (_) => _captureFrame());
+    _autoStopTimer = Timer(const Duration(seconds: 3), _stopCapture);
+  }
+
+  void _stopCapture() {
+    _captureTimer?.cancel();
+    _captureTimer = null;
+    _autoStopTimer?.cancel();
+    _autoStopTimer = null;
+    if (mounted) setState(() => _isRecording = false);
+  }
+
+  void _captureFrame() {
+    if (!kIsWeb || _videoEl == null || !mounted) return;
+    _captureCanvas ??= html.CanvasElement(width: 224, height: 224);
+    final ctx = _captureCanvas!.context2D;
+    ctx.drawImageScaled(_videoEl!, 0, 0, 224, 224);
+    if (_poseCanvasEl != null &&
+        (_poseCanvasEl!.width ?? 0) > 0 &&
+        (_poseCanvasEl!.height ?? 0) > 0) {
+      ctx.drawImageScaled(_poseCanvasEl!, 0, 0, 224, 224);
+    }
+    js.context.callMethod('addPoseSample', [widget.classIndex]);
+    final url = _captureCanvas!.toDataUrl('image/jpeg', 0.7);
+    // Update local state first, then notify parent outside setState to avoid
+    // triggering parent markNeedsBuild while child setState is still executing.
+    setState(() => _sampleUrls.add(url));
+    widget.onSampleCountChanged?.call(_sampleUrls.length);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sampleCount = _sampleUrls.length;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFDDDDDD), width: 1.2),
+        borderRadius: BorderRadius.circular(8),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _editing
+                      ? TextField(
+                          controller: _ctrl,
+                          autofocus: true,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                          decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+                          onChanged: (v) => widget.onNameChanged(v),
+                          onSubmitted: (v) { widget.onNameChanged(v.isEmpty ? widget.aiClass.name : v); setState(() => _editing = false); },
+                        )
+                      : Text(
+                          widget.aiClass.name,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1A1A)),
+                        ),
+                ),
+                IconButton(icon: const Icon(Icons.edit, size: 19, color: Color(0xFF3DBE7A)), onPressed: () => setState(() => _editing = !_editing), padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30)),
+                IconButton(icon: const Icon(Icons.delete_outline, size: 19, color: Color(0xFF3DBE7A)), onPressed: widget.onDelete, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30)),
+                IconButton(icon: Icon(widget.aiClass.collapsed ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, size: 21, color: const Color(0xFF3DBE7A)), onPressed: widget.onToggle, padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 30, minHeight: 30)),
+              ],
+            ),
+          ),
+          const Divider(color: Color(0xFF3DBE7A), thickness: 1.1, indent: 16, endIndent: 16, height: 14),
+          if (!widget.aiClass.collapsed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Sample counter row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          sampleCount == 0 ? 'Add Samples' : '$sampleCount Samples',
+                          style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
+                        ),
+                      ),
+                      if (sampleCount > 0)
+                        GestureDetector(
+                          onTap: () {
+                            if (kIsWeb) js.context.callMethod('clearPoseSamples', [widget.classIndex]);
+                            setState(() => _sampleUrls.clear());
+                            widget.onSampleCountChanged?.call(0);
+                          },
+                          child: const Text(
+                            'Remove All Samples',
+                            style: TextStyle(fontSize: 12, color: Color(0xFF2196F3)),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (_showCamera) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Live camera preview with countdown overlay
+                        Expanded(
+                          flex: 7,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                height: 220,
+                                clipBehavior: Clip.hardEdge,
+                                decoration: BoxDecoration(
+                                  color: Colors.black,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: kIsWeb
+                                    ? HtmlElementView(viewType: _viewId)
+                                    : const Center(child: Icon(Icons.videocam_rounded, size: 60, color: Colors.white54)),
+                              ),
+                              if (!_detectorReady)
+                                Positioned.fill(
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.65),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 28, height: 28,
+                                          child: CircularProgressIndicator(color: Color(0xFF3DBE7A), strokeWidth: 3),
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text('Loading AI model...', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              if (_detectorReady && _countdown > 0)
+                                Text(
+                                  '$_countdown',
+                                  style: const TextStyle(
+                                    fontSize: 90,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    shadows: [Shadow(blurRadius: 16, color: Colors.black)],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Thumbnail grid
+                        Expanded(
+                          flex: 3,
+                          child: Container(
+                            height: 220,
+                            clipBehavior: Clip.hardEdge,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFEEEEEE),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: sampleCount == 0
+                                ? null
+                                : GridView.builder(
+                                    padding: const EdgeInsets.all(3),
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 3,
+                                      crossAxisSpacing: 2,
+                                      mainAxisSpacing: 2,
+                                    ),
+                                    itemCount: sampleCount,
+                                    itemBuilder: (_, i) => Image.network(
+                                      _sampleUrls[i],
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // HOLD TO RECORD / CLICK TO RECORD / RECORDING
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: (!_detectorReady || _holdMode)
+                                ? null
+                                : () { if (!_isRecording && _countdown == 0) _beginCapture(); },
+                            onLongPressStart: (!_detectorReady || !_holdMode)
+                                ? null
+                                : (_) { if (!_isRecording && _countdown == 0) _beginCapture(); },
+                            onLongPressEnd: (!_detectorReady || !_holdMode) ? null : (_) => _stopCapture(),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: _isRecording
+                                    ? const Color(0xFFBDA32A)
+                                    : const Color(0xFFFFCC00),
+                                borderRadius: BorderRadius.circular(32),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  _isRecording
+                                      ? 'RECORDING....'
+                                      : (_holdMode ? 'HOLD TO RECORD' : 'CLICK TO RECORD'),
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 15,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Timer icon: starts 5s countdown then auto-records
+                        GestureDetector(
+                          onTap: _detectorReady ? _startCountdown : null,
+                          child: Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: !_detectorReady
+                                  ? const Color(0xFFCCCCCC)
+                                  : _countdown > 0
+                                      ? const Color(0xFFBDA32A)
+                                      : const Color(0xFF3DBE7A),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.timer_outlined, color: Colors.white, size: 24),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    GestureDetector(
+                      onTap: _startCamera,
+                      child: Container(
+                        width: 68,
+                        height: 76,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3DBE7A),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(7),
+                              ),
+                              child: const Icon(Icons.videocam_rounded, color: Colors.white, size: 26),
+                            ),
+                            const SizedBox(height: 5),
+                            const Text('RECORD', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.4)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiArrow extends StatelessWidget {
+  const _AiArrow();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 88,
+      height: 64,
+      child: Image.asset(
+        CodeMonkeyScratchAssets.arrowRight,
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => CustomPaint(
+          size: const Size(88, 64),
+          painter: _ArrowPainter(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ArrowPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = const Color(0xFFA8D490)..style = PaintingStyle.fill;
+    final w = size.width; final h = size.height; final my = h / 2;
+    canvas.drawPath(Path()
+      ..moveTo(0, my - 7)
+      ..lineTo(w * 0.62, my - 7)
+      ..lineTo(w * 0.62, my - 18)
+      ..lineTo(w, my)
+      ..lineTo(w * 0.62, my + 18)
+      ..lineTo(w * 0.62, my + 7)
+      ..lineTo(0, my + 7)
+      ..close(), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+class _TrainingPanel extends StatelessWidget {
+  const _TrainingPanel({
+    required this.canTrain,
+    required this.isTraining,
+    required this.isDone,
+    required this.progress,
+    required this.onTrain,
+  });
+
+  final bool canTrain;
+  final bool isTraining;
+  final bool isDone;
+  final double progress;
+  final VoidCallback onTrain;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFDDDDDD)),
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('TRAINING', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF3DBE7A), letterSpacing: 0.7)),
+          const Divider(color: Color(0xFF3DBE7A), thickness: 1.2, height: 14),
+          if (isDone)
+            const Text('Training complete!', style: TextStyle(fontSize: 13, color: Color(0xFF3DBE7A), height: 1.5, fontWeight: FontWeight.w700))
+          else if (isTraining) ...[
+            const Text('Training...', style: TextStyle(fontSize: 13, color: Color(0xFF444444), height: 1.5)),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                backgroundColor: const Color(0xFFE0E0E0),
+                color: const Color(0xFF3DBE7A),
+                minHeight: 10,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text('${(progress * 100).round()}%', style: const TextStyle(fontSize: 11, color: Color(0xFF888888))),
+          ] else
+            Text(
+              canTrain ? 'Click Train Model to begin!' : 'first add samples to all classes',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF444444), height: 1.5),
+            ),
+          const SizedBox(height: 16),
+          Center(
+            child: GestureDetector(
+              onTap: (canTrain && !isTraining && !isDone) ? onTrain : null,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDone
+                      ? const Color(0xFF3DBE7A)
+                      : (canTrain && !isTraining)
+                          ? const Color(0xFFFFCC00)
+                          : const Color(0xFFE0E0E0),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  isDone ? 'TRAINED!' : 'TRAIN MODEL',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDone
+                        ? Colors.white
+                        : (canTrain && !isTraining)
+                            ? Colors.black
+                            : const Color(0xFFAAAAAA),
+                    letterSpacing: 0.3,
+                  ),
+                ),
               ),
             ),
           ),
@@ -723,6 +3546,455 @@ class _LessonPanel extends StatelessWidget {
   }
 }
 
+class _PreviewSavePanel extends StatefulWidget {
+  const _PreviewSavePanel({
+    required this.isDone,
+    required this.classNames,
+    this.onSaved,
+  });
+
+  final bool isDone;
+  final List<String> classNames;
+  final VoidCallback? onSaved;
+
+  @override
+  State<_PreviewSavePanel> createState() => _PreviewSavePanelState();
+}
+
+class _PreviewSavePanelState extends State<_PreviewSavePanel> {
+  html.MediaStream? _stream;
+  html.VideoElement? _videoEl;
+  html.CanvasElement? _poseCanvasEl;
+  late final String _viewId;
+  bool _viewRegistered = false;
+  bool _cameraStarted = false;
+  bool _saved = false;
+
+  Timer? _predTimer;
+  List<double> _confidences = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'preview-${identityHashCode(this)}';
+    if (widget.isDone) _startPreviewCamera();
+  }
+
+  @override
+  void didUpdateWidget(_PreviewSavePanel old) {
+    super.didUpdateWidget(old);
+    if (!old.isDone && widget.isDone) _startPreviewCamera();
+  }
+
+  @override
+  void dispose() {
+    _predTimer?.cancel();
+    if (kIsWeb) js.context.callMethod('stopPreviewPose', []);
+    _stream?.getTracks().forEach((t) => t.stop());
+    super.dispose();
+  }
+
+  Future<void> _startPreviewCamera() async {
+    if (!kIsWeb || _cameraStarted) return;
+    if (!_viewRegistered) {
+      _viewRegistered = true;
+      _videoEl = html.VideoElement()
+        ..autoplay = true
+        ..muted = true
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+      _poseCanvasEl = html.CanvasElement()
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.pointerEvents = 'none';
+      final container = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.overflow = 'hidden'
+        ..append(_videoEl!)
+        ..append(_poseCanvasEl!);
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (_) => container);
+    }
+    try {
+      _stream = await html.window.navigator.mediaDevices!
+          .getUserMedia({'video': true, 'audio': false});
+      _videoEl!.srcObject = _stream;
+      js.context.callMethod('startPreviewPose', [_videoEl, _poseCanvasEl]);
+      _cameraStarted = true;
+      _predTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted) return;
+        final predRaw = js.context.callMethod('getLastPrediction', []);
+        if (predRaw != null) {
+          final parsed = _parsePrediction(predRaw);
+          if (parsed.isNotEmpty) setState(() => _confidences = parsed);
+        }
+      });
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isDone) {
+      return Container(
+        width: 210,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFFDDDDDD)),
+          borderRadius: BorderRadius.circular(10),
+          color: Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('PREVIEW AND SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3DBE7A), letterSpacing: 0.7)),
+            const Divider(color: Color(0xFF3DBE7A), thickness: 1.2, height: 14),
+            const Text('you must train the model in order to view it', style: TextStyle(fontSize: 13, color: Color(0xFF444444), height: 1.5)),
+            const SizedBox(height: 16),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(color: const Color(0xFFE0E0E0), borderRadius: BorderRadius.circular(24)),
+                child: const Text('SAVE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFAAAAAA), letterSpacing: 0.3)),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: 210,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFDDDDDD)),
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.white,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('PREVIEW AND SAVE', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF3DBE7A), letterSpacing: 0.7)),
+          const Divider(color: Color(0xFF3DBE7A), thickness: 1.2, height: 14),
+          Container(
+            height: 150,
+            clipBehavior: Clip.hardEdge,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: kIsWeb && _cameraStarted
+                ? HtmlElementView(viewType: _viewId)
+                : const Center(child: Icon(Icons.videocam_rounded, size: 40, color: Colors.white54)),
+          ),
+          const SizedBox(height: 10),
+          for (int i = 0; i < widget.classNames.length; i++) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.classNames[i],
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF333333)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  i < _confidences.length ? '${(_confidences[i] * 100).round()}%' : '0%',
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF888888)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: i < _confidences.length ? _confidences[i] : 0.0,
+                backgroundColor: const Color(0xFFE0E0E0),
+                color: const Color(0xFF3DBE7A),
+                minHeight: 10,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          const SizedBox(height: 6),
+          Center(
+            child: GestureDetector(
+              onTap: _saved ? null : () {
+                setState(() => _saved = true);
+                widget.onSaved?.call();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _saved ? const Color(0xFF3DBE7A) : const Color(0xFFFFCC00),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  _saved ? 'SAVED!' : 'SAVE',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _saved ? Colors.white : Colors.black,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Saved model card shown in the AI-Pose tab ────────────────────────────────
+
+class _SavedModelCard extends StatelessWidget {
+  const _SavedModelCard({required this.model, required this.onGiveItATry, this.onSelect, this.selected = false});
+
+  final _SavedAiModel model;
+  final VoidCallback onGiveItATry;
+  final VoidCallback? onSelect;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? const Color(0xFF3DBE7A) : const Color(0xFFDDDDDD);
+    return GestureDetector(
+      onTap: onSelect,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: borderColor, width: selected ? 2 : 1),
+          borderRadius: BorderRadius.circular(10),
+          color: selected ? const Color(0xFFEEF9F3) : Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(selected ? Icons.check_circle : Icons.model_training, size: 20, color: const Color(0xFF3DBE7A)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    model.name,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF222222)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: [
+                for (final cls in model.classNames)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEEF9F3),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFF3DBE7A)),
+                    ),
+                    child: Text(cls, style: const TextStyle(fontSize: 11, color: Color(0xFF3DBE7A), fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: onGiveItATry,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3DBE7A),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Text(
+                  'Give It A Try',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.3),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Live camera + confidence panel for "Give It A Try" ───────────────────────
+
+class _GiveItATryPanel extends StatefulWidget {
+  const _GiveItATryPanel({required this.model, required this.onClose});
+
+  final _SavedAiModel model;
+  final VoidCallback onClose;
+
+  @override
+  State<_GiveItATryPanel> createState() => _GiveItATryPanelState();
+}
+
+class _GiveItATryPanelState extends State<_GiveItATryPanel> {
+  html.MediaStream? _stream;
+  html.VideoElement? _videoEl;
+  html.CanvasElement? _canvasEl;
+  late final String _viewId;
+  bool _viewRegistered = false;
+  bool _cameraStarted = false;
+
+  Timer? _predTimer;
+  List<double> _confidences = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _viewId = 'give-it-a-try-${identityHashCode(this)}';
+    _startCamera();
+  }
+
+  @override
+  void dispose() {
+    _predTimer?.cancel();
+    if (kIsWeb) js.context.callMethod('stopPreviewPose', []);
+    _stream?.getTracks().forEach((t) => t.stop());
+    super.dispose();
+  }
+
+  Future<void> _startCamera() async {
+    if (!kIsWeb || _cameraStarted) return;
+    if (!_viewRegistered) {
+      _viewRegistered = true;
+      _videoEl = html.VideoElement()
+        ..autoplay = true
+        ..muted = true
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+      _canvasEl = html.CanvasElement()
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.pointerEvents = 'none';
+      final container = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.overflow = 'hidden'
+        ..append(_videoEl!)
+        ..append(_canvasEl!);
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (_) => container);
+    }
+    try {
+      _stream = await html.window.navigator.mediaDevices!
+          .getUserMedia({'video': true, 'audio': false});
+      _videoEl!.srcObject = _stream;
+      js.context.callMethod('startPreviewPose', [_videoEl, _canvasEl]);
+      _cameraStarted = true;
+      _predTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+        if (!mounted) return;
+        final predRaw = js.context.callMethod('getLastPrediction', []);
+        if (predRaw != null) {
+          final parsed = _parsePrediction(predRaw);
+          if (parsed.isNotEmpty) setState(() => _confidences = parsed);
+        }
+      });
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.model.name,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: Color(0xFF222222)),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              GestureDetector(
+                onTap: widget.onClose,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: const BoxDecoration(color: Color(0xFFEEEEEE), shape: BoxShape.circle),
+                  child: const Icon(Icons.close, size: 18, color: Color(0xFF555555)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 180,
+            clipBehavior: Clip.hardEdge,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: kIsWeb && _cameraStarted
+                ? HtmlElementView(viewType: _viewId)
+                : const Center(child: Icon(Icons.videocam_rounded, size: 44, color: Colors.white54)),
+          ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < widget.model.classNames.length; i++) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.model.classNames[i],
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF333333)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  i < _confidences.length ? '${(_confidences[i] * 100).round()}%' : '0%',
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF888888)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 3),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: i < _confidences.length ? _confidences[i] : 0.0,
+                backgroundColor: const Color(0xFFE0E0E0),
+                color: const Color(0xFF3DBE7A),
+                minHeight: 11,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _StarryNightBackground extends StatelessWidget {
   const _StarryNightBackground({this.compact = false});
@@ -780,21 +4052,25 @@ class _OwlSpriteFrame extends StatelessWidget {
 }
 
 class _SquareIconButton extends StatelessWidget {
-  const _SquareIconButton({required this.icon});
+  const _SquareIconButton({required this.icon, this.onPressed});
 
   final IconData icon;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 51,
-      height: 51,
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5B719),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [BoxShadow(offset: Offset(0, 3), color: Color(0xFFCF9212))],
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 51,
+        height: 51,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5B719),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: const [BoxShadow(offset: Offset(0, 3), color: Color(0xFFCF9212))],
+        ),
+        child: Icon(icon, color: Colors.white, size: 30),
       ),
-      child: Icon(icon, color: Colors.white, size: 30),
     );
   }
 }
@@ -818,34 +4094,49 @@ class _InlineCodeBlock extends StatelessWidget {
   }
 }
 
-class _BlocksWorkspace extends StatelessWidget {
+class _BlocksWorkspace extends StatefulWidget {
   const _BlocksWorkspace({
     required this.selectedCategory,
+    required this.paletteOpen,
     required this.categories,
     required this.paletteBlocks,
-    required this.workspaceBlocks,
+    required this.workspaceEntries,
     required this.isRunning,
     required this.activeObjectName,
     this.activeObjectAsset,
     required this.onRun,
+    required this.onStop,
     required this.onClear,
     required this.onSelectCategory,
     required this.onAddBlock,
     required this.onRemoveBlock,
+    this.aiClassNames = const [],
+    this.textWidgetNames = const [],
   });
 
   final String selectedCategory;
+  final bool paletteOpen;
   final List<String> categories;
   final List<_ScratchBlockData> paletteBlocks;
-  final List<_ScratchBlockData> workspaceBlocks;
+  final List<_WorkspaceEntry> workspaceEntries;
   final bool isRunning;
   final String activeObjectName;
   final String? activeObjectAsset;
   final VoidCallback onRun;
+  final VoidCallback onStop;
   final VoidCallback onClear;
   final ValueChanged<String> onSelectCategory;
-  final ValueChanged<_ScratchBlockData> onAddBlock;
+  final Function(_ScratchBlockData, Offset) onAddBlock;
   final ValueChanged<int> onRemoveBlock;
+  final List<String> aiClassNames;
+  final List<String> textWidgetNames;
+
+  @override
+  State<_BlocksWorkspace> createState() => _BlocksWorkspaceState();
+}
+
+class _BlocksWorkspaceState extends State<_BlocksWorkspace> {
+  final _canvasKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -859,79 +4150,99 @@ class _BlocksWorkspace extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 0, 11, 0),
             child: Row(
               children: [
-                activeObjectAsset != null
-                    ? Image.asset(activeObjectAsset!, height: 42, fit: BoxFit.contain,
+                widget.activeObjectAsset != null
+                    ? Image.asset(widget.activeObjectAsset!, height: 42, fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => const Icon(Icons.widgets, size: 36))
                     : const _OwlSpriteFrame(frame: 0, height: 42),
                 const SizedBox(width: 10),
-                Text(activeObjectName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF1C2530))),
+                Text(widget.activeObjectName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: Color(0xFF1C2530))),
                 const Spacer(),
                 ElevatedButton.icon(
-                  onPressed: isRunning ? null : onRun,
+                  onPressed: widget.isRunning ? widget.onStop : widget.onRun,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF46C77E),
+                    backgroundColor: widget.isRunning ? const Color(0xFFE05252) : const Color(0xFF46C77E),
                     foregroundColor: Colors.white,
                     elevation: 3,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 19),
                   ),
-                  icon: Icon(isRunning ? Icons.hourglass_bottom : Icons.play_circle_fill, size: 31),
-                  label: Text(isRunning ? 'RUNNING' : 'RUN!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  icon: Icon(widget.isRunning ? Icons.stop_circle_outlined : Icons.play_circle_fill, size: 31),
+                  label: Text(widget.isRunning ? 'STOP' : 'RUN!', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
                 ),
               ],
             ),
           ),
           Expanded(
             child: DragTarget<_ScratchBlockData>(
-              onAccept: onAddBlock,
+              onAcceptWithDetails: (details) {
+                if (!mounted) return;
+                final ctx = _canvasKey.currentContext;
+                RenderBox? box;
+                if (ctx != null && ctx.mounted) {
+                  final ro = ctx.findRenderObject();
+                  if (ro is RenderBox && ro.attached) box = ro;
+                }
+                final localPos = box != null
+                    ? box.globalToLocal(details.offset)
+                    : const Offset(50, 50);
+                widget.onAddBlock(details.data, Offset(localPos.dx.clamp(0.0, 1200.0), localPos.dy.clamp(0.0, 1200.0)));
+              },
               builder: (context, candidateData, rejectedData) {
                 return Container(
+                  key: _canvasKey,
                   width: double.infinity,
                   color: candidateData.isEmpty ? const Color(0xFFEAF2F7) : const Color(0xFFDDEFFF),
                   child: Stack(
                     children: [
-                      Positioned(
-                        top: 11,
-                        left: 15,
-                        right: 15,
-                        bottom: 12,
-                        child: SingleChildScrollView(
-                          child: Wrap(
-                            alignment: WrapAlignment.start,
-                            crossAxisAlignment: WrapCrossAlignment.start,
-                            spacing: 10,
-                            runSpacing: 9,
-                            children: [
-                              for (var i = 0; i < workspaceBlocks.length; i++)
-                                GestureDetector(
-                                  onDoubleTap: () => onRemoveBlock(i),
-                                  child: _ScratchBlock(block: workspaceBlocks[i], large: true),
-                                ),
-                              if (workspaceBlocks.length == 1)
-                                Container(
-                                  margin: const EdgeInsets.only(top: 50, left: 15),
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(.45),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.white),
-                                  ),
-                                  child: const Text(
-                                    'Drag blocks from the palette here.\nDouble click a block to remove it.',
-                                    style: TextStyle(color: Color(0xFF7D8990), fontSize: 14),
-                                  ),
-                                ),
-                            ],
-                          ),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _WorkspaceDotPainter()),
+                      ),
+                      Positioned.fill(
+                        child: _WorkspaceCanvas(
+                          entries: widget.workspaceEntries,
+                          onRemove: widget.onRemoveBlock,
+                          aiClassNames: widget.aiClassNames,
+                          textWidgetNames: widget.textWidgetNames,
                         ),
                       ),
+                      if (widget.workspaceEntries.length == 1)
+                        Positioned(
+                          top: 90,
+                          left: 20,
+                          child: IgnorePointer(
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(.45),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.white),
+                              ),
+                              child: const Text(
+                                'Drag blocks from the palette here.\nDouble-tap a block to remove it.',
+                                style: TextStyle(color: Color(0xFF7D8990), fontSize: 14),
+                              ),
+                            ),
+                          ),
+                        ),
                       Positioned(
                         top: 58,
                         right: 56,
-                        child: IconButton(
-                          onPressed: onClear,
-                          tooltip: 'Clear blocks',
-                          icon: const Icon(Icons.delete, color: Color(0xFFC9CFD2), size: 66),
+                        child: Tooltip(
+                          message: 'Clear all blocks',
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: widget.onClear,
+                            child: Container(
+                              width: 82,
+                              height: 82,
+                              alignment: Alignment.center,
+                              child: const Icon(
+                                Icons.delete,
+                                color: Color(0xFFC9CFD2),
+                                size: 66,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -940,6 +4251,7 @@ class _BlocksWorkspace extends StatelessWidget {
               },
             ),
           ),
+          if (widget.paletteOpen)
           Container(
             height: 146,
             color: const Color(0xFFD9D9D9),
@@ -950,10 +4262,10 @@ class _BlocksWorkspace extends StatelessWidget {
                   height: 115,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
-                    itemCount: paletteBlocks.length,
+                    itemCount: widget.paletteBlocks.length,
                     separatorBuilder: (_, __) => const SizedBox(width: 12),
                     itemBuilder: (context, index) {
-                      final block = paletteBlocks[index];
+                      final block = widget.paletteBlocks[index];
                       return Draggable<_ScratchBlockData>(
                         data: block,
                         feedback: Material(
@@ -1003,12 +4315,12 @@ class _BlocksWorkspace extends StatelessWidget {
               spacing: 6,
               runSpacing: 9,
               children: [
-                for (final category in categories)
+                for (final category in widget.categories)
                   _CategoryButton(
                     label: category,
                     color: _categoryColor(category),
-                    selected: selectedCategory == category,
-                    onTap: () => onSelectCategory(category),
+                    selected: widget.paletteOpen && widget.selectedCategory == category,
+                    onTap: () => widget.onSelectCategory(category),
                   ),
               ],
             ),
@@ -1058,7 +4370,7 @@ class _CategoryButton extends StatelessWidget {
 }
 
 // Converts _ScratchBlockData to a BlockDef so we can render with Scratch3Block.
-BlockDef _scratchDataToBlockDef(_ScratchBlockData block) {
+BlockDef _scratchDataToBlockDef(_ScratchBlockData block, {List<String>? aiOptions, List<String>? aiClassOptions, String? editedValue, String? editedValue2}) {
   BlockShape blockShape;
   bool leftTab = true;
   bool rightNotch = true;
@@ -1100,7 +4412,9 @@ BlockDef _scratchDataToBlockDef(_ScratchBlockData block) {
 
   if (block.value != null) {
     if (block.valueDropdown) {
-      fields.add(BlockFieldDef.dropdown(block.value!));
+      final opts = aiOptions ?? const <String>[];
+      final dropLabel = (editedValue != null && editedValue.isNotEmpty) ? editedValue : block.value!;
+      fields.add(BlockFieldDef.dropdown(dropLabel, options: opts));
     } else {
       final n = num.tryParse(block.value!);
       if (n != null) {
@@ -1117,7 +4431,10 @@ BlockDef _scratchDataToBlockDef(_ScratchBlockData block) {
 
   if (block.value2 != null) {
     if (block.value2Dropdown) {
-      fields.add(BlockFieldDef.dropdown(block.value2!));
+      fields.add(const BlockFieldDef.label('Predict'));
+      final opts = aiClassOptions ?? const <String>[];
+      final dropLabel = (editedValue2 != null && editedValue2.isNotEmpty) ? editedValue2 : block.value2!;
+      fields.add(BlockFieldDef.dropdown(dropLabel, options: opts));
     } else {
       final n = num.tryParse(block.value2!);
       if (n != null) {
@@ -1149,22 +4466,462 @@ Color _darkenColor(Color c) {
 }
 
 class _ScratchBlock extends StatelessWidget {
-  const _ScratchBlock({required this.block, this.large = false});
+  const _ScratchBlock({required this.block, this.large = false, this.innerHeight, this.onValueChanged, this.dropdownOptions, this.editedValue, this.editedValue2, this.aiClassNames = const []});
 
   final _ScratchBlockData block;
   final bool large;
+  final double? innerHeight;
+  final void Function(int fieldIndex, String value)? onValueChanged;
+  final List<String>? dropdownOptions;
+  final String? editedValue;
+  final String? editedValue2;
+  final List<String> aiClassNames;
 
   @override
   Widget build(BuildContext context) {
-    return Scratch3Block(
-      block: _scratchDataToBlockDef(block),
-      color: block.color,
-      darkColor: _darkenColor(block.color),
-      scale: large ? 1.0 : 0.72,
+    return UnconstrainedBox(
+      child: Scratch3Block(
+        block: _scratchDataToBlockDef(block, aiOptions: dropdownOptions, aiClassOptions: aiClassNames.isNotEmpty ? aiClassNames : null, editedValue: editedValue, editedValue2: editedValue2),
+        color: block.color,
+        darkColor: _darkenColor(block.color),
+        scale: large ? 1.0 : 0.72,
+        innerHeight: innerHeight,
+        onFieldChanged: onValueChanged,
+      ),
     );
   }
 }
 
+
+// ── Workspace data model ──────────────────────────────────────────────────────
+
+class _WorkspaceEntry {
+  _WorkspaceEntry({required this.block, this.position = Offset.zero});
+  _ScratchBlockData block;
+  Offset position;
+  String? editedValue;
+  String? editedValue2;
+}
+
+// ── Workspace dotted background ───────────────────────────────────────────────
+
+class _WorkspaceDotPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFEAF2F7));
+    final paint = Paint()..color = const Color(0xFFCBD8E2);
+    for (double y = 14; y < size.height; y += 20) {
+      for (double x = 14; x < size.width; x += 20) {
+        canvas.drawCircle(Offset(x, y), 1.4, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
+
+// ── Free-form draggable workspace canvas ─────────────────────────────────────
+
+class _WorkspaceCanvas extends StatefulWidget {
+  const _WorkspaceCanvas({
+    required this.entries,
+    required this.onRemove,
+    this.trashKey,
+    this.trashHighlight,
+    this.aiClassNames = const [],
+    this.textWidgetNames = const [],
+  });
+
+  final List<_WorkspaceEntry> entries;
+  final ValueChanged<int> onRemove;
+  final GlobalKey? trashKey;
+  final ValueNotifier<bool>? trashHighlight;
+  final List<String> aiClassNames;
+  final List<String> textWidgetNames;
+
+  @override
+  State<_WorkspaceCanvas> createState() => _WorkspaceCanvasState();
+}
+
+class _WorkspaceCanvasState extends State<_WorkspaceCanvas> {
+  late List<Offset> _positions;
+
+  // Blocks at index >= _renderedCount are wrapped in Offstage(offstage:true)
+  // so their render objects are laid out (avoiding hit-test assertions) but
+  // invisible. Set to entries.length once they are ready to show.
+  int _renderedCount = 0;
+
+  // Indices of blocks that move together with the currently dragged block.
+  // Computed once at pan-start so that positions shifting during drag don't break the group.
+  Set<int> _dragGroup = {};
+
+  Set<int> _getDependents(int idx) {
+    final result = <int>{};
+    _collectDependents(idx, result);
+    return result;
+  }
+
+  void _collectDependents(int from, Set<int> result) {
+    for (int i = 0; i < widget.entries.length; i++) {
+      if (i == from || result.contains(i)) continue;
+      if (_snapsBelow(i, from) || _snapsInsideOf(i, from)) {
+        result.add(i);
+        _collectDependents(i, result);
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _positions = widget.entries.map((e) => e.position).toList();
+    _renderedCount = widget.entries.length;
+  }
+
+  @override
+  void didUpdateWidget(_WorkspaceCanvas old) {
+    super.didUpdateWidget(old);
+    final prevLen = _positions.length;
+    // Always reload from entries — they store the authoritative position (kept in
+    // sync during drags via onPanUpdate). This handles add, remove, and in-place
+    // list mutations (removeWhere+add) that leave the length unchanged.
+    _positions = widget.entries.map((e) => e.position).toList();
+    if (widget.entries.length > prevLen) {
+      // New blocks added. Keep them offstage (invisible but laid out) for this
+      // frame so their render objects exist before any mouse hit-test fires.
+      _renderedCount = prevLen;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        for (int i = prevLen; i < widget.entries.length; i++) {
+          _trySnapBlock(i);
+        }
+        setState(() => _renderedCount = widget.entries.length);
+      });
+    } else {
+      _renderedCount = widget.entries.length;
+    }
+  }
+
+  // Static canvas height (no inner-block expansion, used for sizing inner blocks themselves).
+  double _canvasHeight(_ScratchBlockData block) {
+    final def = _scratchDataToBlockDef(block);
+    const nd = 5.0;
+    const stackH = 33.0;
+    const reporterH = 25.0;
+    const footH = 13.0;
+    switch (def.shape) {
+      case BlockShape.hat:
+      case BlockShape.stack:
+        final extra = def.multilineBelow != null ? 18.0 : 0.0;
+        return stackH + extra + nd;
+      case BlockShape.cBlock:
+        return stackH + 30.0 + footH + nd;
+      case BlockShape.reporter:
+      case BlockShape.boolean:
+        return reporterH;
+    }
+  }
+
+  // True if the block at idx is a C-block container that can hold inner blocks.
+  bool _isCBlockEntry(int idx) {
+    final b = widget.entries[idx].block;
+    return b.shape == _ScratchBlockShape.cBlock &&
+        b.kind != _ScratchBlockKind.endEvent;
+  }
+
+  // Height of all blocks snapped inside C-block j (min 30 so the slot is always visible).
+  double _innerSlotHeightForIdx(int cblockIdx) {
+    final innerX = _positions[cblockIdx].dx + 22;
+    double total = 0;
+    for (int i = 0; i < widget.entries.length; i++) {
+      if (i == cblockIdx) continue;
+      if ((_positions[i].dx - innerX).abs() < 14) {
+        total += _canvasHeight(widget.entries[i].block);
+      }
+    }
+    return math.max(30.0, total);
+  }
+
+  // Dynamic canvas height: C-blocks expand to contain their inner blocks.
+  double _canvasHeightForIdx(int idx) {
+    final block = widget.entries[idx].block;
+    if (_isCBlockEntry(idx)) {
+      const stackH = 33.0;
+      const footH = 13.0;
+      const nd = 5.0;
+      return stackH + _innerSlotHeightForIdx(idx) + footH + nd;
+    }
+    return _canvasHeight(block);
+  }
+
+  // Y where the next block's top should sit: end of block j's body.
+  double _bottomConnectorY(int j) =>
+      _positions[j].dy + _canvasHeightForIdx(j) - 5.0;
+
+  // Returns the Offset where the next block should snap inside C-block j.
+  // If nothing is inside yet, returns the top of the inner slot.
+  // If inner blocks exist, returns below the last one.
+  Offset _innerSlotBottom(int cblockIdx) {
+    final innerX = _positions[cblockIdx].dx + 22;
+    final baseY = _positions[cblockIdx].dy + 33; // stackH
+    double maxBottomY = baseY;
+    for (int i = 0; i < widget.entries.length; i++) {
+      if (i == cblockIdx) continue;
+      if ((_positions[i].dx - innerX).abs() < 14) {
+        final bottom = _positions[i].dy + _canvasHeight(widget.entries[i].block) - 5;
+        if (bottom > maxBottomY) maxBottomY = bottom;
+      }
+    }
+    return Offset(innerX, maxBottomY);
+  }
+
+  // True if block j's outer bottom connector is already occupied by another block.
+  bool _isOuterConnectorOccupied(int j, int excludeIdx) {
+    final snapY = _bottomConnectorY(j);
+    final snapX = _positions[j].dx;
+    for (int k = 0; k < _positions.length; k++) {
+      if (k == j || k == excludeIdx) continue;
+      if ((_positions[k].dx - snapX).abs() < 10 &&
+          (_positions[k].dy - snapY).abs() < 10) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Block b snaps below block a: same X (tight tolerance), top of b at a's bottom connector.
+  bool _snapsBelow(int b, int a) {
+    const thX = 12.0; // tight so inner blocks (offset +22) aren't treated as "below" outer blocks
+    const thY = 55.0;
+    return (_positions[b].dx - _positions[a].dx).abs() < thX &&
+        (_positions[b].dy - _bottomConnectorY(a)).abs() < thY;
+  }
+
+  // Block i is snapped inside the C-block at j.
+  bool _snapsInsideOf(int i, int j) {
+    if (!_isCBlockEntry(j)) return false;
+    const thX = 12.0;
+    const thY = 55.0;
+    final innerX = _positions[j].dx + 22;
+    final innerY = _positions[j].dy + 33; // stackH — top of inner slot
+    return (_positions[i].dx - innerX).abs() < thX &&
+        (_positions[i].dy - innerY).abs() < thY;
+  }
+
+  Set<int> _connectedIndices() {
+    final connected = <int>{};
+    for (int i = 0; i < widget.entries.length; i++) {
+      final b = widget.entries[i].block;
+      if (b.kind == _ScratchBlockKind.event ||
+          (b.shape == _ScratchBlockShape.cBlock && b.kind != _ScratchBlockKind.endEvent)) {
+        connected.add(i);
+      }
+    }
+    if (connected.isEmpty) return {};
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (int i = 0; i < widget.entries.length; i++) {
+        if (connected.contains(i)) continue;
+        for (final j in connected.toList()) {
+          if (_snapsBelow(i, j) || _snapsInsideOf(i, j)) {
+            connected.add(i);
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+    return connected;
+  }
+
+  // A block is considered connected when it is attached above/below another block,
+  // or when it is inside / contains a C-block slot. The delete X should only show
+  // on fully free blocks, so connected chains are not accidentally deleted.
+  bool _hasAnyConnection(int i) {
+    if (i <= 0 || i >= widget.entries.length) return true;
+    for (int j = 0; j < widget.entries.length; j++) {
+      if (j == i) continue;
+      if (_snapsBelow(i, j) ||
+          _snapsBelow(j, i) ||
+          _snapsInsideOf(i, j) ||
+          _snapsInsideOf(j, i)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // We no longer delete by checking a trash RenderObject.
+  // The old version used `trashKey.currentContext?.findRenderObject()` while
+  // blocks were being removed/rebuilt, which can throw:
+  // "Cannot get renderObject of inactive element" on Flutter Web.
+  // Individual deletion is now handled by the small X button on each block.
+
+  void _trySnapBlock(int i) {
+    if (i >= _positions.length) return;
+    const snapZoneX = 80.0;
+    const snapZoneY = 80.0;
+    final connected = _connectedIndices();
+
+    Offset? bestSnap;
+    double bestDist = double.infinity;
+
+    for (int j = 0; j < widget.entries.length; j++) {
+      if (j == i || !connected.contains(j)) continue;
+
+      // Outer bottom connector — skip if already occupied by another block.
+      if (!_isOuterConnectorOccupied(j, i)) {
+        final snapX = _positions[j].dx;
+        final snapY = _bottomConnectorY(j);
+        final dx = (_positions[i].dx - snapX).abs();
+        final dy = (_positions[i].dy - snapY).abs();
+        if (dx < snapZoneX && dy < snapZoneY) {
+          final dist = math.sqrt(dx * dx + dy * dy);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestSnap = Offset(snapX, snapY);
+          }
+        }
+      }
+
+      // Inner slot connector — available for all C-blocks (chains inside automatically).
+      if (_isCBlockEntry(j)) {
+        final inner = _innerSlotBottom(j);
+        final dx = (_positions[i].dx - inner.dx).abs();
+        final dy = (_positions[i].dy - inner.dy).abs();
+        if (dx < snapZoneX && dy < snapZoneY) {
+          final dist = math.sqrt(dx * dx + dy * dy);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestSnap = Offset(inner.dx, inner.dy);
+          }
+        }
+      }
+    }
+
+    if (bestSnap != null) {
+      final snap = bestSnap;
+      final delta = snap - _positions[i];
+      setState(() {
+        _positions[i] = snap;
+        widget.entries[i].position = snap;
+        for (final dep in _dragGroup) {
+          _positions[dep] += delta;
+          widget.entries[dep].position = _positions[dep];
+        }
+      });
+    }
+    _dragGroup = {};
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        for (int i = 0; i < widget.entries.length; i++)
+          Positioned(
+            left: _positions[i].dx,
+            top: _positions[i].dy,
+            // Offstage keeps the render object laid out (hasSize=true) so it
+            // won't trigger a "never been laid out" hit-test assertion on web
+            // when the mouse moves between build and the first layout pass.
+            child: Offstage(
+              offstage: i >= _renderedCount,
+              child: GestureDetector(
+                onDoubleTap: () {
+                  if (i == 0 || _hasAnyConnection(i)) return;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted || i >= widget.entries.length) return;
+                    widget.onRemove(i);
+                  });
+                },
+                onPanStart: (_) {
+                  _dragGroup = _getDependents(i);
+                },
+                onPanUpdate: (d) {
+                  setState(() {
+                    _positions[i] += d.delta;
+                    widget.entries[i].position = _positions[i];
+                    for (final dep in _dragGroup) {
+                      _positions[dep] += d.delta;
+                      widget.entries[dep].position = _positions[dep];
+                    }
+                  });
+                },
+                onPanEnd: (_) {
+                  _trySnapBlock(i);
+                },
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _ScratchBlock(
+                      block: widget.entries[i].block,
+                      large: true,
+                      innerHeight: _isCBlockEntry(i) ? _innerSlotHeightForIdx(i) : null,
+                      dropdownOptions: widget.entries[i].block.kind == _ScratchBlockKind.ai && widget.aiClassNames.isNotEmpty
+                          ? widget.aiClassNames
+                          : widget.entries[i].block.kind == _ScratchBlockKind.widget && widget.textWidgetNames.isNotEmpty
+                              ? widget.textWidgetNames
+                              : null,
+                      aiClassNames: widget.aiClassNames,
+                      editedValue: widget.entries[i].editedValue,
+                      editedValue2: widget.entries[i].editedValue2,
+                      onValueChanged: (fi, v) {
+                        if (fi == 0) {
+                          widget.entries[i].editedValue = v;
+                        } else {
+                          widget.entries[i].editedValue2 = v;
+                        }
+                        setState(() {});
+                      },
+                    ),
+                    if (i != 0 && !_hasAnyConnection(i))
+                      Positioned(
+                        top: -10,
+                        right: -10,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            // Delay removal until after the current pointer event.
+                            // This prevents removing the element while Flutter is still
+                            // processing gestures/layout for that same element.
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted || i >= widget.entries.length) return;
+                              widget.onRemove(i);
+                            });
+                          },
+                          child: Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE05555),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(.20),
+                                  blurRadius: 3,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.close, size: 14, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 class _GameAndSpritePanel extends StatelessWidget {
   const _GameAndSpritePanel({
@@ -1174,17 +4931,35 @@ class _GameAndSpritePanel extends StatelessWidget {
     required this.owlRotation,
     required this.owlOpacity,
     required this.owlFrame,
+    required this.owlVisible,
     required this.isRunning,
+    required this.exerciseNumber,
     required this.projectSprites,
     required this.stageWidgets,
+    required this.selectedObjectId,
     required this.onAddSpritePressed,
     required this.onOliverSettingsChanged,
+    required this.onOliverSelected,
     required this.onSpriteDeleted,
     required this.onSpriteDuplicated,
     required this.onWidgetAdded,
     required this.onWidgetRemoved,
     required this.onWidgetSelected,
     required this.onWidgetChanged,
+    required this.onAiClassNamesChanged,
+    this.onModelSaved,
+    this.savedModels = const [],
+    this.worldWidth = 600,
+    this.worldHeight = 400,
+    this.cameraTarget = 'None',
+    this.gravity = 1800,
+    this.physics = 'ARCADE',
+    this.onWorldWidthChanged,
+    this.onWorldHeightChanged,
+    this.onCameraTargetChanged,
+    this.onGravityChanged,
+    this.onPhysicsChanged,
+    this.onFullscreen,
   });
 
   final double owlX;
@@ -1193,17 +4968,35 @@ class _GameAndSpritePanel extends StatelessWidget {
   final double owlRotation;
   final double owlOpacity;
   final int owlFrame;
+  final bool owlVisible;
   final bool isRunning;
+  final int exerciseNumber;
   final List<_SpriteAssetData> projectSprites;
   final List<_AddedGameWidget> stageWidgets;
+  final String selectedObjectId;
   final VoidCallback onAddSpritePressed;
   final ValueChanged<_SpriteSettings> onOliverSettingsChanged;
+  final VoidCallback onOliverSelected;
   final ValueChanged<_SpriteAssetData> onSpriteDeleted;
   final ValueChanged<_SpriteAssetData> onSpriteDuplicated;
   final ValueChanged<_AddedGameWidget> onWidgetAdded;
   final ValueChanged<_AddedGameWidget> onWidgetRemoved;
   final ValueChanged<_AddedGameWidget> onWidgetSelected;
   final VoidCallback onWidgetChanged;
+  final ValueChanged<List<String>> onAiClassNamesChanged;
+  final ValueChanged<_SavedAiModel>? onModelSaved;
+  final List<_SavedAiModel> savedModels;
+  final int worldWidth;
+  final int worldHeight;
+  final String cameraTarget;
+  final double gravity;
+  final String physics;
+  final ValueChanged<int>? onWorldWidthChanged;
+  final ValueChanged<int>? onWorldHeightChanged;
+  final ValueChanged<String>? onCameraTargetChanged;
+  final ValueChanged<double>? onGravityChanged;
+  final ValueChanged<String>? onPhysicsChanged;
+  final VoidCallback? onFullscreen;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,15 +5013,21 @@ class _GameAndSpritePanel extends StatelessWidget {
               owlRotation: owlRotation,
               owlOpacity: owlOpacity,
               owlFrame: owlFrame,
+              owlVisible: owlVisible,
               isRunning: isRunning,
               stageWidgets: stageWidgets,
+              worldWidth: worldWidth,
+              cameraTarget: cameraTarget,
+              onFullscreen: onFullscreen,
             ),
           ),
           Expanded(
             flex: 48,
             child: _SpriteInspector(
+              exerciseNumber: exerciseNumber,
               projectSprites: projectSprites,
               stageWidgets: stageWidgets,
+              selectedObjectId: selectedObjectId,
               onAddSpritePressed: onAddSpritePressed,
               owlX: owlX,
               owlY: owlY,
@@ -1236,12 +5035,27 @@ class _GameAndSpritePanel extends StatelessWidget {
               owlRotation: owlRotation,
               owlOpacity: owlOpacity,
               onOliverSettingsChanged: onOliverSettingsChanged,
+              onOliverSelected: onOliverSelected,
               onSpriteDeleted: onSpriteDeleted,
               onSpriteDuplicated: onSpriteDuplicated,
               onWidgetAdded: onWidgetAdded,
               onWidgetRemoved: onWidgetRemoved,
               onWidgetSelected: onWidgetSelected,
               onWidgetChanged: onWidgetChanged,
+              onAiClassNamesChanged: onAiClassNamesChanged,
+              onModelSaved: onModelSaved,
+              savedModels: savedModels,
+              worldWidth: worldWidth,
+              worldHeight: worldHeight,
+              cameraTarget: cameraTarget,
+              gravity: gravity,
+              physics: physics,
+              onWorldWidthChanged: onWorldWidthChanged,
+              onWorldHeightChanged: onWorldHeightChanged,
+              onCameraTargetChanged: onCameraTargetChanged,
+              onGravityChanged: onGravityChanged,
+              onPhysicsChanged: onPhysicsChanged,
+              isRunning: isRunning,
             ),
           ),
         ],
@@ -1258,8 +5072,12 @@ class _StagePreview extends StatelessWidget {
     required this.owlRotation,
     required this.owlOpacity,
     required this.owlFrame,
+    required this.owlVisible,
     required this.isRunning,
     required this.stageWidgets,
+    this.worldWidth = 600,
+    this.cameraTarget = 'None',
+    this.onFullscreen,
   });
 
   final double owlX;
@@ -1268,91 +5086,131 @@ class _StagePreview extends StatelessWidget {
   final double owlRotation;
   final double owlOpacity;
   final int owlFrame;
+  final bool owlVisible;
   final bool isRunning;
   final List<_AddedGameWidget> stageWidgets;
+  final int worldWidth;
+  final String cameraTarget;
+  final VoidCallback? onFullscreen;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         const spriteSize = 74.0;
-        final maxLeft = math.max(0.0, constraints.maxWidth - spriteSize - 8);
         final maxTop = math.max(0.0, constraints.maxHeight - spriteSize - 8);
-        final left = owlX.clamp(0.0, maxLeft);
         final top = owlY.clamp(0.0, maxTop);
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Positioned.fill(child: _StarryNightBackground()),
-            Positioned(
-              left: constraints.maxWidth * .30,
-              bottom: 0,
-              child: Container(
-                width: 30,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF26323B),
-                  border: Border.all(color: Colors.black, width: 2),
+        final bool followCam = cameraTarget == 'Oliver';
+        final double viewCenterX = constraints.maxWidth / 2 - spriteSize / 2;
+        final double maxScroll = math.max(0.0, worldWidth - constraints.maxWidth);
+        final double cameraOffset = followCam
+            ? (owlX - viewCenterX).clamp(0.0, maxScroll)
+            : 0.0;
+        // When not following, let Oliver walk off the right edge (ClipRect will hide it).
+        final double displayLeft = followCam ? viewCenterX : owlX;
+
+        return ClipRect(
+          child: Stack(
+            children: [
+              // Scrolling background
+              Positioned(
+                left: -cameraOffset,
+                top: 0,
+                bottom: 0,
+                width: constraints.maxWidth + worldWidth,
+                child: const _StarryNightBackground(),
+              ),
+              // House decoration (world-space)
+              Positioned(
+                left: constraints.maxWidth * .30 - cameraOffset,
+                bottom: 0,
+                child: Container(
+                  width: 30,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF26323B),
+                    border: Border.all(color: Colors.black, width: 2),
+                  ),
                 ),
               ),
-            ),
-            AnimatedPositioned(
-              left: left,
-              top: top,
-              duration: const Duration(milliseconds: 70),
-              curve: Curves.linear,
-              child: Container(
-                width: spriteSize,
-                height: spriteSize,
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF91C75B), width: 4),
-                ),
-                alignment: Alignment.center,
-                child: Opacity(
-                  opacity: owlOpacity.clamp(0.0, 1.0),
-                  child: Transform.scale(
-                    scale: owlScale,
-                    child: Transform.rotate(
-                      angle: (owlRotation * math.pi / 180) + (isRunning ? -.05 : -.16),
-                      child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+              // Oliver
+              AnimatedPositioned(
+                left: displayLeft,
+                top: top,
+                duration: const Duration(milliseconds: 70),
+                curve: Curves.linear,
+                child: Container(
+                  width: spriteSize,
+                  height: spriteSize,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFF91C75B), width: 4),
+                  ),
+                  alignment: Alignment.center,
+                  child: Opacity(
+                    opacity: owlOpacity.clamp(0.0, 1.0),
+                    child: Transform.scale(
+                      scale: owlScale,
+                      child: Transform.rotate(
+                        angle: (owlRotation * math.pi / 180) + (isRunning ? -.05 : -.16),
+                        child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            for (int i = 0; i < stageWidgets.length; i++)
-              if (stageWidgets[i].show)
-                if (stageWidgets[i].type == _GameWidgetType.dialog)
-                  Positioned(
-                    top: 18, left: 18, right: 18, bottom: 60,
-                    child: Opacity(
-                      opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
-                      child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
+              // Stage widget overlays (viewport-fixed)
+              for (int i = 0; i < stageWidgets.length; i++)
+                if (stageWidgets[i].show)
+                  if (stageWidgets[i].type == _GameWidgetType.dialog)
+                    Positioned(
+                      top: 18, left: 18, right: 18, bottom: 60,
+                      child: Opacity(
+                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
+                      ),
+                    )
+                  else
+                    Positioned(
+                      top: 12.0 + i * 52,
+                      left: 12,
+                      child: Opacity(
+                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
+                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
+                      ),
                     ),
-                  )
-                else
-                  Positioned(
-                    top: 12.0 + i * 52,
-                    left: 12,
-                    child: Opacity(
-                      opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
-                      child: _StageWidgetOverlay(gameWidget: stageWidgets[i]),
-                    ),
-                  ),
-            Positioned(
-              top: 0,
-              right: 0,
-              child: Row(
-                children: const [
-                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDefault),
-                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDrag),
-                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolErase),
-                  _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolPaint),
-                ],
+              // Tool icons (viewport-fixed)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Row(
+                  children: const [
+                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDefault),
+                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDrag),
+                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolErase),
+                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolPaint),
+                  ],
+                ),
               ),
-            ),
-          ],
+              // Fullscreen button
+              Positioned(
+                bottom: 4,
+                right: 4,
+                child: GestureDetector(
+                  onTap: onFullscreen,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Icon(Icons.fullscreen, color: Colors.white, size: 22),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -1384,13 +5242,94 @@ class _StageToolAsset extends StatelessWidget {
 
 
 // ── Stage widget overlay (counter, text, timer, etc shown on stage) ───────────
-class _StageWidgetOverlay extends StatelessWidget {
-  const _StageWidgetOverlay({required this.gameWidget});
+class _StageWidgetOverlay extends StatefulWidget {
+  const _StageWidgetOverlay({required this.gameWidget, required this.isRunning});
   final _AddedGameWidget gameWidget;
+  final bool isRunning;
+
+  @override
+  State<_StageWidgetOverlay> createState() => _StageWidgetOverlayState();
+}
+
+class _StageWidgetOverlayState extends State<_StageWidgetOverlay> {
+  html.MediaStream? _stream;
+  html.VideoElement? _videoEl;
+  html.CanvasElement? _poseCanvasEl;
+  late final String _viewId;
+  bool _cameraStarted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.gameWidget.type == _GameWidgetType.webcam && kIsWeb) {
+      _viewId = 'stage-webcam-${identityHashCode(this)}';
+      final videoEl = html.VideoElement()
+        ..autoplay = true
+        ..muted = true
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.objectFit = 'cover';
+      final canvasEl = html.CanvasElement()
+        ..style.position = 'absolute'
+        ..style.top = '0'
+        ..style.left = '0'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.pointerEvents = 'none';
+      final container = html.DivElement()
+        ..style.position = 'relative'
+        ..style.width = '100%'
+        ..style.height = '100%'
+        ..style.overflow = 'hidden'
+        ..append(videoEl)
+        ..append(canvasEl);
+      ui_web.platformViewRegistry.registerViewFactory(_viewId, (_) => container);
+      _videoEl = videoEl;
+      _poseCanvasEl = canvasEl;
+      if (widget.isRunning) _startCamera();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_StageWidgetOverlay old) {
+    super.didUpdateWidget(old);
+    if (widget.gameWidget.type != _GameWidgetType.webcam) return;
+    if (!old.isRunning && widget.isRunning) _startCamera();
+    if (old.isRunning && !widget.isRunning) _stopCamera();
+  }
+
+  @override
+  void dispose() {
+    if (widget.gameWidget.type == _GameWidgetType.webcam) _stopCamera();
+    super.dispose();
+  }
+
+  Future<void> _startCamera() async {
+    if (!kIsWeb || _cameraStarted || _videoEl == null) return;
+    try {
+      _stream = await html.window.navigator.mediaDevices!
+          .getUserMedia({'video': true, 'audio': false});
+      _videoEl!.srcObject = _stream;
+      js.context.callMethod('startPreviewPose', [_videoEl, _poseCanvasEl]);
+      _cameraStarted = true;
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  void _stopCamera() {
+    if (!kIsWeb) return;
+    js.context.callMethod('stopPreviewPose', []);
+    _stream?.getTracks().forEach((t) => t.stop());
+    _stream = null;
+    _cameraStarted = false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (gameWidget.type == _GameWidgetType.dialog) {
+    if (widget.gameWidget.type == _GameWidgetType.dialog) {
       return Container(
         decoration: BoxDecoration(
           color: const Color(0xFFB8CDD8),
@@ -1403,10 +5342,10 @@ class _StageWidgetOverlay extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
               child: Text(
-                gameWidget.text,
+                widget.gameWidget.text,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: gameWidget.textColor,
+                  color: widget.gameWidget.textColor,
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   shadows: const [Shadow(color: Colors.black38, offset: Offset(0, 1), blurRadius: 2)],
@@ -1442,29 +5381,34 @@ class _StageWidgetOverlay extends StatelessWidget {
       );
     }
 
-    if (gameWidget.type == _GameWidgetType.webcam) {
+    if (widget.gameWidget.type == _GameWidgetType.webcam) {
       return Container(
         width: 160,
         height: 120,
         decoration: BoxDecoration(
-          color: const Color(0xFF3C3C3C),
+          color: const Color(0xFF1A1A1A),
           border: Border.all(color: const Color(0xFF91C75B), width: 2),
           borderRadius: BorderRadius.circular(6),
         ),
-        child: const Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.videocam, color: Colors.white54, size: 44),
-            SizedBox(height: 4),
-            Text('webcam', style: TextStyle(color: Colors.white38, fontSize: 11)),
-          ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: kIsWeb && _cameraStarted
+              ? HtmlElementView(viewType: _viewId)
+              : const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.videocam, color: Colors.white54, size: 44),
+                    SizedBox(height: 4),
+                    Text('webcam', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                  ],
+                ),
         ),
       );
     }
 
-    if (gameWidget.type == _GameWidgetType.button) {
+    if (widget.gameWidget.type == _GameWidgetType.button) {
       return Transform.rotate(
-        angle: gameWidget.rotation * 3.14159265 / 180,
+        angle: widget.gameWidget.rotation * 3.14159265 / 180,
         child: Container(
           width: 100,
           height: 70,
@@ -1479,7 +5423,7 @@ class _StageWidgetOverlay extends StatelessWidget {
                 alignment: Alignment.topCenter,
                 heightFactor: 0.5,
                 child: Image.asset(
-                  _AddedGameWidget.buttonImages[gameWidget.buttonImageIndex],
+                  _AddedGameWidget.buttonImages[widget.gameWidget.buttonImageIndex],
                   fit: BoxFit.fill,
                   width: double.infinity,
                   errorBuilder: (_, __, ___) => Container(
@@ -1494,9 +5438,9 @@ class _StageWidgetOverlay extends StatelessWidget {
       );
     }
 
-    final label = switch (gameWidget.type) {
+    final label = switch (widget.gameWidget.type) {
       _GameWidgetType.counter => '0',
-      _GameWidgetType.text    => gameWidget.text,
+      _GameWidgetType.text    => widget.gameWidget.text,
       _GameWidgetType.timer   => '0.0',
       _GameWidgetType.clock   => '00:00',
       _GameWidgetType.button  => '',
@@ -1513,7 +5457,7 @@ class _StageWidgetOverlay extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: gameWidget.textColor,
+          color: widget.gameWidget.textColor,
           fontSize: 18,
           fontWeight: FontWeight.w800,
         ),
@@ -1546,8 +5490,10 @@ class _SpriteSettings {
 // ── Sprite inspector panel ────────────────────────────────────────────────────
 class _SpriteInspector extends StatefulWidget {
   const _SpriteInspector({
+    required this.exerciseNumber,
     required this.projectSprites,
     required this.stageWidgets,
+    required this.selectedObjectId,
     required this.onAddSpritePressed,
     required this.owlX,
     required this.owlY,
@@ -1555,16 +5501,33 @@ class _SpriteInspector extends StatefulWidget {
     required this.owlRotation,
     required this.owlOpacity,
     required this.onOliverSettingsChanged,
+    required this.onOliverSelected,
     required this.onSpriteDeleted,
     required this.onSpriteDuplicated,
     required this.onWidgetAdded,
     required this.onWidgetRemoved,
     required this.onWidgetSelected,
     required this.onWidgetChanged,
+    required this.onAiClassNamesChanged,
+    this.onModelSaved,
+    this.savedModels = const [],
+    this.worldWidth = 600,
+    this.worldHeight = 400,
+    this.cameraTarget = 'None',
+    this.gravity = 1800,
+    this.physics = 'ARCADE',
+    this.onWorldWidthChanged,
+    this.onWorldHeightChanged,
+    this.onCameraTargetChanged,
+    this.onGravityChanged,
+    this.onPhysicsChanged,
+    this.isRunning = false,
   });
 
+  final int exerciseNumber;
   final List<_SpriteAssetData> projectSprites;
   final List<_AddedGameWidget> stageWidgets;
+  final String selectedObjectId;
   final VoidCallback onAddSpritePressed;
   final double owlX;
   final double owlY;
@@ -1572,12 +5535,27 @@ class _SpriteInspector extends StatefulWidget {
   final double owlRotation;
   final double owlOpacity;
   final ValueChanged<_SpriteSettings> onOliverSettingsChanged;
+  final VoidCallback onOliverSelected;
   final ValueChanged<_SpriteAssetData> onSpriteDeleted;
   final ValueChanged<_SpriteAssetData> onSpriteDuplicated;
   final ValueChanged<_AddedGameWidget> onWidgetAdded;
   final ValueChanged<_AddedGameWidget> onWidgetRemoved;
   final ValueChanged<_AddedGameWidget> onWidgetSelected;
   final VoidCallback onWidgetChanged;
+  final ValueChanged<List<String>> onAiClassNamesChanged;
+  final ValueChanged<_SavedAiModel>? onModelSaved;
+  final List<_SavedAiModel> savedModels;
+  final int worldWidth;
+  final int worldHeight;
+  final String cameraTarget;
+  final double gravity;
+  final String physics;
+  final ValueChanged<int>? onWorldWidthChanged;
+  final ValueChanged<int>? onWorldHeightChanged;
+  final ValueChanged<String>? onCameraTargetChanged;
+  final ValueChanged<double>? onGravityChanged;
+  final ValueChanged<String>? onPhysicsChanged;
+  final bool isRunning;
 
   @override
   State<_SpriteInspector> createState() => _SpriteInspectorState();
@@ -1588,6 +5566,7 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
   bool _showPreview = false;
   int _activeTab = 0;
   _AddedGameWidget? _activeWidget;
+  OverlayEntry? _aiModelEntry;
 
   static const _oliverSprite = _SpriteAssetData(
     displayName: 'Oliver',
@@ -1619,6 +5598,46 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
   void _switchTab(int index) => setState(() { _activeTab = index; _active = null; _activeWidget = null; _showPreview = false; });
 
   @override
+  void dispose() {
+    _removeAiModelPanel();
+    super.dispose();
+  }
+
+  void _showAiModelPanel(BuildContext ctx) {
+    _removeAiModelPanel();
+    _aiModelEntry = OverlayEntry(builder: (overlayCtx) {
+      final sw = MediaQuery.of(overlayCtx).size.width;
+      return Positioned(
+        right: 0,
+        top: 0,
+        bottom: 0,
+        width: sw * 0.63,
+        child: Material(
+          elevation: 12,
+          color: Colors.white,
+          borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+          child: _NewAiModelDialog(
+            onClassNamesChanged: widget.onAiClassNamesChanged,
+            onClose: _removeAiModelPanel,
+            onSaved: (model) {
+              _removeAiModelPanel();
+              widget.onModelSaved?.call(model);
+            },
+          ),
+        ),
+      );
+    });
+    Overlay.of(ctx, rootOverlay: true).insert(_aiModelEntry!);
+    setState(() {});
+  }
+
+  void _removeAiModelPanel() {
+    _aiModelEntry?.remove();
+    _aiModelEntry = null;
+    if (mounted) setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       children: [
@@ -1626,10 +5645,12 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
           height: 56,
           child: Row(
             children: [
-              _InspectorTab(label: 'Sprites', selected: _activeTab == 0, onTap: () => _switchTab(0)),
-              _InspectorTab(label: 'Widgets', selected: _activeTab == 1, onTap: () => _switchTab(1)),
-              _InspectorTab(label: 'Sounds',  selected: _activeTab == 2, onTap: () => _switchTab(2)),
-              _InspectorTab(label: 'Game',    selected: _activeTab == 3, onTap: () => _switchTab(3)),
+              _InspectorTab(label: 'Sprites',  selected: _activeTab == 0, onTap: () => _switchTab(0)),
+              _InspectorTab(label: 'Widgets',  selected: _activeTab == 1, onTap: () => _switchTab(1)),
+              _InspectorTab(label: 'Sounds',   selected: _activeTab == 2, onTap: () => _switchTab(2)),
+              if (widget.exerciseNumber >= 2)
+                _InspectorTab(label: 'AI - Pose', selected: _activeTab == 3, onTap: () => _switchTab(3)),
+              _InspectorTab(label: 'Game',     selected: _activeTab == 4, onTap: () => _switchTab(4)),
             ],
           ),
         ),
@@ -1639,6 +5660,8 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
             color: Colors.white,
             child: switch (_activeTab) {
               1 => _activeWidget != null ? _buildWidgetSettingsPanel(_activeWidget!) : _buildWidgetsTab(),
+              3 => _buildAiPoseTab(),
+              4 => _buildGameTab(),
               _ => _active != null ? _buildSettingsPanel(_active!) : _buildGrid(),
             },
           ),
@@ -1659,6 +5682,8 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
             children: [
               _AddNewSpriteCard(onTap: widget.onAddSpritePressed),
               _OliverSpriteCard(
+                isSelected: widget.selectedObjectId == 'oliver',
+                onTap: widget.onOliverSelected,
                 onSettingsTap: () => _openSettings(_makeOliverSettings()),
               ),
               for (final sprite in widget.projectSprites)
@@ -1692,6 +5717,210 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
                   onTap: () => widget.onWidgetSelected(w),
                   onSettingsTap: () => setState(() => _activeWidget = w),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  _SavedAiModel? _giveItATryModel;
+  _SavedAiModel? _selectedModel;
+
+  Widget _buildAiPoseTab() {
+    if (_giveItATryModel != null) {
+      return _GiveItATryPanel(
+        model: _giveItATryModel!,
+        onClose: () => setState(() => _giveItATryModel = null),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ElevatedButton(
+            onPressed: () => _showAiModelPanel(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3DBE7A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              elevation: 2,
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.videocam_rounded, size: 28),
+                SizedBox(width: 10),
+                Text(
+                  'ADD NEW MODEL',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, letterSpacing: 1.1),
+                ),
+              ],
+            ),
+          ),
+          if (widget.savedModels.isNotEmpty) ...[
+            const SizedBox(height: 22),
+            const Text(
+              'Select a model to use in the game',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF555555)),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 14),
+            for (final model in widget.savedModels)
+              _SavedModelCard(
+                model: model,
+                selected: _selectedModel == model,
+                onSelect: () {
+                  setState(() => _selectedModel = model);
+                  widget.onAiClassNamesChanged(model.classNames);
+                },
+                onGiveItATry: () => setState(() => _giveItATryModel = model),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGameTab() {
+    final spriteNames = ['None', 'Oliver', ...widget.projectSprites.map((s) => s.displayName)];
+    final widthOptions  = [600, 1200, 1800, 2400, 3000, 3600];
+    final heightOptions = [400, 800, 1200, 1400, 1800, 2200];
+    final disabled = widget.isRunning;
+
+    const labelStyle = TextStyle(
+      fontSize: 10, fontWeight: FontWeight.w800,
+      color: Color(0xFF888888), letterSpacing: 0.6,
+    );
+
+    Widget settingCol(String label, Widget control) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label.toUpperCase(), style: labelStyle),
+        const SizedBox(height: 4),
+        control,
+      ],
+    );
+
+    Widget dd<T>(T value, List<T> options, ValueChanged<T>? cb) => Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F4F8),
+        border: Border.all(color: const Color(0xFFCDD5E0)),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF2E3A4E)),
+          items: options.map((o) => DropdownMenuItem<T>(value: o, child: Text(o.toString()))).toList(),
+          onChanged: (disabled || cb == null) ? null : (v) { if (v != null) cb(v); },
+        ),
+      ),
+    );
+
+    Widget gravityControl() => Row(
+      children: [
+        Expanded(
+          child: Container(
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0F4F8),
+              border: Border.all(color: const Color(0xFFCDD5E0)),
+              borderRadius: const BorderRadius.horizontal(left: Radius.circular(5)),
+            ),
+            child: Text(widget.gravity.round().toString(),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF2E3A4E))),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFCDD5E0)),
+            borderRadius: const BorderRadius.horizontal(right: Radius.circular(5)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: 26, height: 17,
+                child: InkWell(
+                  onTap: disabled ? null : () => widget.onGravityChanged?.call((widget.gravity + 100).clamp(0, 9999)),
+                  child: const Icon(Icons.keyboard_arrow_up, size: 14, color: Color(0xFF555555)),
+                ),
+              ),
+              const Divider(height: 0.5, color: Color(0xFFCDD5E0)),
+              SizedBox(
+                width: 26, height: 17,
+                child: InkWell(
+                  onTap: disabled ? null : () => widget.onGravityChanged?.call((widget.gravity - 100).clamp(0, 9999)),
+                  child: const Icon(Icons.keyboard_arrow_down, size: 14, color: Color(0xFF555555)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return AbsorbPointer(
+      absorbing: disabled,
+      child: Opacity(
+        opacity: disabled ? 0.55 : 1.0,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('GAME SETTINGS', style: TextStyle(
+                fontSize: 11, fontWeight: FontWeight.w900,
+                color: Color(0xFF888888), letterSpacing: 1.0)),
+              const SizedBox(height: 12),
+              // Row 1: Background | Camera Target
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(child: settingCol('Background',
+                    Row(children: [
+                      const Text('starry_night', style: TextStyle(fontSize: 12, color: Color(0xFF333333))),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () {},
+                        child: const Text('| Change', style: TextStyle(fontSize: 12, color: Color(0xFF2F75B5))),
+                      ),
+                    ]),
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: settingCol('Camera Target',
+                    dd<String>(widget.cameraTarget, spriteNames, widget.onCameraTargetChanged))),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Row 2: World Width | World Height
+              Row(
+                children: [
+                  Expanded(child: settingCol('World Width',
+                    dd<int>(widget.worldWidth, widthOptions, widget.onWorldWidthChanged))),
+                  const SizedBox(width: 10),
+                  Expanded(child: settingCol('World Height',
+                    dd<int>(widget.worldHeight, heightOptions, widget.onWorldHeightChanged))),
+                ],
+              ),
+              const SizedBox(height: 10),
+              // Row 3: Gravity | Physics
+              Row(
+                children: [
+                  Expanded(child: settingCol('Gravity', gravityControl())),
+                  const SizedBox(width: 10),
+                  Expanded(child: settingCol('Physics',
+                    dd<String>(widget.physics, const ['ARCADE', 'P2'], widget.onPhysicsChanged))),
+                ],
+              ),
             ],
           ),
         ),
@@ -2617,19 +6846,26 @@ class _AddNewSpriteCard extends StatelessWidget {
 }
 
 class _OliverSpriteCard extends StatelessWidget {
-  const _OliverSpriteCard({required this.onSettingsTap});
+  const _OliverSpriteCard({required this.onSettingsTap, required this.onTap, required this.isSelected});
 
   final VoidCallback onSettingsTap;
+  final VoidCallback onTap;
+  final bool isSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       width: 135,
       height: 148,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: const Color(0xFF84B75C), width: 3),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF3DBE7A) : const Color(0xFF84B75C),
+          width: isSelected ? 4 : 3,
+        ),
       ),
       child: Stack(
         children: [
@@ -2663,6 +6899,7 @@ class _OliverSpriteCard extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -4812,60 +9049,6 @@ class _InspectorTab extends StatelessWidget {
   }
 }
 
-class _TinyCheckbox extends StatelessWidget {
-  const _TinyCheckbox({required this.label, required this.value});
-
-  final String label;
-  final bool value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 28,
-          height: 28,
-          child: Checkbox(
-            value: value,
-            onChanged: (_) {},
-            visualDensity: VisualDensity.compact,
-            activeColor: const Color(0xFF667E8E),
-          ),
-        ),
-        Flexible(child: Text(label, style: const TextStyle(fontSize: 16, color: Color(0xFF414141)))),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.label, required this.icon, required this.color});
-
-  final String label;
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(6),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(.18), offset: const Offset(0, 3))],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.white, size: 22),
-          const SizedBox(width: 9),
-          Text(label, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: .5)),
-        ],
-      ),
-    );
-  }
-}
-
 enum _ScratchBlockKind { event, endEvent, movement, variable, control, display, ai, widget, game, logic, functionBlock }
 
 enum _ScratchBlockShape { command, cBlock, reporter, booleanReporter }
@@ -5000,13 +9183,6 @@ class _ScratchBlockData {
         shape: _ScratchBlockShape.reporter,
       );
 
-  factory _ScratchBlockData.ai(String label, {String? value}) => _ScratchBlockData(
-        label: label,
-        value: value,
-        color: const Color(0xFFACAC4F),
-        kind: _ScratchBlockKind.ai,
-      );
-
   factory _ScratchBlockData.aiReporter(String label, {String? value}) => _ScratchBlockData(
         label: label,
         value: value,
@@ -5025,11 +9201,12 @@ class _ScratchBlockData {
         shape: _ScratchBlockShape.cBlock,
       );
 
-  factory _ScratchBlockData.widgetBlock(String label, {String? value, String? value2}) => _ScratchBlockData(
+  factory _ScratchBlockData.widgetBlock(String label, {String? value, String? value2, bool value2Dropdown = false}) => _ScratchBlockData(
         label: label,
         value: value,
         value2: value2,
         valueDropdown: value != null,
+        value2Dropdown: value2Dropdown,
         color: const Color(0xFF5B88B0),
         kind: _ScratchBlockKind.widget,
       );

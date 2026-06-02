@@ -277,6 +277,8 @@ class Scratch3Block extends StatefulWidget {
     this.scale = 1,
     this.draggable = false,
     this.onTap,
+    this.innerHeight,
+    this.onFieldChanged,
   });
 
   final BlockDef block;
@@ -285,6 +287,8 @@ class Scratch3Block extends StatefulWidget {
   final double scale;
   final bool draggable;
   final VoidCallback? onTap;
+  final double? innerHeight;
+  final void Function(int fieldIndex, String value)? onFieldChanged;
 
   @override
   State<Scratch3Block> createState() => _Scratch3BlockState();
@@ -295,7 +299,10 @@ class _Scratch3BlockState extends State<Scratch3Block> {
 
   @override
   Widget build(BuildContext context) {
-    final metrics = _BlockMetrics.from(widget.block);
+    final metrics = widget.innerHeight != null
+        ? _BlockMetrics.fromWithInner(widget.block, widget.innerHeight!)
+        : _BlockMetrics.from(widget.block);
+    final shape = widget.block.shape;
     final blockChild = AnimatedScale(
       scale: _hovered ? 1.025 : 1,
       duration: const Duration(milliseconds: 120),
@@ -314,20 +321,29 @@ class _Scratch3BlockState extends State<Scratch3Block> {
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _BlockShapePainter(
-                      shape: widget.block.shape,
                       color: widget.color,
                       darkColor: widget.darkColor,
-                      metrics: metrics,
+                      shape: shape,
+                      isHat: shape == BlockShape.hat,
+                      isReporter: shape == BlockShape.reporter,
+                      isBoolean: shape == BlockShape.boolean,
+                      isCBlock: shape == BlockShape.cBlock,
+                      headH: _ShapeConstants.stackH,
+                      footH: _ShapeConstants.footH,
                     ),
                   ),
                 ),
-                _BlockContentOverlay(block: widget.block, metrics: metrics),
+                _BlockContentOverlay(block: widget.block, metrics: metrics, onFieldChanged: widget.onFieldChanged),
               ],
             ),
           ),
         ),
       ),
     );
+
+    // Workspace blocks (not draggable, no onTap) don't need hover tracking.
+    // Skipping MouseRegion avoids recursive mouse_tracker assertion errors.
+    if (!widget.draggable && widget.onTap == null) return blockChild;
 
     final interactive = MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -356,10 +372,11 @@ class _Scratch3BlockState extends State<Scratch3Block> {
 }
 
 class _BlockContentOverlay extends StatelessWidget {
-  const _BlockContentOverlay({required this.block, required this.metrics});
+  const _BlockContentOverlay({required this.block, required this.metrics, this.onFieldChanged});
 
   final BlockDef block;
   final _BlockMetrics metrics;
+  final void Function(int fieldIndex, String value)? onFieldChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -367,10 +384,10 @@ class _BlockContentOverlay extends StatelessWidget {
       case BlockShape.hat:
         return Positioned(
           left: metrics.padding + 14,
-          top: metrics.padding + metrics.bodyTop,
+          top: metrics.padding,
           width: metrics.width,
           height: metrics.lipHeight,
-          child: _BlockTextRow(label: block.label, fields: block.fields),
+          child: _BlockTextRow(label: block.label, fields: block.fields, onFieldChanged: onFieldChanged),
         );
       case BlockShape.cBlock:
         return Stack(
@@ -380,17 +397,18 @@ class _BlockContentOverlay extends StatelessWidget {
               top: metrics.padding,
               width: metrics.width,
               height: metrics.lipHeight,
-              child: _BlockTextRow(label: block.label, fields: block.fields),
+              child: _BlockTextRow(label: block.label, fields: block.fields, onFieldChanged: onFieldChanged),
             ),
             if (block.elseRow != null)
               Positioned(
                 left: metrics.padding + 14,
                 top: metrics.padding + metrics.lipHeight + metrics.mouthHeight,
                 width: metrics.width,
-                height: metrics.lipHeight,
+                height: _ShapeConstants.footH,
                 child: _BlockTextRow(
                   label: block.elseRow!.label,
                   fields: block.elseRow!.fields,
+                  onFieldChanged: onFieldChanged,
                 ),
               ),
           ],
@@ -404,12 +422,12 @@ class _BlockContentOverlay extends StatelessWidget {
           width: metrics.width,
           height: metrics.height,
           child: block.multilineBelow == null
-              ? _BlockTextRow(label: block.label, fields: block.fields)
+              ? _BlockTextRow(label: block.label, fields: block.fields, onFieldChanged: onFieldChanged)
               : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _BlockTextRow(label: block.label, fields: block.fields, height: 24),
+                    _BlockTextRow(label: block.label, fields: block.fields, height: 24, onFieldChanged: onFieldChanged),
                     _BlockTextRow(label: block.multilineBelow!, fields: const [], height: 18),
                   ],
                 ),
@@ -419,11 +437,12 @@ class _BlockContentOverlay extends StatelessWidget {
 }
 
 class _BlockTextRow extends StatelessWidget {
-  const _BlockTextRow({required this.label, required this.fields, this.height});
+  const _BlockTextRow({required this.label, required this.fields, this.height, this.onFieldChanged});
 
   final String label;
   final List<BlockFieldDef> fields;
   final double? height;
+  final void Function(int fieldIndex, String value)? onFieldChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -434,9 +453,12 @@ class _BlockTextRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (label.isNotEmpty) _BlockLabel(label),
-          for (final field in fields) ...[
-            if (label.isNotEmpty || fields.indexOf(field) > 0) const SizedBox(width: 6),
-            _BlockField(field),
+          for (int fi = 0; fi < fields.length; fi++) ...[
+            if (label.isNotEmpty || fi > 0) const SizedBox(width: 6),
+            _BlockField(
+              fields[fi],
+              onChanged: onFieldChanged != null ? (v) => onFieldChanged!(fi, v) : null,
+            ),
           ],
         ],
       ),
@@ -466,9 +488,10 @@ class _BlockLabel extends StatelessWidget {
 }
 
 class _BlockField extends StatelessWidget {
-  const _BlockField(this.field);
+  const _BlockField(this.field, {this.onChanged});
 
   final BlockFieldDef field;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -504,6 +527,7 @@ class _BlockField extends StatelessWidget {
           initial: '${field.value ?? 0}',
           width: field.width ?? math.max(20, '${field.value ?? 0}'.length * 8 + 8),
           round: true,
+          onChanged: onChanged,
         );
       case BlockFieldKind.dropdown:
       case BlockFieldKind.op:
@@ -511,17 +535,20 @@ class _BlockField extends StatelessWidget {
           label: field.label,
           width: field.width,
           round: field.kind == BlockFieldKind.op,
+          options: field.options,
+          onChanged: onChanged,
         );
     }
   }
 }
 
 class _EditableValueChip extends StatefulWidget {
-  const _EditableValueChip({required this.initial, required this.width, required this.round});
+  const _EditableValueChip({required this.initial, required this.width, required this.round, this.onChanged});
 
   final String initial;
   final double width;
   final bool round;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<_EditableValueChip> createState() => _EditableValueChipState();
@@ -529,6 +556,14 @@ class _EditableValueChip extends StatefulWidget {
 
 class _EditableValueChipState extends State<_EditableValueChip> {
   late final TextEditingController _controller = TextEditingController(text: widget.initial);
+
+  @override
+  void didUpdateWidget(_EditableValueChip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Do NOT update _controller.text here: calling the controller's text setter
+    // fires TextEditingController.notifyListeners() which causes EditableText to
+    // call setState during the parent's build pass → "setState during build" error.
+  }
 
   @override
   void dispose() {
@@ -557,23 +592,33 @@ class _EditableValueChipState extends State<_EditableValueChip> {
           border: InputBorder.none,
           contentPadding: EdgeInsets.zero,
         ),
+        onChanged: widget.onChanged,
       ),
     );
   }
 }
 
 class _DropdownLikeChip extends StatefulWidget {
-  const _DropdownLikeChip({required this.label, this.width, this.round = false});
+  const _DropdownLikeChip({
+    required this.label,
+    this.width,
+    this.round = false,
+    this.options = const [],
+    this.onChanged,
+  });
 
   final String label;
   final double? width;
   final bool round;
+  final List<String> options;
+  final ValueChanged<String>? onChanged;
 
   @override
   State<_DropdownLikeChip> createState() => _DropdownLikeChipState();
 }
 
 class _DropdownLikeChipState extends State<_DropdownLikeChip> {
+  late String _current = widget.label;
   late final TextEditingController _controller = TextEditingController(text: widget.label);
 
   @override
@@ -582,10 +627,46 @@ class _DropdownLikeChipState extends State<_DropdownLikeChip> {
     super.dispose();
   }
 
+  Future<void> _showPopup(BuildContext ctx) async {
+    final box = ctx.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final offset = box.localToGlobal(Offset.zero);
+    final selected = await showMenu<String>(
+      context: ctx,
+      position: RelativeRect.fromLTRB(
+        offset.dx, offset.dy + box.size.height + 2,
+        offset.dx + box.size.width, offset.dy + box.size.height + 2,
+      ),
+      items: [
+        for (final opt in widget.options)
+          PopupMenuItem(
+            value: opt,
+            height: 36,
+            child: Row(
+              children: [
+                if (opt == _current)
+                  const Text('✓ ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                Text(opt, style: const TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (selected != null && selected != _current) {
+      if (!mounted) return;
+      setState(() {
+        _current = selected;
+        _controller.text = selected;
+      });
+      widget.onChanged?.call(selected);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final width = widget.width ?? math.max(28, widget.label.length * 7 + 22).toDouble();
-    return Container(
+    final width = widget.width ?? math.max(28, _current.length * 7 + 22).toDouble();
+    final hasOptions = widget.options.isNotEmpty;
+    final chip = Container(
       width: width,
       height: 22,
       padding: const EdgeInsets.only(left: 5, right: 2),
@@ -597,21 +678,36 @@ class _DropdownLikeChipState extends State<_DropdownLikeChip> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _controller,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _BlockColors.ink),
-              decoration: const InputDecoration(
-                isCollapsed: true,
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
+            child: hasOptions
+                ? Text(
+                    _current,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _BlockColors.ink),
+                  )
+                : TextField(
+                    controller: _controller,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _BlockColors.ink),
+                    decoration: const InputDecoration(
+                      isCollapsed: true,
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
           ),
           const Text('▾', style: TextStyle(fontSize: 9, color: Color(0xAA1F2430))),
         ],
       ),
+    );
+
+    if (!hasOptions) return chip;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _showPopup(context),
+      child: chip,
     );
   }
 }
@@ -648,31 +744,198 @@ class _TextValueChip extends StatelessWidget {
   }
 }
 
+// ── HTML-ported shape constants ───────────────────────────────────────────────
+
+class _ShapeConstants {
+  static const double R = 5;     // corner radius
+  static const double NX = 13;   // notch X start
+  static const double NW = 20;   // notch width
+  static const double ND = 5;    // notch depth (tab overflow below block)
+  static const double ARM = 16;  // C-block mouth left indent
+  static const double HAT_R = 14;// hat curve radius
+  static const double stroke = 1.5;
+  static const double stackH = 33;    // stack block content height
+  static const double reporterH = 25; // reporter content height
+  static const double booleanH = 25;  // boolean content height
+  static const double padX = 14;      // horizontal content padding
+  static const double footH = 13;     // C-block foot height
+  static const double minStackW = 80.0;
+  static const double minCBlockW = 120.0;
+  static const double minReporterW = 56.0;
+  static const double pad = 14;
+}
+
+// ── HTML-ported path generator ────────────────────────────────────────────────
+
+class _BlockPaths {
+  static const double _R = _ShapeConstants.R;
+  static const double _NX = _ShapeConstants.NX;
+  static const double _NW = _ShapeConstants.NW;
+  static const double _ND = _ShapeConstants.ND;
+  static const double _ARM = _ShapeConstants.ARM;
+  static const double _HAT_R = _ShapeConstants.HAT_R;
+
+  // Notch at top (groove going DOWN into block – accepts tab from block above)
+  static void _topNotch(Path p) {
+    p.lineTo(_NX, 0);
+    p.cubicTo(_NX + 2, _ND, _NX + _NW - 2, _ND, _NX + _NW, 0);
+  }
+
+  // Tab at bottom (protrudes DOWN below block – inserts into notch of block below)
+  static void _bottomTab(Path p, double H) {
+    p.lineTo(_NX + _NW, H);
+    p.cubicTo(_NX + _NW - 2, H + _ND, _NX + 2, H + _ND, _NX, H);
+  }
+
+  /// Stack block (H = body height, tab protrudes to H+ND below widget bounds).
+  static Path stack(double W, double H, {bool topNotch = true, bool bottomTab = true}) {
+    final p = Path();
+    p.moveTo(_R, 0);
+    if (topNotch) _topNotch(p);
+    p.lineTo(W - _R, 0);
+    p.arcToPoint(Offset(W, _R), radius: const Radius.circular(_R));
+    p.lineTo(W, H - _R);
+    p.arcToPoint(Offset(W - _R, H), radius: const Radius.circular(_R));
+    if (bottomTab) _bottomTab(p, H);
+    p.lineTo(_R, H);
+    p.arcToPoint(Offset(0, H - _R), radius: const Radius.circular(_R));
+    p.lineTo(0, _R);
+    p.arcToPoint(Offset(_R, 0), radius: const Radius.circular(_R));
+    p.close();
+    return p;
+  }
+
+  /// Hat block (no top notch, curved top-left, bottom tab).
+  static Path hat(double W, double H) {
+    final p = Path();
+    p.moveTo(0, _HAT_R);
+    p.cubicTo(0, 4, 6, 0, _HAT_R + 4, 0);
+    p.lineTo(W - _R, 0);
+    p.arcToPoint(Offset(W, _R), radius: const Radius.circular(_R));
+    p.lineTo(W, H - _R);
+    p.arcToPoint(Offset(W - _R, H), radius: const Radius.circular(_R));
+    _bottomTab(p, H);
+    p.lineTo(_R, H);
+    p.arcToPoint(Offset(0, H - _R), radius: const Radius.circular(_R));
+    p.lineTo(0, _HAT_R);
+    p.close();
+    return p;
+  }
+
+  /// Reporter (pill/oval).
+  static Path reporter(double W, double H) {
+    final r = H / 2;
+    return Path()
+      ..moveTo(r, 0)
+      ..lineTo(W - r, 0)
+      ..arcToPoint(Offset(W, r), radius: Radius.circular(r))
+      ..arcToPoint(Offset(W - r, H), radius: Radius.circular(r))
+      ..lineTo(r, H)
+      ..arcToPoint(Offset(0, H - r), radius: Radius.circular(r))
+      ..arcToPoint(Offset(r, 0), radius: Radius.circular(r))
+      ..close();
+  }
+
+  /// Boolean (hexagonal).
+  static Path boolean(double W, double H) {
+    final k = H / 2;
+    return Path()
+      ..moveTo(k, 0)
+      ..lineTo(W - k, 0)
+      ..lineTo(W, H / 2)
+      ..lineTo(W - k, H)
+      ..lineTo(k, H)
+      ..lineTo(0, H / 2)
+      ..close();
+  }
+
+  /// C-block (headH + innerH + footH, tab protrudes below).
+  static Path cBlock(double W, double headH, double innerH, double footH) {
+    final y1 = headH;
+    final y2 = headH + innerH;
+    final y3 = headH + innerH + footH;
+    final p = Path();
+    // top notch
+    p.moveTo(_R, 0);
+    _topNotch(p);
+    p.lineTo(W - _R, 0);
+    p.arcToPoint(Offset(W, _R), radius: const Radius.circular(_R));
+    // right side of head
+    p.lineTo(W, y1);
+    // mouth opening – notch for inner blocks' top notch
+    p.lineTo(_ARM + _NX + _NW, y1);
+    p.cubicTo(_ARM + _NX + _NW - 2, y1 + _ND, _ARM + _NX + 2, y1 + _ND, _ARM + _NX, y1);
+    p.lineTo(_ARM, y1);
+    // left wall of mouth going down
+    p.lineTo(_ARM, y2);
+    // bottom of mouth back to full width
+    p.lineTo(W, y2);
+    // foot right side
+    p.lineTo(W, y3 - _R);
+    p.arcToPoint(Offset(W - _R, y3), radius: const Radius.circular(_R));
+    // bottom tab
+    _bottomTab(p, y3);
+    p.lineTo(_R, y3);
+    p.arcToPoint(Offset(0, y3 - _R), radius: const Radius.circular(_R));
+    // left side back up
+    p.lineTo(0, _R);
+    p.arcToPoint(Offset(_R, 0), radius: const Radius.circular(_R));
+    p.close();
+    return p;
+  }
+
+}
+
+// ── Shape painter ─────────────────────────────────────────────────────────────
+
 class _BlockShapePainter extends CustomPainter {
   const _BlockShapePainter({
-    required this.shape,
     required this.color,
     required this.darkColor,
-    required this.metrics,
+    required this.shape,
+    // For stack/hat: size.height includes ND tab overflow
+    this.isHat = false,
+    this.isReporter = false,
+    this.isBoolean = false,
+    // For C-blocks
+    this.isCBlock = false,
+    this.headH = 33,
+    this.footH = 13,
   });
 
-  final BlockShape shape;
   final Color color;
   final Color darkColor;
-  final _BlockMetrics metrics;
+  final BlockShape shape;
+  final bool isHat;
+  final bool isReporter;
+  final bool isBoolean;
+  final bool isCBlock;
+  final double headH;
+  final double footH;
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.translate(metrics.padding, metrics.padding);
-    final path = switch (shape) {
-      BlockShape.stack => _BlockPaths.stack(metrics.width, metrics.height, leftTab: metrics.leftTab, rightNotch: metrics.rightNotch),
-      BlockShape.reporter => _BlockPaths.reporter(metrics.width, metrics.height),
-      BlockShape.boolean => _BlockPaths.boolean(metrics.width, metrics.height),
-      BlockShape.hat => _BlockPaths.hat(metrics),
-      BlockShape.cBlock => _BlockPaths.cBlock(metrics),
-    };
+    final W = size.width;
+    final H = size.height;
+    const nd = _ShapeConstants.ND;
+    Path path;
+    if (isCBlock) {
+      // H includes ND tab overflow at bottom
+      final innerH = math.max(1.0, H - headH - footH - nd);
+      path = _BlockPaths.cBlock(W, headH, innerH, footH);
+    } else if (isHat) {
+      // H includes ND tab at bottom; hat body = H - ND
+      path = _BlockPaths.hat(W, H - nd);
+    } else if (isReporter) {
+      path = _BlockPaths.reporter(W, H);
+    } else if (isBoolean) {
+      path = _BlockPaths.boolean(W, H);
+    } else {
+      // Stack: H includes ND tab at bottom; body = H - ND
+      path = _BlockPaths.stack(W, H - nd);
+    }
 
-    canvas.drawShadow(path, Colors.black.withOpacity(.10), 1.2, false);
+    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.12), 1.5, false);
     canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.fill);
     canvas.drawPath(
       path,
@@ -685,158 +948,12 @@ class _BlockShapePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BlockShapePainter oldDelegate) {
-    return oldDelegate.shape != shape ||
-        oldDelegate.color != color ||
-        oldDelegate.darkColor != darkColor ||
-        oldDelegate.metrics != metrics;
-  }
+  bool shouldRepaint(covariant _BlockShapePainter old) =>
+      old.color != color || old.darkColor != darkColor ||
+      old.isCBlock != isCBlock || old.isHat != isHat;
 }
 
-class _BlockPaths {
-  static Path stack(double w, double h, {bool leftTab = true, bool rightNotch = true}) {
-    const r = _ShapeConstants.r;
-    const tabD = _ShapeConstants.tabD;
-    const tabH = _ShapeConstants.tabH;
-    final ty = ((h - tabH) / 2).roundToDouble();
-    final p = Path()
-      ..moveTo(r, 0)
-      ..lineTo(w - r, 0)
-      ..arcToPoint(Offset(w, r), radius: const Radius.circular(r));
-    if (rightNotch) {
-      p
-        ..lineTo(w, ty)
-        ..relativeCubicTo(-tabD, 2, -tabD, tabH - 2, 0, tabH);
-    }
-    p
-      ..lineTo(w, h - r)
-      ..arcToPoint(Offset(w - r, h), radius: const Radius.circular(r))
-      ..lineTo(r, h)
-      ..arcToPoint(Offset(0, h - r), radius: const Radius.circular(r));
-    if (leftTab) {
-      p
-        ..lineTo(0, ty + tabH)
-        ..relativeCubicTo(-tabD, -2, -tabD, -(tabH - 2), 0, -tabH);
-    }
-    p
-      ..lineTo(0, r)
-      ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
-      ..close();
-    return p;
-  }
-
-  static Path reporter(double w, double h) {
-    final r = h / 2;
-    return Path()
-      ..moveTo(r, 0)
-      ..lineTo(w - r, 0)
-      ..arcToPoint(Offset(w - r, h), radius: Radius.circular(r))
-      ..lineTo(r, h)
-      ..arcToPoint(Offset(r, 0), radius: Radius.circular(r))
-      ..close();
-  }
-
-  static Path boolean(double w, double h) {
-    final k = h / 2;
-    return Path()
-      ..moveTo(k, 0)
-      ..lineTo(w - k, 0)
-      ..lineTo(w, h / 2)
-      ..lineTo(w - k, h)
-      ..lineTo(k, h)
-      ..lineTo(0, h / 2)
-      ..close();
-  }
-
-  static Path hat(_BlockMetrics m) {
-    const r = _ShapeConstants.r;
-    const tabD = _ShapeConstants.tabD;
-    const tabH = _ShapeConstants.tabH;
-    final lipW = m.lipWidth;
-    final w = m.width;
-    final totalH = m.height;
-    final bodyTop = m.bodyTop;
-    final lipBottom = bodyTop + m.lipHeight;
-    final mouthH = m.mouthHeight;
-    final rightNotchY = bodyTop + (m.lipHeight - tabH) / 2;
-
-    final outer = Path()
-      ..moveTo(0, bodyTop)
-      ..cubicTo(0, -4, 44, -4, 48, bodyTop)
-      ..lineTo(w - r, bodyTop)
-      ..arcToPoint(Offset(w, bodyTop + r), radius: const Radius.circular(r))
-      ..lineTo(w, rightNotchY)
-      ..relativeCubicTo(-tabD, 2, -tabD, tabH - 2, 0, tabH)
-      ..lineTo(w, totalH - r)
-      ..arcToPoint(Offset(w - r, totalH), radius: const Radius.circular(r))
-      ..lineTo(r, totalH)
-      ..arcToPoint(Offset(0, totalH - r), radius: const Radius.circular(r))
-      ..close();
-
-    final mx = 10.0;
-    final my = lipBottom;
-    final mw = lipW - mx - 4;
-    final mouth = _mouthRectPath(mx, my, mw, mouthH);
-    outer.fillType = PathFillType.evenOdd;
-    outer.addPath(mouth, Offset.zero);
-    return outer;
-  }
-
-  static Path cBlock(_BlockMetrics m) {
-    const r = _ShapeConstants.r;
-    const tabD = _ShapeConstants.tabD;
-    const tabH = _ShapeConstants.tabH;
-    final w = m.width;
-    final totalH = m.height;
-    final lipW = m.lipWidth;
-    final rightNotchY = (m.lipHeight - tabH) / 2;
-
-    final outer = Path()
-      ..moveTo(r, 0)
-      ..lineTo(w - r, 0)
-      ..arcToPoint(Offset(w, r), radius: const Radius.circular(r))
-      ..lineTo(w, rightNotchY)
-      ..relativeCubicTo(-tabD, 2, -tabD, tabH - 2, 0, tabH)
-      ..lineTo(w, totalH - r)
-      ..arcToPoint(Offset(w - r, totalH), radius: const Radius.circular(r))
-      ..lineTo(r, totalH)
-      ..arcToPoint(Offset(0, totalH - r), radius: const Radius.circular(r))
-      ..lineTo(0, rightNotchY + tabH)
-      ..relativeCubicTo(-tabD, -2, -tabD, -(tabH - 2), 0, -tabH)
-      ..lineTo(0, r)
-      ..arcToPoint(const Offset(r, 0), radius: const Radius.circular(r))
-      ..close();
-
-    final mouth1 = _mouthRectPath(12, m.lipHeight, lipW - 12 + 4, m.mouthHeight);
-    outer.fillType = PathFillType.evenOdd;
-    outer.addPath(mouth1, Offset.zero);
-    if (m.hasElse) {
-      final mouth2 = _mouthRectPath(12, m.lipHeight + m.mouthHeight + m.lipHeight, lipW - 12 + 4, m.mouthHeight);
-      outer.addPath(mouth2, Offset.zero);
-    }
-    return outer;
-  }
-
-  static Path _mouthRectPath(double mx, double my, double mw, double mh) {
-    const r = _ShapeConstants.r;
-    const tabH = _ShapeConstants.tabH;
-    final innerNotchX = mx + 12;
-    final p = Path()
-      ..moveTo(mx + r, my)
-      ..lineTo(innerNotchX, my)
-      ..relativeCubicTo(2, tabH / 2, tabH - 2, tabH / 2, tabH, 0)
-      ..lineTo(mx + mw - r, my)
-      ..arcToPoint(Offset(mx + mw, my + r), radius: const Radius.circular(r))
-      ..lineTo(mx + mw, my + mh - r)
-      ..arcToPoint(Offset(mx + mw - r, my + mh), radius: const Radius.circular(r))
-      ..lineTo(mx + r, my + mh)
-      ..arcToPoint(Offset(mx, my + mh - r), radius: const Radius.circular(r))
-      ..lineTo(mx, my + r)
-      ..arcToPoint(Offset(mx + r, my), radius: const Radius.circular(r))
-      ..close();
-    return p;
-  }
-}
+// ── Block metrics (kept for canvasWidth used in snap calculations) ─────────────
 
 class _BlockMetrics {
   const _BlockMetrics({
@@ -846,9 +963,8 @@ class _BlockMetrics {
     required this.canvasHeight,
     required this.padding,
     this.lipWidth = 0,
-    this.lipHeight = 34,
+    this.lipHeight = 33,
     this.mouthHeight = 30,
-    this.bodyTop = 12,
     this.leftTab = true,
     this.rightNotch = true,
     this.hasElse = false,
@@ -862,126 +978,73 @@ class _BlockMetrics {
   final double lipWidth;
   final double lipHeight;
   final double mouthHeight;
-  final double bodyTop;
   final bool leftTab;
   final bool rightNotch;
   final bool hasElse;
 
   static _BlockMetrics from(BlockDef block) {
+    const nd = _ShapeConstants.ND;
+    const stackH = _ShapeConstants.stackH;
+    const reporterH = _ShapeConstants.reporterH;
+    const booleanH = _ShapeConstants.booleanH;
+    const footH = _ShapeConstants.footH;
+    const padX = _ShapeConstants.padX;
+    const minStackW = _ShapeConstants.minStackW;
+    const minCBlockW = _ShapeConstants.minCBlockW;
+    const minReporterW = _ShapeConstants.minReporterW;
+    final contentW = _contentWidth(block.label, block.fields);
     switch (block.shape) {
       case BlockShape.stack:
-        final baseHeight = block.multilineBelow == null ? _ShapeConstants.stackH : _ShapeConstants.stackH + 18;
-        final contentW = _contentWidth(block.label, block.fields);
-        final secondW = block.multilineBelow == null ? 0 : _labelWidth(block.multilineBelow!);
-        final width = block.width ?? math.max(80, math.max(contentW, secondW) + _ShapeConstants.pad * 2);
-        return _BlockMetrics(
-          width: width,
-          height: baseHeight,
-          canvasWidth: width + 24,
-          canvasHeight: baseHeight + 24,
-          padding: 12,
-          leftTab: block.leftTab,
-          rightNotch: block.rightNotch,
-        );
+        final h = block.multilineBelow == null ? stackH : stackH + 18;
+        final w = block.width ?? math.max(minStackW, contentW + padX * 2);
+        return _BlockMetrics(width: w, height: h, canvasWidth: w + nd, canvasHeight: h + nd, padding: 0,
+            leftTab: block.leftTab, rightNotch: block.rightNotch);
       case BlockShape.reporter:
-        final width = block.width ?? math.max(60, _contentWidth(block.label, block.fields) + 26);
-        return _BlockMetrics(
-          width: width,
-          height: _ShapeConstants.reporterH,
-          canvasWidth: width + 16,
-          canvasHeight: _ShapeConstants.reporterH + 16,
-          padding: 8,
-        );
+        final w = block.width ?? math.max(minReporterW, contentW + 26);
+        return _BlockMetrics(width: w, height: reporterH, canvasWidth: w, canvasHeight: reporterH, padding: 0);
       case BlockShape.boolean:
-        final width = block.width ?? math.max(58, _contentWidth(block.label, block.fields) + 30);
-        return _BlockMetrics(
-          width: width,
-          height: _ShapeConstants.booleanH,
-          canvasWidth: width + 16,
-          canvasHeight: _ShapeConstants.booleanH + 16,
-          padding: 8,
-        );
+        final w = block.width ?? math.max(minReporterW, contentW + 30);
+        return _BlockMetrics(width: w, height: booleanH, canvasWidth: w, canvasHeight: booleanH, padding: 0);
       case BlockShape.hat:
-        final lipW = math.max(130, _contentWidth(block.label, block.fields) + 36).toDouble();
-        const bodyTop = 12.0;
-        const lipH = 30.0;
-        const mouthH = 30.0;
-        const bottomStrip = 10.0;
-        final width = lipW + 18;
-        final height = bodyTop + lipH + mouthH + bottomStrip;
-        return _BlockMetrics(
-          width: width,
-          height: height,
-          canvasWidth: width + 28,
-          canvasHeight: height + 28,
-          padding: 14,
-          lipWidth: lipW,
-          lipHeight: lipH,
-          mouthHeight: mouthH,
-          bodyTop: bodyTop,
-        );
+        final w = block.width ?? math.max(minStackW, contentW + padX * 2);
+        return _BlockMetrics(width: w, height: stackH, canvasWidth: w + nd, canvasHeight: stackH + nd,
+            padding: 0, lipWidth: w, lipHeight: stackH);
       case BlockShape.cBlock:
-        final mainW = _contentWidth(block.label, block.fields);
-        final elseW = block.elseRow == null ? 0 : _contentWidth(block.elseRow!.label, block.elseRow!.fields);
-        final lipW = math.max(110, math.max(mainW, elseW) + 30).toDouble();
-        const lipH = _ShapeConstants.stackH;
-        const mouthH = 30.0;
-        const bottomStrip = 12.0;
-        final hasElse = block.elseRow != null;
-        final width = lipW + 18;
-        final height = lipH + mouthH + (hasElse ? lipH + mouthH : 0) + bottomStrip;
-        return _BlockMetrics(
-          width: width,
-          height: height,
-          canvasWidth: width + 24,
-          canvasHeight: height + 24,
-          padding: 12,
-          lipWidth: lipW,
-          lipHeight: lipH,
-          mouthHeight: mouthH,
-          hasElse: hasElse,
-        );
+        final w = block.width ?? math.max(minCBlockW, contentW + padX * 2);
+        final h = stackH + 30.0 + footH;
+        return _BlockMetrics(width: w, height: h, canvasWidth: w + nd, canvasHeight: h + nd,
+            padding: 0, lipWidth: w, lipHeight: stackH, mouthHeight: 30, hasElse: block.elseRow != null);
     }
   }
 
+  /// C-block variant with a dynamic inner slot height (expands to fit blocks placed inside).
+  static _BlockMetrics fromWithInner(BlockDef block, double innerH) {
+    if (block.shape != BlockShape.cBlock) return from(block);
+    const nd = _ShapeConstants.ND;
+    const stackH = _ShapeConstants.stackH;
+    const footH = _ShapeConstants.footH;
+    const padX = _ShapeConstants.padX;
+    const minCBlockW = _ShapeConstants.minCBlockW;
+    final contentW = _contentWidth(block.label, block.fields);
+    final w = block.width ?? math.max(minCBlockW, contentW + padX * 2);
+    final h = stackH + innerH + footH;
+    return _BlockMetrics(width: w, height: h, canvasWidth: w + nd, canvasHeight: h + nd,
+        padding: 0, lipWidth: w, lipHeight: stackH, mouthHeight: innerH, hasElse: block.elseRow != null);
+  }
+
   static double _contentWidth(String label, List<BlockFieldDef> fields) {
-    final labelW = _labelWidth(label);
-    final fieldW = fields.fold<double>(0, (sum, f) => sum + f.renderWidth + 6);
-    return labelW + fieldW;
+    return _labelWidth(label) + fields.fold<double>(0, (s, f) => s + f.renderWidth + 6);
   }
 
-  static double _labelWidth(String text) => (text.length * 7.5).ceilToDouble();
+  static double _labelWidth(String text) => (text.length * 9.0).ceilToDouble();
 
   @override
-  bool operator ==(Object other) {
-    return other is _BlockMetrics &&
-        other.width == width &&
-        other.height == height &&
-        other.canvasWidth == canvasWidth &&
-        other.canvasHeight == canvasHeight &&
-        other.padding == padding &&
-        other.lipWidth == lipWidth &&
-        other.lipHeight == lipHeight &&
-        other.mouthHeight == mouthHeight &&
-        other.bodyTop == bodyTop &&
-        other.leftTab == leftTab &&
-        other.rightNotch == rightNotch &&
-        other.hasElse == hasElse;
-  }
+  bool operator ==(Object other) =>
+      other is _BlockMetrics && other.width == width && other.height == height &&
+      other.canvasWidth == canvasWidth && other.lipHeight == lipHeight;
 
   @override
-  int get hashCode => Object.hash(width, height, canvasWidth, canvasHeight, padding, lipWidth, lipHeight, mouthHeight, bodyTop, leftTab, rightNotch, hasElse);
-}
-
-class _ShapeConstants {
-  static const double tabD = 6;
-  static const double tabH = 18;
-  static const double r = 4;
-  static const double stroke = 1.5;
-  static const double pad = 14;
-  static const double stackH = 34;
-  static const double reporterH = 24;
-  static const double booleanH = 26;
+  int get hashCode => Object.hash(width, height, canvasWidth, canvasHeight);
 }
 
 enum BlockShape { stack, reporter, boolean, hat, cBlock }
@@ -1049,14 +1112,17 @@ class BlockFieldDef {
     this.label = '',
     this.value,
     this.width,
+    this.options = const [],
   });
 
   final BlockFieldKind kind;
   final String label;
   final Object? value;
   final double? width;
+  final List<String> options;
 
-  const BlockFieldDef.dropdown(String label, {double? width}) : this._(kind: BlockFieldKind.dropdown, label: label, width: width);
+  const BlockFieldDef.dropdown(String label, {double? width, List<String> options = const []})
+      : this._(kind: BlockFieldKind.dropdown, label: label, width: width, options: options);
   const BlockFieldDef.number(Object value, {double? width}) : this._(kind: BlockFieldKind.number, value: value, width: width);
   const BlockFieldDef.text({double? width}) : this._(kind: BlockFieldKind.text, width: width);
   const BlockFieldDef.slot({double? width}) : this._(kind: BlockFieldKind.slot, width: width);

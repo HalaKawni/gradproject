@@ -31,6 +31,174 @@
 
   <title>client</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- TensorFlow.js + MoveNet pose detection -->
+  <!-- Full tfjs bundle needed: pose-detection uses tfjs-converter internally -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.2.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.0.0/dist/pose-detection.js"></script>
+  <script>
+    window._poseDetector   = null;
+    window._poseLoopActive = false;
+    window._lastKeypoints  = [];
+    window._poseVideoRef   = null;
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+    function drawSkeleton(ctx, kps, w, h) {
+      const edges = [[0,1],[0,2],[1,3],[2,4],[5,6],[5,7],[6,8],[7,9],[8,10],
+                     [5,11],[6,12],[11,12],[11,13],[12,14],[13,15],[14,16]];
+      ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 2;
+      for (const [a,b] of edges) {
+        if (kps[a] && kps[b] && kps[a].score > 0.25 && kps[b].score > 0.25) {
+          ctx.beginPath(); ctx.moveTo(kps[a].x, kps[a].y);
+          ctx.lineTo(kps[b].x, kps[b].y); ctx.stroke();
+        }
+      }
+      ctx.fillStyle = '#00BFFF';
+      for (const kp of kps) {
+        if (kp.score > 0.25) {
+          ctx.beginPath(); ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI); ctx.fill();
+        }
+      }
+    }
+
+    function flattenKps(kps) {
+      const w = window._poseVideoRef ? (window._poseVideoRef.videoWidth  || 640) : 640;
+      const h = window._poseVideoRef ? (window._poseVideoRef.videoHeight || 480) : 480;
+      const flat = [];
+      for (const kp of kps) { flat.push(kp.x / w, kp.y / h); }
+      return flat;
+    }
+
+    // ── Pose detector init ───────────────────────────────────────────────────
+    window.initPoseDetector = async function () {
+      if (window._poseDetector) return;
+      try {
+        await tf.setBackend('webgl');
+        await tf.ready();
+        const model = poseDetection.SupportedModels.MoveNet;
+        window._poseDetector = await poseDetection.createDetector(model, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        });
+      } catch (e) { console.warn('Pose detector init failed:', e); }
+    };
+
+    // ── Recording pose draw loop ─────────────────────────────────────────────
+    window.startPoseDraw = function (videoEl, canvasEl) {
+      window._poseVideoRef   = videoEl;
+      window._poseLoopActive = true;
+      // Init detector here so the Promise never crosses the JS/Dart boundary.
+      if (!window._poseDetector) window.initPoseDetector();
+      (async function loop() {
+        if (!window._poseLoopActive) return;
+        if (window._poseDetector && videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+          try {
+            canvasEl.width  = videoEl.videoWidth  || videoEl.clientWidth;
+            canvasEl.height = videoEl.videoHeight || videoEl.clientHeight;
+            const poses = await window._poseDetector.estimatePoses(videoEl);
+            const ctx = canvasEl.getContext('2d');
+            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+            if (poses.length > 0) {
+              window._lastKeypoints = poses[0].keypoints;
+              drawSkeleton(ctx, window._lastKeypoints, canvasEl.width, canvasEl.height);
+              window._lastPrediction = window.predictCurrentPose();
+            }
+          } catch (_) {}
+        }
+        if (window._poseLoopActive) requestAnimationFrame(loop);
+      })();
+    };
+    window.stopPoseDraw = function () { window._poseLoopActive = false; };
+
+    // ── Sample storage (KNN training data) ──────────────────────────────────
+    window._poseSamples = {}; // classIdx -> [flatKps, ...]
+
+    window.addPoseSample = function (classIdx) {
+      if (!window._lastKeypoints || window._lastKeypoints.length === 0) return;
+      if (!window._poseSamples[classIdx]) window._poseSamples[classIdx] = [];
+      window._poseSamples[classIdx].push(flattenKps(window._lastKeypoints));
+    };
+
+    window.clearPoseSamples = function (classIdx) {
+      delete window._poseSamples[classIdx];
+    };
+
+    // ── KNN training (fast — just stores data, simulates progress) ───────────
+    window._trainingProgress = 0;
+    window._knnData = null;
+    window._knnNumClasses = 0;
+
+    window.trainPoseModel = async function (numClasses) {
+      window._trainingProgress = 0;
+      window._knnNumClasses    = numClasses;
+      window._knnData          = {};
+      for (let i = 0; i < numClasses; i++) {
+        window._knnData[i] = (window._poseSamples[i] || []).slice();
+      }
+      // Animate progress over ~1.5s
+      for (let i = 1; i <= 50; i++) {
+        await new Promise(r => setTimeout(r, 30));
+        window._trainingProgress = i / 50;
+      }
+    };
+
+    window.getTrainingProgress = function () { return window._trainingProgress; };
+
+    // ── KNN prediction ───────────────────────────────────────────────────────
+    window._lastPrediction = null;
+
+    window.predictCurrentPose = function () {
+      if (!window._knnData || !window._lastKeypoints || window._lastKeypoints.length < 5) return null;
+      const n = window._knnNumClasses;
+      const query = flattenKps(window._lastKeypoints);
+      const k = 5;
+      const all = [];
+      for (let i = 0; i < n; i++) {
+        for (const sample of (window._knnData[i] || [])) {
+          let d = 0;
+          for (let j = 0; j < query.length; j++) d += (query[j] - sample[j]) ** 2;
+          all.push({ label: i, dist: Math.sqrt(d) });
+        }
+      }
+      if (all.length === 0) return null;
+      all.sort((a, b) => a.dist - b.dist);
+      const votes = new Array(n).fill(0);
+      for (let i = 0; i < Math.min(k, all.length); i++) votes[all[i].label]++;
+      const total = votes.reduce((a, b) => a + b, 0);
+      return total > 0 ? votes.map(v => v / total) : null;
+    };
+
+    // ── Preview camera (separate stream for PREVIEW AND SAVE panel) ──────────
+    window._previewLoopActive = false;
+
+    window.startPreviewPose = function (videoEl, canvasEl) {
+      window._previewLoopActive = true;
+      if (!window._poseDetector) window.initPoseDetector();
+      (async function loop() {
+        if (!window._previewLoopActive) return;
+        if (window._poseDetector && videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+          try {
+            canvasEl.width  = videoEl.videoWidth  || videoEl.clientWidth;
+            canvasEl.height = videoEl.videoHeight || videoEl.clientHeight;
+            const poses = await window._poseDetector.estimatePoses(videoEl);
+            const ctx = canvasEl.getContext('2d');
+            ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+            if (poses.length > 0) {
+              window._lastKeypoints = poses[0].keypoints;
+              drawSkeleton(ctx, window._lastKeypoints, canvasEl.width, canvasEl.height);
+              window._lastPrediction = window.predictCurrentPose();
+            }
+          } catch (_) {}
+        }
+        if (window._previewLoopActive) requestAnimationFrame(loop);
+      })();
+    };
+    window.stopPreviewPose = function () { window._previewLoopActive = false; };
+
+    window.getLastPrediction = function () {
+      if (!window._lastPrediction) return null;
+      return JSON.stringify(Array.from(window._lastPrediction));
+    };
+  </script>
 </head>
 <body>
   <!--
