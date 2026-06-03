@@ -209,12 +209,7 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text('nameofweb',
-              style: GoogleFonts.montserrat(
-                color:      const Color.fromARGB(255, 202, 97, 128),
-                fontSize:   18,
-                fontWeight: FontWeight.bold,
-              )),
+          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
           Row(children: [
             GestureDetector(
               onTap: () => setState(() => _showProfileMenu = !_showProfileMenu),

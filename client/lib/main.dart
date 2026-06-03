@@ -67,16 +67,7 @@ class WelcomePage extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         // Logo
-        Text(
-          'nameofweb',
-          style: const TextStyle(
-            fontFamily: 'Arial',
-            color: Color.fromARGB(255,220, 202, 233),
-            //color: Color.fromARGB(255,219, 161, 157),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
 
         // Nav links
         Row(

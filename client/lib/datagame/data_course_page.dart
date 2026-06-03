@@ -175,16 +175,7 @@ class _DataCoursePageState extends State<DataCoursePage> {
         children: [
           Row(
             children: [
-              Container(
-                width: 36, height: 36,
-                decoration: const BoxDecoration(color: Color(0xFF8B5E3C), shape: BoxShape.circle),
-                child: const Icon(Icons.pets, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 10),
-              Text('name of web',
-                  style: GoogleFonts.montserrat(
-                      color: const Color.fromARGB(255, 202, 97, 128), fontSize: 16,
-                      fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+              Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
               const SizedBox(width: 24),
               Text('data.course_title'.tr(),
                   style: GoogleFonts.montserrat(
@@ -192,15 +183,9 @@ class _DataCoursePageState extends State<DataCoursePage> {
             ],
           ),
           Row(children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                  color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 2)),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
-            ),
+            Image.asset('assets/images/sprites/avatar00.png', width: 36, height: 36),
             const SizedBox(width: 16),
-            const Icon(Icons.menu, color: Colors.white, size: 24),
+            Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
           ]),
         ],
       ),

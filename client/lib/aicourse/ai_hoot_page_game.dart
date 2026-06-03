@@ -1418,38 +1418,7 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18),
       child: Row(
         children: [
-          Container(
-            width: 52,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFA36A35),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFF140B07), width: 2),
-            ),
-            alignment: Alignment.center,
-            child: const Text('', style: TextStyle(fontSize: 27)),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'CODE',
-            style: TextStyle(
-              color: Color(0xFFFFC12F),
-              fontWeight: FontWeight.w900,
-              fontSize: 34,
-              letterSpacing: 1.3,
-              height: 1,
-            ),
-          ),
-          const Text(
-            'MONKEY',
-            style: TextStyle(
-              color: Color(0xFFC7925E),
-              fontWeight: FontWeight.w900,
-              fontSize: 34,
-              letterSpacing: 1.3,
-              height: 1,
-            ),
-          ),
+          Image.asset('assets/images/sprites/logocodey.png', height: 44, fit: BoxFit.contain),
           const SizedBox(width: 24),
           Text(
             'AI IS A HOOT: EXERCISE #$exerciseNumber',

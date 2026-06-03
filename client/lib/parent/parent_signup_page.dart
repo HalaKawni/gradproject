@@ -299,8 +299,7 @@ class _LinkChildPageState extends State<LinkChildPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('nameofweb',
-              style: TextStyle(color: Color.fromARGB(255, 220, 202, 233), fontSize: 18, fontWeight: FontWeight.bold)),
+          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
           Row(children: [
             _HoverNavButton(label: 'nav.login'.tr(), onPressed: () => Navigator.pop(context)),
           ]),

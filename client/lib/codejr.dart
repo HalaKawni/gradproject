@@ -36,14 +36,7 @@ class CodemonkeyJrPage extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Text(
-              'nameofweb',
-              style: TextStyle(
-                color: Color.fromARGB(255, 220, 202, 233),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
           ),
           Row(
             children: [
@@ -590,13 +583,7 @@ Widget _buildFoundationsSection() {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            '🐒 nameofweb',
-            style: GoogleFonts.pacifico(
-              color: const Color(0xFFF5C518),
-              fontSize: 16,
-            ),
-          ),
+          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
           Row(
             children: ['Privacy Policy', 'Terms of Use', 'Contact Us']
                 .map((l) => Padding(

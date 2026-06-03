@@ -191,15 +191,9 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
                   color: const Color.fromARGB(255, 202, 97, 128),
                   fontSize: 18, fontWeight: FontWeight.bold)),
           Row(children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                  color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 2)),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
-            ),
+            Image.asset('assets/images/sprites/avatar00.png', width: 36, height: 36),
             const SizedBox(width: 16),
-            const Icon(Icons.menu, color: Colors.white, size: 24),
+            Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
           ]),
         ],
       ),
