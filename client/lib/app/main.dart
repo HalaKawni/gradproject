@@ -102,15 +102,10 @@ class WelcomePage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Logo
-          Text(
-            'nameofweb',
-            style: const TextStyle(
-              fontFamily: 'Arial',
-              color: Color.fromARGB(255, 220, 202, 233),
-              //color: Color.fromARGB(255,219, 161, 157),
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Image.asset(
+            'assets/images/sprites/logocodey.png',
+            height: 40,
+            fit: BoxFit.contain,
           ),
 
           // Nav links
@@ -371,7 +366,7 @@ class WelcomePage extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'CODING FOR KIDS',
+                    'home.title'.tr(),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.amaticSc(
                       //color: const Color.fromARGB(255, 153, 206, 138),
@@ -389,7 +384,7 @@ class WelcomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'INTRODUCING PROGRAMMING GAMES FOR THE NEXT GENERATION',
+                    'home.subtitle'.tr(),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.nunito(
                       color: Colors.white70,
@@ -431,7 +426,7 @@ class WelcomePage extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          'START FOR FREE',
+                          'home.start_for_free'.tr(),
                           style: GoogleFonts.montserrat(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
@@ -913,12 +908,17 @@ class _HoverButton extends StatefulWidget {
 class _HoverButtonState extends State<_HoverButton> {
   bool _hovered = false;
 
+  void _setHovered(bool value) {
+    if (!mounted) return;
+    setState(() => _hovered = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     final isYellow = widget.filled || _hovered;
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
       child: GestureDetector(
         onTap: widget.onPressed,
         child: AnimatedContainer(
@@ -957,6 +957,11 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
   String _selected = '🇺🇸 EN';
   bool _hovered = false;
 
+  void _setHovered(bool value) {
+    if (!mounted) return;
+    setState(() => _hovered = value);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -966,8 +971,8 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
       child: PopupMenuButton<String>(
         color: const Color(0xFF2A1505),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

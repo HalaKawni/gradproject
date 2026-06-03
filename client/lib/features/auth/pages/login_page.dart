@@ -674,14 +674,7 @@ class _LoginPageState extends State<LoginPage>
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: const Text(
-              'nameofweb',
-              style: TextStyle(
-                color: Color.fromARGB(255, 220, 202, 233),
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            child: Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
           ),
           Row(
             children: [

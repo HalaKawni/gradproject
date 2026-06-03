@@ -416,27 +416,11 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
       ),
       child: Row(
         children: [
-          Container(
-            width: 44, height: 44,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft, end: Alignment.bottomRight,
-                colors: [_WSColors.sun, _WSColors.coral],
-              ),
-              boxShadow: const [BoxShadow(color: _WSColors.coralDeep, offset: Offset(0, 3))],
-            ),
-            child: const Icon(Icons.pets, color: Colors.white, size: 26),
-          ),
-          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('name of web',
-                  style: GoogleFonts.montserrat(
-                      fontSize: 20, fontWeight: FontWeight.w900,
-                      color: _WSColors.sun, letterSpacing: 0.5, height: 1)),
+              Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
               Text('WORD SEARCH',
                   style: GoogleFonts.nunito(
                       fontSize: 10, fontWeight: FontWeight.w800,

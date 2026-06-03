@@ -38,26 +38,28 @@ enum _DiscoverContentTab { challenges, assets }
 
 class _DashboardPageState extends State<DashboardPage> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  _DashboardSection _activeSection = _DashboardSection.courses;
+  _DiscoverContentTab _discoverContentTab = _DiscoverContentTab.challenges;
+  String _selectedAvatarPath = 'assets/images/sprites/avatar00.png';
   bool _showFilterExpanded = false;
   bool _showLevelError = false;
   bool _showCategoryError = false;
   bool _showTopicError = false;
-  String _activeTab = 'Filter'; // internal key, not displayed directly
-  _DashboardSection _activeSection = _DashboardSection.courses;
-  _DiscoverContentTab _discoverContentTab = _DiscoverContentTab.challenges;
-  bool _isLoadingPublicCourses = false;
-  List<_CourseData> _publicCourses = const [];
-  bool _isLoadingPublishedGames = false;
-  String? _publishedGamesErrorMessage;
-  List<SavedBuilderProject> _publishedGames = const [];
-  bool _isLoadingPublishedAssets = false;
-  String? _publishedAssetsErrorMessage;
-  List<_PublishedBuilderAsset> _publishedAssets = const [];
+  String _activeTab = 'Filter';
+
   Future<List<Map<String, dynamic>>>? _coursesFuture;
   String? _linkCode;
   bool _linkCodeLoading = false;
   String? _linkCodeError;
   Map<String, dynamic>? _myStats;
+  List<_CourseData> _publicCourses = const [];
+  bool _isLoadingPublicCourses = false;
+  List<SavedBuilderProject> _publishedGames = const [];
+  bool _isLoadingPublishedGames = false;
+  String? _publishedGamesErrorMessage;
+  List<_PublishedBuilderAsset> _publishedAssets = const [];
+  bool _isLoadingPublishedAssets = false;
+  String? _publishedAssetsErrorMessage;
 
   @override
   void initState() {
@@ -79,6 +81,17 @@ class _DashboardPageState extends State<DashboardPage> {
     if (mounted) {
       setState(() => _myStats = stats);
     }
+  }
+
+  Widget _buildAvatarWidget({double size = 80}) {
+    return _AvatarWidget(
+      avatarPath: _selectedAvatarPath,
+      size: size,
+      onSelect: (path) {
+        if (!mounted) return;
+        setState(() => _selectedAvatarPath = path);
+      },
+    );
   }
 
   Future<void> _loadPublicCourses() async {
@@ -255,13 +268,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF0F0ED),
-      body: Row(
+      body: Column(
         children: [
-          _buildSidebar(),
+          _buildTopNavbar(),
           Expanded(
-            child: Column(
+            child: Row(
               children: [
-                _buildTopNavbar(),
+                _buildSidebar(),
                 Expanded(child: content),
               ],
             ),
@@ -281,31 +294,16 @@ class _DashboardPageState extends State<DashboardPage> {
         children: [
           GestureDetector(
             onTap: () => _scaffoldKey.currentState?.openDrawer(),
-            child: const Icon(Icons.menu, color: Colors.white, size: 24),
+            child: Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
           ),
           const SizedBox(width: 12),
-          Flexible(
-            child: Text(
-              'nameofweb',
-              style: GoogleFonts.montserrat(
-                color: const Color.fromARGB(255, 202, 97, 128),
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+          Image.asset(
+            'assets/images/sprites/logocodey.png',
+            height: 32,
+            fit: BoxFit.contain,
           ),
           const Spacer(),
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4A7DBF),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white24, width: 2),
-            ),
-            child: const Icon(Icons.person, color: Colors.white, size: 18),
-          ),
+          _buildAvatarWidget(size: 32),
         ],
       ),
     );
@@ -342,6 +340,24 @@ class _DashboardPageState extends State<DashboardPage> {
             }),
           ),
           const Spacer(),
+          // ── STREAK ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: [
+                const Text('🔥', style: TextStyle(fontSize: 18)),
+                const SizedBox(width: 8),
+                Text(
+                  '${(_myStats?['streak'] as int?) ?? 0} Day Streak',
+                  style: GoogleFonts.nunito(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
           _SidebarItem(
             label: 'dashboard.help_center'.tr(),
             isActive: false,
@@ -383,28 +399,16 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            'nameofweb',
-            style: GoogleFonts.montserrat(
-              color: const Color.fromARGB(255, 202, 97, 128),
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+          Image.asset(
+            'assets/images/sprites/logocodey.png',
+            height: 44,
+            fit: BoxFit.contain,
           ),
           Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4A7DBF),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 2),
-                ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
-              ),
+              _buildAvatarWidget(size: 36),
               const SizedBox(width: 16),
-              const Icon(Icons.menu, color: Colors.white, size: 24),
+              Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
             ],
           ),
         ],
@@ -413,221 +417,197 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildHeroBanner() {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: SizedBox(
-        height: 224,
-        child: Stack(
-          fit: StackFit.expand,
+    final isMobile = Responsive.isMobile(context);
+    if (isMobile) {
+      return Container(
+        color: const Color.fromARGB(255, 254, 253, 153),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
           children: [
-            // ── FULL IMAGE — show RIGHT half ──
-            Image.asset(
-              'assets/images/hot_air_baloon.png',
-              fit: BoxFit.cover,
-              width: double.infinity,
-              alignment: Alignment.bottomLeft, // ← shows right half
-            ),
-
-            // ── DARK OVERLAY on image ──
-            Container(color: Colors.black.withOpacity(0.25)),
-
-            // ── YELLOW LEFT with angled cut ──
-            ClipPath(
-              clipper: _AngledClipper(),
-              child: Container(
-                color: const Color.fromARGB(255, 254, 253, 153),
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4A7DBF),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                      ),
-                      child: const Icon(
-                        Icons.person,
-                        color: Colors.white,
-                        size: 44,
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'dashboard.welcome'.tr(),
-                          style: GoogleFonts.nunito(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF3A2A00),
-                          ),
-                        ),
-                        Text(
-                          '${widget.username}!',
-                          style: GoogleFonts.nunito(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF3A2A00),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── RIGHT CONTENT sits on top of image ──
-            Positioned(
-              left: MediaQuery.of(context).size.width * 0.40,
-              right: 24,
-              top: 0,
-              bottom: 0,
-              child: Row(
+            _buildAvatarWidget(size: 52),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Progress circle
-                  FutureBuilder<Map<String, dynamic>>(
-                    future: GameApiService.getProgress('codemonkey-jr'),
-                    builder: (context, snapshot) {
-                      final data = snapshot.data;
-                      final completed = data != null
-                          ? (data['highestLevelReached'] ?? 0) as int
-                          : 0;
-                      final total = 15; // total levels
-                      final percent = (completed / total).clamp(0.0, 1.0);
-                      final percentText = '${(percent * 100).round()}%';
-
-                      return SizedBox(
-                        width: 90,
-                        height: 90,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 90,
-                              height: 90,
-                              child: CircularProgressIndicator(
-                                value: percent,
-                                strokeWidth: 8,
-                                backgroundColor: Colors.white.withOpacity(0.3),
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF4DD0E1),
-                                ),
-                              ),
-                            ),
-                            Text(
-                              percentText,
-                              style: GoogleFonts.nunito(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 20),
-
-                  // Course info
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'dashboard.current_course'.tr(),
-                          style: GoogleFonts.nunito(
-                            fontSize: 12,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          'dashboard.codemonkey_jr'.tr(),
-                          style: GoogleFonts.nunito(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Text(
-                          'dashboard.sequencing_loops'.tr(),
-                          style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            color: Colors.white70,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.emoji_events,
-                              color: Color(0xFFFFD700),
-                              size: 16,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'dashboard.achievements'.tr(),
-                              style: GoogleFonts.nunito(
-                                fontSize: 12,
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                  Text(
+                    'dashboard.welcome'.tr(),
+                    style: GoogleFonts.nunito(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3A2A00),
                     ),
                   ),
-
-                  // Continue coding button
-                  ElevatedButton.icon(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const WorldMapPage()),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 254, 253, 153),
-                      foregroundColor: const Color(0xFF3A2A00),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    icon: const Icon(Icons.play_circle_fill, size: 22),
-                    label: Text(
-                      'dashboard.continue_coding'.tr(),
-                      style: GoogleFonts.montserrat(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        letterSpacing: 0.5,
-                      ),
+                  Text(
+                    '${widget.username}!',
+                    style: GoogleFonts.nunito(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF3A2A00),
                     ),
                   ),
                 ],
               ),
             ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WorldMapPage()),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 252, 183, 199),
+                foregroundColor: const Color(0xFF3A2A00),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              icon: const Icon(Icons.play_circle_fill, size: 18),
+              label: Text(
+                'dashboard.continue_coding'.tr(),
+                style: GoogleFonts.montserrat(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+            ),
           ],
         ),
+      );
+    }
+
+    return Container(
+      height: 170,
+      color: const Color.fromARGB(255, 254, 253, 153),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        children: [
+          _buildAvatarWidget(size: 80),
+          const SizedBox(width: 20),
+          SizedBox(
+            width: 220,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'dashboard.welcome'.tr(),
+                  style: GoogleFonts.nunito(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF3A2A00),
+                  ),
+                ),
+                Text(
+                  '${widget.username}!',
+                  style: GoogleFonts.nunito(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF3A2A00),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 32),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'dashboard.current_course'.tr(),
+                  style: GoogleFonts.nunito(
+                    fontSize: 12,
+                    color: const Color(0xFF4A7DBF),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'dashboard.codemonkey_jr'.tr(),
+                  style: GoogleFonts.nunito(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: const Color(0xFF3A2A00),
+                  ),
+                ),
+                Text(
+                  'dashboard.sequencing_loops'.tr(),
+                  style: GoogleFonts.nunito(
+                    fontSize: 14,
+                    color: const Color(0xFF5B5B5B),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.emoji_events,
+                      color: Color(0xFFFFB000),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'dashboard.achievements'.tr(),
+                      style: GoogleFonts.nunito(
+                        fontSize: 12,
+                        color: const Color(0xFF3A2A00),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WorldMapPage()),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color.fromARGB(255, 252, 183, 199),
+              foregroundColor: const Color(0xFF3A2A00),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(30),
+              ),
+            ),
+            icon: const Icon(Icons.play_circle_fill, size: 22),
+            label: Text(
+              'dashboard.continue_coding'.tr(),
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStreakBanner() {
+    final streak = (_myStats?['streak'] as num?)?.toInt() ?? 0;
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFFFFF4C7),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.local_fire_department, color: Color(0xFFFF8A00)),
+          const SizedBox(width: 8),
+          Text(
+            '$streak Day Streak',
+            style: GoogleFonts.nunito(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF3A2A00),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -739,73 +719,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildStreakBanner() {
-    final s      = _myStats ?? {};
-    final streak = s['streak'] as int? ?? 0;
-    final last7  = (s['last7Days'] as List?)?.map((v) => v as bool).toList()
-        ?? List.filled(7, false);
-    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFFF7A00), Color(0xFFFFB347)],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-      child: Row(
-        children: [
-          const Text('🔥', style: TextStyle(fontSize: 22)),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                streak == 0 ? 'Start your streak today!' : '$streak Day Streak!',
-                style: GoogleFonts.nunito(
-                    fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
-              ),
-              Text(
-                streak == 0 ? 'Play a course to begin' : 'Keep coding every day!',
-                style: GoogleFonts.nunito(fontSize: 11, color: Colors.white70),
-              ),
-            ],
-          ),
-          const Spacer(),
-          // 7-day activity dots
-          Row(
-            children: List.generate(7, (i) {
-              final active = i < last7.length && last7[i];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 22,
-                    height: 22,
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    decoration: BoxDecoration(
-                      color: active ? Colors.white : Colors.white.withOpacity(0.25),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 1.5),
-                    ),
-                    child: active
-                        ? const Icon(Icons.check, size: 13, color: Color(0xFFFF7A00))
-                        : null,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(dayLabels[i],
-                      style: GoogleFonts.nunito(fontSize: 9, color: Colors.white70)),
-                ],
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
 
   static const _scoreGameNames = {
     'codemonkey-jr': 'CodeMonkey Jr.',
@@ -3260,6 +3173,243 @@ class _CreationCardState extends State<_CreationCard> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── AVATAR WIDGET ──
+class _AvatarWidget extends StatefulWidget {
+  final String avatarPath;
+  final double size;
+  final ValueChanged<String> onSelect;
+
+  const _AvatarWidget({
+    required this.avatarPath,
+    required this.size,
+    required this.onSelect,
+  });
+
+  @override
+  State<_AvatarWidget> createState() => _AvatarWidgetState();
+}
+
+class _AvatarWidgetState extends State<_AvatarWidget> {
+  bool _hovered = false;
+
+  void _showAvatarDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => _AvatarSelectionDialog(
+        currentAvatar: widget.avatarPath,
+        onSelect: widget.onSelect,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: _showAvatarDialog,
+        child: SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: Stack(
+            children: [
+              ClipOval(
+                child: Image.asset(
+                  widget.avatarPath,
+                  width: widget.size,
+                  height: widget.size,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              if (_hovered)
+                ClipOval(
+                  child: Image.asset(
+                    'assets/images/sprites/avatar_change.png',
+                    width: widget.size,
+                    height: widget.size,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── AVATAR SELECTION DIALOG ──
+class _AvatarSelectionDialog extends StatefulWidget {
+  final String currentAvatar;
+  final ValueChanged<String> onSelect;
+
+  const _AvatarSelectionDialog({
+    required this.currentAvatar,
+    required this.onSelect,
+  });
+
+  @override
+  State<_AvatarSelectionDialog> createState() => _AvatarSelectionDialogState();
+}
+
+class _AvatarSelectionDialogState extends State<_AvatarSelectionDialog> {
+  late String _selected;
+
+  static const List<String> _avatars = [
+    'assets/images/sprites/avatar1.png',
+    'assets/images/sprites/avatar2.png',
+    'assets/images/sprites/avatar3.png',
+    'assets/images/sprites/avatar4.png',
+    'assets/images/sprites/avatar5.png',
+    'assets/images/sprites/avatar6.png',
+    'assets/images/sprites/avatar7.png',
+    'assets/images/sprites/avatar8.png',
+    'assets/images/sprites/avatar9.png',
+    'assets/images/sprites/avatar10.png',
+    'assets/images/sprites/avatar11.png',
+    'assets/images/sprites/avatar12.png',
+    'assets/images/sprites/avatar13.png',
+    'assets/images/sprites/avatar14.png',
+    'assets/images/sprites/avatar15.png',
+    'assets/images/sprites/avatar16.png',
+    'assets/images/sprites/avatar17.png',
+    'assets/images/sprites/avatar18.png',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.currentAvatar;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: SizedBox(
+        width: 520,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'CHANGE AVATAR',
+                    style: GoogleFonts.montserrat(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF4CAF50),
+                      letterSpacing: 1,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: const Icon(Icons.close, color: Color(0xFF888888)),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Color(0xFF4CAF50), thickness: 2),
+            // Body
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Current avatar preview
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF8B6914), width: 3),
+                      color: const Color(0xFF8B6914),
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: ClipOval(
+                      child: Image.asset(_selected, fit: BoxFit.cover),
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  // Scrollable grid of avatars
+                  Expanded(
+                    child: SizedBox(
+                      height: 240,
+                      child: GridView.count(
+                        crossAxisCount: 5,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        children: _avatars.map((path) {
+                          final isSelected = path == _selected;
+                          return GestureDetector(
+                            onTap: () => setState(() => _selected = path),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: isSelected
+                                    ? Border.all(color: const Color(0xFF4A7DBF), width: 3)
+                                    : Border.all(color: Colors.transparent, width: 3),
+                              ),
+                              child: ClipOval(
+                                child: Image.asset(path, fit: BoxFit.cover),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Footer
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF555555),
+                      side: const BorderSide(color: Color(0xFFBBBBBB)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text('CANCEL',
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () {
+                      widget.onSelect(_selected);
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text('SAVE',
+                        style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

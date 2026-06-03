@@ -213,38 +213,23 @@ class _DataPlayPageState extends State<DataPlayPage> {
 
   Widget _buildNavbar(int lessonNumber, String lessonTitle) {
     return Container(
-      color: const Color(0xFF2D1B0A),
+      color: const Color(0xFFFCB7C7),
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(children: [
-            Container(
-              width: 38, height: 38,
-              decoration: const BoxDecoration(color: Color(0xFF8B5E3C), shape: BoxShape.circle),
-              child: const Icon(Icons.pets, color: Colors.white, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Text('CODEMONKEY',
-                style: GoogleFonts.montserrat(
-                    color: const Color(0xFFF5A623), fontSize: 18,
-                    fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
             const SizedBox(width: 24),
             Text('DATA IS EVERYWHERE: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
                 style: GoogleFonts.montserrat(
                     color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
           ]),
           Row(children: [
-            Container(
-              width: 36, height: 36,
-              decoration: BoxDecoration(
-                  color: const Color(0xFF4A7DBF), shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 2)),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
-            ),
+            Image.asset('assets/images/sprites/avatar00.png', width: 36, height: 36),
             const SizedBox(width: 16),
-            const Icon(Icons.menu, color: Colors.white, size: 24),
+            Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
           ]),
         ],
       ),
