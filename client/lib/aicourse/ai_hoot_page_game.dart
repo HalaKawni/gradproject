@@ -35,6 +35,29 @@ class CodeMonkeyScratchAssets {
 
 const String _kGameId = 'ai-hoot';
 
+const List<({String name, String asset})> _kBackgrounds = [
+  (name: 'starry_night', asset: 'assets/images/starry_night.png'),
+  (name: 'jungle',       asset: 'assets/images/sprites/jungle.png'),
+  (name: 'jungle_night', asset: 'assets/images/sprites/jungle_night.png'),
+  (name: 'ocean_night',  asset: 'assets/images/sprites/ocean_night.png'),
+  (name: 'bricks',       asset: 'assets/images/sprites/bricks.png'),
+  (name: 'bricks_2',     asset: 'assets/images/sprites/bricks_2.png'),
+  (name: 'grass',        asset: 'assets/images/sprites/grass.png'),
+  (name: 'grass_2',      asset: 'assets/images/sprites/grass_2.png'),
+  (name: 'road',         asset: 'assets/images/sprites/road.png'),
+  (name: 'clouds_bright',asset: 'assets/images/sprites/clouds_bright.png'),
+  (name: 'bubbles',      asset: 'assets/images/sprites/bubbles.png'),
+  (name: 'winter',       asset: 'assets/images/sprites/winter.png'),
+  (name: 'underground',  asset: 'assets/images/sprites/underground.png'),
+  (name: 'sunny',        asset: 'assets/images/sprites/sunny.png'),
+  (name: 'nature',       asset: 'assets/images/sprites/nature.png'),
+  (name: 'soccer',       asset: 'assets/images/sprites/soccer.png'),
+  (name: 'beach',        asset: 'assets/images/sprites/beach.png'),
+  (name: 'room',         asset: 'assets/images/sprites/room.png'),
+  (name: 'ocean',        asset: 'assets/images/sprites/ocean.png'),
+  (name: 'bright_stars', asset: 'assets/images/sprites/bright_stars.png'),
+];
+
 /// Drop this file in: client/lib/codemonkey_scratch_page.dart
 /// Then open it with:
 /// Navigator.push(context, MaterialPageRoute(builder: (_) => const CodeMonkeyScratchPage()));
@@ -118,6 +141,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   int _owlFrame = 0;
   bool _owlVisible = true;
   double _owlSpeed = 62.0; // pixels per Step block
+  bool _owlIsJumping = false; // true while a Jump block is in flight
   final Map<String, dynamic> _variables = {};
 
   Timer? _onPredictionTimer;
@@ -130,16 +154,25 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
       .where((w) => w.type == _GameWidgetType.text)
       .map((w) => w.name)
       .toList();
+
+  List<String> get _clockWidgetNames => _stageWidgets
+      .where((w) => w.type == _GameWidgetType.clock)
+      .map((w) => w.name)
+      .toList();
   bool _modelSaved = false;
   bool _modelSelected = false;
   _SavedAiModel? _savedModel;
 
   bool _isFullscreen = false;
+  bool _showRefCards = false;
+
+  List<_PlacedTile> _placedTiles = [];
 
   // Game settings (Game tab)
   int _worldWidth = 600;
   int _worldHeight = 400;
   String _cameraTarget = 'None';
+  String _selectedBackground = 'assets/images/starry_night.png';
   double _gravity = 1800;
   String _physics = 'ARCADE';
 
@@ -217,7 +250,50 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   @override
   void initState() {
     super.initState();
-    if (widget.exerciseNumber == 5) {
+    if (widget.exerciseNumber == 9) {
+      _objectWorkspaces = {
+        'oliver': [
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.controlC('Loop'), position: const Offset(20, 47)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Step', value: '1'), position: const Offset(42, 80)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: 'squat'), position: const Offset(20, 136)),
+          _WorkspaceEntry(block: _ScratchBlockData.display('Set Scale', value: '0.5'), position: const Offset(42, 169)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: 'stand'), position: const Offset(220, 136)),
+          _WorkspaceEntry(block: _ScratchBlockData.display('Set Scale', value: '1'), position: const Offset(242, 169)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: 'arms up'), position: const Offset(20, 250)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Jump', value: '1'), position: const Offset(42, 283)),
+          _WorkspaceEntry(block: _ScratchBlockData.eventC('On Collide With World Bounds', value: 'Left'), position: const Offset(430, 14)),
+        ],
+      };
+      if (widget.savedModels.isNotEmpty) {
+        _aiClassNames = List.from(widget.savedModels.first.classNames);
+        _modelSaved = true;
+        _modelSelected = true;
+        _savedModel = widget.savedModels.first;
+      }
+      // Pre-populate webcam widget (carried from previous exercises)
+      final webcam = _AddedGameWidget(_GameWidgetType.webcam);
+      _stageWidgets.add(webcam);
+      _objectWorkspaces[webcam.id] = [
+        _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+      ];
+    } else if (widget.exerciseNumber == 8 || widget.exerciseNumber == 7) {
+      _objectWorkspaces = {
+        'oliver': [
+          _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.controlC('Loop'), position: const Offset(20, 47)),
+          _WorkspaceEntry(block: _ScratchBlockData.movement('Step', value: '1'), position: const Offset(42, 80)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiReporter('Predict', value: ''), position: const Offset(280, 14)),
+          _WorkspaceEntry(block: _ScratchBlockData.aiC('On Prediction', value: ''), position: const Offset(280, 57)),
+        ],
+      };
+      if (widget.exerciseNumber == 8 && widget.savedModels.isNotEmpty) {
+        _aiClassNames = List.from(widget.savedModels.first.classNames);
+        _modelSaved = true;
+        _modelSelected = true;
+        _savedModel = widget.savedModels.first;
+      }
+    } else if (widget.exerciseNumber == 6 || widget.exerciseNumber == 5) {
       _objectWorkspaces = {
         'oliver': [
           _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
@@ -234,6 +310,10 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
         _modelSaved = true;
         _modelSelected = true;
         _savedModel = widget.savedModels.first;
+      }
+      if (widget.exerciseNumber == 6) {
+        _worldWidth = 3600;
+        _cameraTarget = 'None';
       }
     } else if (widget.exerciseNumber == 4) {
       _objectWorkspaces = {
@@ -271,8 +351,11 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
 
   final List<_SpriteAssetData> _projectSprites = <_SpriteAssetData>[];
   final List<_AddedGameWidget> _stageWidgets = [];
+  final Map<_SpriteAssetData, Offset> _spriteStagePositions = {};
 
   void _onWidgetAdded(_AddedGameWidget w) {
+    w.stageX = 12.0;
+    w.stageY = 12.0 + _stageWidgets.length * 55.0;
     setState(() {
       _stageWidgets.add(w);
       // "On Run" hat canvasHeight=38, bottom connector at dy+(38-5)=47
@@ -294,7 +377,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
           _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
           _WorkspaceEntry(block: _ScratchBlockData.endEvent('On Confirm'), position: const Offset(20, 130)),
         ];
-      } else if (w.type == _GameWidgetType.webcam) {
+      } else if (w.type == _GameWidgetType.webcam || w.type == _GameWidgetType.clock) {
         _objectWorkspaces[w.id] = [
           _WorkspaceEntry(block: _ScratchBlockData.event('On Run'), position: const Offset(20, 14)),
         ];
@@ -353,7 +436,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
           _ScratchBlockData.widgetBlock('Change counter:', value: 'By', value2: '1'),
           _ScratchBlockData.widgetBlock('Set text:', value: 'text', value2: 'raise hands', value2Dropdown: true),
           _ScratchBlockData.widgetBlock('Set timer:', value: 'To', value2: '1'),
-          _ScratchBlockData.widgetBlock('Start clock:', value: ''),
+          _ScratchBlockData.widgetBlock('Start clock:', value: 'clock'),
           _ScratchBlockData.widgetReporter('Get', value: 'Value'),
           _ScratchBlockData.widgetReporter('Get', value: 'Seconds'),
         ];
@@ -453,7 +536,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
       _isRunning = true;
       _owlX = 36; _owlY = 315; _owlFrame = 0;
       _owlScale = 1.0; _owlRotation = 0.0; _owlOpacity = 1.0;
-      _owlVisible = true; _owlSpeed = 62.0;
+      _owlVisible = true; _owlSpeed = 62.0; _owlIsJumping = false;
       _variables.clear();
     });
     _startPredictionPolling();
@@ -580,16 +663,58 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   }
 
   // Walking animation — cycles through 5 sprite frames while moving horizontally.
+  // Oliver's hitbox insets inside the 74×74 sprite frame.
+  static const double _hitL = 10, _hitT = 8, _hitW = 54, _hitH = 62;
+
+  // Resolve horizontal position against placed tiles. Stops Oliver flush against
+  // a tile wall instead of walking through it. Skipped while airborne so Oliver
+  // can walk over the top of a wall after jumping.
+  double _resolveWalkX(double oldX, double newX) {
+    if (_owlIsJumping) return newX.clamp(0.0, _worldWidth.toDouble() - 74.0);
+    const tileSize = 30.0;
+    if (newX == oldX) return newX;
+    for (final tile in _placedTiles) {
+      final tLeft   = tile.gridX * tileSize;
+      final tRight  = tLeft + tileSize;
+      final tTop    = tile.gridY * tileSize;
+      final tBottom = tTop + tileSize;
+      // Skip tiles that don't overlap Oliver's vertical band
+      final owlTop    = _owlY + _hitT;
+      final owlBottom = owlTop + _hitH;
+      if (owlBottom <= tTop || owlTop >= tBottom) continue;
+      if (newX > oldX) {
+        // Moving right: stop right edge at tile's left face
+        final oldRight = oldX + _hitL + _hitW;
+        final newRight = newX + _hitL + _hitW;
+        if (newRight > tLeft && oldRight <= tLeft) {
+          newX = math.min(newX, tLeft - _hitL - _hitW);
+        }
+      } else {
+        // Moving left: stop left edge at tile's right face
+        final oldLeft = oldX + _hitL;
+        final newLeft = newX + _hitL;
+        if (newLeft < tRight && oldLeft >= tRight) {
+          newX = math.max(newX, tRight - _hitL);
+        }
+      }
+    }
+    return newX.clamp(0.0, _worldWidth.toDouble() - 74.0);
+  }
+
   Future<void> _walkOneStep({required double distance}) async {
-    const spriteSize = 74.0;
+    // For AI-controlled exercises, require an active model before walking.
+    if ((widget.exerciseNumber == 8 || widget.exerciseNumber == 9) && !_modelSaved) {
+      await Future<void>.delayed(const Duration(milliseconds: 550));
+      return;
+    }
     const frameCount = 5;
     const ticks = 10;
     final double dx = distance / ticks;
-    final double maxX = _worldWidth.toDouble() - spriteSize;
     for (var tick = 0; tick < ticks; tick++) {
       if (!mounted || !_isRunning) return;
+      final double resolved = _resolveWalkX(_owlX, _owlX + dx);
       setState(() {
-        _owlX = (_owlX + dx).clamp(0.0, maxX);
+        _owlX = resolved;
         _owlFrame = tick % frameCount;
       });
       await Future<void>.delayed(const Duration(milliseconds: 55));
@@ -709,11 +834,13 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
 
       case 'Jump':
         final jh = n1 * 70; final jd = (260 * n1).clamp(80.0, 5000.0).toInt();
+        _owlIsJumping = true;
         setState(() => _owlY -= jh);
         await Future.delayed(Duration(milliseconds: jd));
-        if (!mounted || !_isRunning) return;
+        if (!mounted || !_isRunning) { _owlIsJumping = false; return; }
         setState(() => _owlY += jh);
         await Future.delayed(Duration(milliseconds: jd));
+        _owlIsJumping = false;
 
       case 'Set X':
         setState(() => _owlX = n1);
@@ -910,17 +1037,27 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
   }
 
   void _onSpriteDeleted(_SpriteAssetData sprite) {
-    setState(() => _projectSprites.remove(sprite));
+    setState(() {
+      _projectSprites.remove(sprite);
+      _spriteStagePositions.remove(sprite);
+    });
   }
 
   void _onSpriteDuplicated(_SpriteAssetData sprite) {
-    setState(() => _projectSprites.add(_SpriteAssetData(
+    final copy = _SpriteAssetData(
       displayName: '${sprite.displayName} copy',
       assetPath: sprite.assetPath,
       categories: sprite.categories,
       frameCount: sprite.frameCount,
       imageBytes: sprite.imageBytes,
-    )));
+    );
+    setState(() {
+      _spriteStagePositions[copy] = Offset(
+        (_spriteStagePositions[sprite]?.dx ?? 50.0) + 20,
+        (_spriteStagePositions[sprite]?.dy ?? 50.0) + 20,
+      );
+      _projectSprites.add(copy);
+    });
   }
 
   Future<void> _showAddSpriteDialog(BuildContext context) async {
@@ -933,6 +1070,8 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
     if (!mounted || pickedSprite == null) return;
 
     setState(() {
+      _spriteStagePositions[pickedSprite] =
+          Offset(50.0 + _projectSprites.length * 85.0, 50.0);
       _projectSprites.add(pickedSprite);
     });
   }
@@ -945,7 +1084,10 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
         children: [
           Column(
         children: [
-          _TopBar(exerciseNumber: widget.exerciseNumber),
+          _TopBar(
+            exerciseNumber: widget.exerciseNumber,
+            onReferenceCardsTap: () => setState(() => _showRefCards = true),
+          ),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -973,7 +1115,22 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                         },
                         onPrevExercise: () => _navigateToExercise(widget.exerciseNumber - 1),
                         onReset: _handleReset,
-                        onAllCompleted: _saveCurrentExercise,
+                        onAllCompleted: () async {
+                          await _saveCurrentExercise();
+                          if (!mounted) return;
+                          if (widget.exerciseNumber == 9) {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (ctx) => _CourseCompletedDialog(
+                                onBackToHome: () {
+                                  if (mounted) Navigator.of(context).pop();
+                                },
+                              ),
+                            );
+                          }
+                        },
+                        placedTiles: _placedTiles,
                       )),
                       Container(width: 2, color: const Color(0xFFD0D0D0)),
                       Expanded(
@@ -1008,6 +1165,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           onRemoveBlock: _removeBlock,
                           aiClassNames: _aiClassNames,
                           textWidgetNames: _textWidgetNames,
+                          clockWidgetNames: _clockWidgetNames,
                         ),
                       ),
                       Container(width: 2, color: const Color(0xFF9A9A9A)),
@@ -1037,9 +1195,16 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           onWidgetChanged: _onWidgetChanged,
                           onAiClassNamesChanged: (names) => setState(() {
                             _aiClassNames = names;
-                            if (widget.exerciseNumber == 3 && names.isNotEmpty) _modelSelected = true;
+                            if ((widget.exerciseNumber == 3 || widget.exerciseNumber == 7) && names.isNotEmpty) _modelSelected = true;
                           }),
-                          onModelSaved: (model) => setState(() { _modelSaved = true; _savedModel = model; }),
+                          onModelSaved: (model) => setState(() {
+                            _modelSaved = true;
+                            _savedModel = model;
+                            if (widget.exerciseNumber == 7) {
+                              _modelSelected = true;
+                              _aiClassNames = List.from(model.classNames);
+                            }
+                          }),
                           savedModels: [
                             ...widget.savedModels,
                             if (_savedModel != null) _savedModel!,
@@ -1055,6 +1220,15 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
                           onGravityChanged: (v) => setState(() => _gravity = v),
                           onPhysicsChanged: (v) => setState(() => _physics = v),
                           onFullscreen: () => setState(() => _isFullscreen = true),
+                          placedTiles: _placedTiles,
+                          onTilesChanged: (tiles) => setState(() => _placedTiles = tiles),
+                          background: _selectedBackground,
+                          onBackgroundChanged: (v) => setState(() => _selectedBackground = v),
+                          spriteStagePositions: _spriteStagePositions,
+                          onSpritePositionChanged: (sprite, pos) =>
+                              setState(() => _spriteStagePositions[sprite] = pos),
+                          onOliverPositionChanged: (x, y) =>
+                              setState(() { _owlX = x; _owlY = y; }),
                         ),
                       ),
                     ],
@@ -1071,6 +1245,12 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
           ),
         ],
       ),
+          if (_showRefCards)
+            Positioned.fill(
+              child: _ReferenceCardsOverlay(
+                onClose: () => setState(() => _showRefCards = false),
+              ),
+            ),
           if (_isFullscreen) Positioned.fill(
             child: _FullscreenStage(
               owlX: _owlX,
@@ -1085,6 +1265,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
               worldWidth: _worldWidth,
               worldHeight: _worldHeight,
               cameraTarget: _cameraTarget,
+              background: _selectedBackground,
               onExit: () => setState(() => _isFullscreen = false),
             ),
           ),
@@ -1111,6 +1292,7 @@ class _FullscreenStage extends StatelessWidget {
     this.worldWidth = 600,
     this.worldHeight = 400,
     this.cameraTarget = 'None',
+    this.background = 'assets/images/starry_night.png',
   });
 
   final double owlX;
@@ -1126,6 +1308,7 @@ class _FullscreenStage extends StatelessWidget {
   final int worldWidth;
   final int worldHeight;
   final String cameraTarget;
+  final String background;
 
   @override
   Widget build(BuildContext context) {
@@ -1154,7 +1337,7 @@ class _FullscreenStage extends StatelessWidget {
                 top: 0,
                 bottom: 0,
                 width: constraints.maxWidth + worldWidth,
-                child: const _StarryNightBackground(),
+                child: _StarryNightBackground(asset: background),
               ),
               // Oliver — no border in fullscreen
               if (owlVisible)
@@ -1222,9 +1405,10 @@ class _FullscreenStage extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TopBar extends StatelessWidget {
-  const _TopBar({this.exerciseNumber = 1});
+  const _TopBar({this.exerciseNumber = 1, this.onReferenceCardsTap});
 
   final int exerciseNumber;
+  final VoidCallback? onReferenceCardsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1277,7 +1461,13 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const Icon(Icons.article, color: Colors.white, size: 26),
+          GestureDetector(
+            onTap: onReferenceCardsTap,
+            child: Image.asset('assets/images/sprites/reference_cards.png',
+                width: 30, height: 30,
+                errorBuilder: (_, __, ___) =>
+                    const Icon(Icons.article, color: Colors.white, size: 26)),
+          ),
           const SizedBox(width: 30),
           Container(
             width: 44,
@@ -1286,11 +1476,18 @@ class _TopBar extends StatelessWidget {
               color: Color(0xFF2E7794),
               shape: BoxShape.circle,
             ),
+            clipBehavior: Clip.antiAlias,
             alignment: Alignment.center,
-            child: const Text('🐧', style: TextStyle(fontSize: 25)),
+            child: Image.asset('assets/images/sprites/00.png',
+                width: 36, height: 36,
+                errorBuilder: (_, __, ___) =>
+                    const Text('🦉', style: TextStyle(fontSize: 25))),
           ),
           const SizedBox(width: 28),
-          const Icon(Icons.menu, color: Color(0xFFFFBC1D), size: 34),
+          Image.asset('assets/images/sprites/btn_menu.png',
+              width: 34, height: 34,
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.menu, color: Color(0xFFFFBC1D), size: 34)),
         ],
       ),
     );
@@ -1298,6 +1495,21 @@ class _TopBar extends StatelessWidget {
 }
 
 // ─── Exercise / instruction data ────────────────────────────────────────────
+
+enum _TileType { grass, dirt, brick, stone, sand }
+
+class _PlacedTile {
+  const _PlacedTile({required this.gridX, required this.gridY, required this.type});
+  final int gridX;
+  final int gridY;
+  final _TileType type;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _PlacedTile && other.gridX == gridX && other.gridY == gridY;
+  @override
+  int get hashCode => Object.hash(gridX, gridY);
+}
 
 class _Bullet {
   const _Bullet(this.text, {this.sub = false, this.numbered = 0});
@@ -1317,6 +1529,7 @@ class _ExerciseStep {
     this.aiClassIndex,
     this.autoCheck = false,
     this.validateSettings,
+    this.validateTiles,
   });
   final String heading;
   final List<_Bullet> bullets;
@@ -1327,6 +1540,7 @@ class _ExerciseStep {
   final int? aiClassIndex;
   final bool autoCheck;
   final bool Function(int worldWidth, String cameraTarget)? validateSettings;
+  final bool Function(List<_PlacedTile>)? validateTiles;
 }
 
 final List<_ExerciseStep> _exercise1Steps = [
@@ -1551,7 +1765,258 @@ final List<_ExerciseStep> _exercise5Steps = [
   ),
 ];
 
+final List<_ExerciseStep> _exercise6Steps = [
+  _ExerciseStep(
+    heading: 'Add tiles to make the game more challenging:',
+    bullets: const [
+      _Bullet('Click on the paintbrush 🖌 to add tiles'),
+      _Bullet('Click on the eraser 🧹 to delete tiles', sub: true),
+    ],
+    validate: (_) => false,
+    validateTiles: (tiles) => tiles.isNotEmpty,
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Move the game to the right to add more tiles there:',
+    bullets: const [
+      _Bullet('Click on the drag icon ✛ to scroll and move around the game screen', numbered: 1),
+      _Bullet('Click on the arrow icon to switch back', numbered: 2),
+    ],
+    validate: (_) => false,
+    validateTiles: (tiles) => tiles.any((t) => t.gridX > 8),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [
+      _Bullet('Make Oliver jump over the tiles you added', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise7Steps = [
+  _ExerciseStep(
+    heading: 'We will use the AI model again.',
+    bullets: const [
+      _Bullet('Click on Add New Model in the AI - Pose tab'),
+      _Bullet('You can name your model, making it simpler to locate it at a later time'),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Name the first class: squat.',
+    bullets: const [
+      _Bullet('Replace Class 1 with squat'),
+    ],
+    validate: (_) => false,
+    requiredAiClassName: 'squat',
+    aiClassIndex: 0,
+  ),
+  _ExerciseStep(
+    heading: 'Record poses for the squat class by:',
+    bullets: const [
+      _Bullet('Click on Record', numbered: 1),
+      _Bullet('Click on the timer icon', numbered: 2),
+      _Bullet('Click to record', numbered: 3),
+      _Bullet('The camera will start taking pictures in 5 seconds', sub: true),
+      _Bullet('Do the squat pose', numbered: 4),
+      _Bullet('Make sure to move a little to take many versions of your pose', numbered: 5),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Name the second class: stand.',
+    bullets: const [
+      _Bullet('Replace Class 2 with stand'),
+    ],
+    validate: (_) => false,
+    requiredAiClassName: 'stand',
+    aiClassIndex: 1,
+  ),
+  _ExerciseStep(
+    heading: 'Record the pose for stand class:',
+    bullets: const [
+      _Bullet('Click on Record', numbered: 1),
+      _Bullet('Click on the timer icon', numbered: 2),
+      _Bullet('Click to record', numbered: 3),
+      _Bullet('The camera will start taking pictures in 5 seconds', sub: true),
+      _Bullet('Stand straight', numbered: 4),
+      _Bullet('Make sure to move a little to take many versions of your pose', numbered: 5),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Add a third class by clicking on Add Another Class.',
+    bullets: const [
+      _Bullet('Name it arms up'),
+      _Bullet('Replace Class 3 with arms up', sub: true),
+    ],
+    validate: (_) => false,
+    requiredAiClassName: 'arms up',
+    aiClassIndex: 2,
+  ),
+  _ExerciseStep(
+    heading: 'Record poses for the arms up class by:',
+    bullets: const [
+      _Bullet('Click on Record', numbered: 1),
+      _Bullet('Click on the timer icon', numbered: 2),
+      _Bullet('Click to record', numbered: 3),
+      _Bullet('The camera will start taking pictures in 5 seconds', sub: true),
+      _Bullet('Raise your arms up', numbered: 4),
+      _Bullet('Make sure to move a little to take many versions of your pose', numbered: 5),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on Train Model.',
+    bullets: const [],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'After training the model, the model can identify the three poses you have recorded.',
+    bullets: const [
+      _Bullet('Test your model by posing in the three different positions'),
+      _Bullet('Once you are satisfied that the model recognizes the different poses, click on Save'),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Add this model to the game by clicking on it.',
+    bullets: const [],
+    validate: (_) => false,
+  ),
+];
+
+final List<_ExerciseStep> _exercise8Steps = [
+  _ExerciseStep(
+    heading: '',
+    bullets: const [
+      _Bullet('Drag an On Prediction block', numbered: 1),
+      _Bullet('Change the dropdown to arms up', sub: true),
+      _Bullet('Drag a Jump block', numbered: 2),
+      _Bullet('Place it inside the On Prediction block', sub: true),
+    ],
+    validate: (entries) {
+      final hasArmsUp = entries.any((e) =>
+          e.block.label == 'On Prediction' &&
+          (e.editedValue?.toLowerCase() == 'arms up' ||
+              e.block.value?.toLowerCase() == 'arms up'));
+      final hasJump = entries.any((e) => e.block.label == 'Jump');
+      return hasArmsUp && hasJump;
+    },
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: '',
+    bullets: const [
+      _Bullet('Drag an On Prediction block', numbered: 1),
+      _Bullet('Change the dropdown to squat', sub: true),
+      _Bullet('Drag a Set Scale block', numbered: 2),
+      _Bullet('Place it inside the On Prediction block', sub: true),
+      _Bullet('Change the value from 1 to 0.5', sub: true),
+    ],
+    validate: (entries) {
+      final hasSquat = entries.any((e) =>
+          e.block.label == 'On Prediction' &&
+          (e.editedValue?.toLowerCase() == 'squat' ||
+              e.block.value?.toLowerCase() == 'squat'));
+      final hasSetScale05 = entries.any((e) =>
+          e.block.label == 'Set Scale' && e.editedValue == '0.5');
+      return hasSquat && hasSetScale05;
+    },
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: '',
+    bullets: const [
+      _Bullet('Drag an On Prediction block', numbered: 1),
+      _Bullet('Change the dropdown to stand', sub: true),
+      _Bullet('Drag a Set Scale block', numbered: 2),
+      _Bullet('Place it inside the On Prediction block', sub: true),
+    ],
+    validate: (entries) {
+      final hasStand = entries.any((e) =>
+          e.block.label == 'On Prediction' &&
+          (e.editedValue?.toLowerCase() == 'stand' ||
+              e.block.value?.toLowerCase() == 'stand'));
+      final hasSetScale = entries.where((e) => e.block.label == 'Set Scale').length >= 2;
+      return hasStand && hasSetScale;
+    },
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN!',
+    bullets: const [
+      _Bullet('Make sure Oliver can jump on or squat below the tile obstacles', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
+final List<_ExerciseStep> _exercise9Steps = [
+  _ExerciseStep(
+    heading: 'Add a Clock widget from the Widgets tab.',
+    bullets: const [
+      _Bullet('Keep the default name clock'),
+      _Bullet('Drag it to the upper left corner'),
+    ],
+    validate: (_) => true,
+  ),
+  _ExerciseStep(
+    heading: 'Drag a Start clock block.',
+    bullets: const [
+      _Bullet('Connect it to the On Run block'),
+    ],
+    validate: (entries) => entries.any((e) => e.block.label == 'Start clock:'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Set the collision direction to Right.',
+    bullets: const [
+      _Bullet('Click on the owl sprite to bring up its code', numbered: 1),
+      _Bullet('Find the On Collide With World Bounds block', numbered: 2),
+      _Bullet('Change the dropdown value to Right', sub: true),
+    ],
+    validate: (entries) => entries.any((e) =>
+        e.block.label == 'On Collide With World Bounds' &&
+        (e.editedValue?.toLowerCase() == 'right' ||
+            e.block.value?.toLowerCase() == 'right')),
+    autoCheck: false,
+  ),
+  _ExerciseStep(
+    heading: 'Drag a Pause Game block.',
+    bullets: const [
+      _Bullet('Place it inside the On Collide With World Bounds block'),
+    ],
+    validate: (entries) => entries.any((e) => e.block.label == 'Pause Game'),
+    autoCheck: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN! to test your game.',
+    bullets: const [
+      _Bullet('See how fast you can get Oliver to the end of the course', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+  _ExerciseStep(
+    heading: 'Click on RUN! again.',
+    bullets: const [
+      _Bullet('Try to complete the game faster', sub: true),
+    ],
+    validate: (_) => false,
+    isRunStep: true,
+  ),
+];
+
 List<_ExerciseStep> _stepsForExercise(int n) =>
+    n == 9 ? _exercise9Steps :
+    n == 8 ? _exercise8Steps :
+    n == 7 ? _exercise7Steps :
+    n == 6 ? _exercise6Steps :
     n == 5 ? _exercise5Steps :
     n == 4 ? _exercise4Steps :
     n == 3 ? _exercise3Steps :
@@ -1574,6 +2039,7 @@ class _LessonPanel extends StatefulWidget {
     this.worldWidth = 600,
     this.cameraTarget = 'None',
     this.onAllCompleted,
+    this.placedTiles = const [],
   });
   final List<_WorkspaceEntry> workspaceEntries;
   final bool isRunning;
@@ -1588,6 +2054,7 @@ class _LessonPanel extends StatefulWidget {
   final int worldWidth;
   final String cameraTarget;
   final VoidCallback? onAllCompleted;
+  final List<_PlacedTile> placedTiles;
 
   @override
   State<_LessonPanel> createState() => _LessonPanelState();
@@ -1660,6 +2127,12 @@ class _LessonPanelState extends State<_LessonPanel> {
     }
     if (step.autoCheck == true && step.validateSettings != null) {
       if (step.validateSettings!(widget.worldWidth, widget.cameraTarget)) {
+        setState(() { _completedSteps++; _showError = false; });
+        _checkAllComplete();
+      }
+    }
+    if (step.autoCheck == true && step.validateTiles != null) {
+      if (step.validateTiles!(widget.placedTiles)) {
         setState(() { _completedSteps++; _showError = false; });
         _checkAllComplete();
       }
@@ -1772,7 +2245,15 @@ class _LessonPanelState extends State<_LessonPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.exerciseNumber == 5)
+                  if (widget.exerciseNumber == 9)
+                    const _Exercise9OverviewContent()
+                  else if (widget.exerciseNumber == 8)
+                    const _Exercise8OverviewContent()
+                  else if (widget.exerciseNumber == 7)
+                    const _Exercise7OverviewContent()
+                  else if (widget.exerciseNumber == 6)
+                    const _Exercise6OverviewContent()
+                  else if (widget.exerciseNumber == 5)
                     const _Exercise5OverviewContent()
                   else if (widget.exerciseNumber == 4)
                     const _Exercise4OverviewContent()
@@ -2617,6 +3098,289 @@ class _Exercise5OverviewContent extends StatelessWidget {
         _BulletRow(
           bullet: const _Bullet('Camera target'),
           style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13),
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise6OverviewContent extends StatelessWidget {
+  const _Exercise6OverviewContent();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.gps_fixed, size: 34, color: Color(0xFF2E2722)),
+          const SizedBox(width: 10),
+          const Text('OVERVIEW', style: TextStyle(color: Color(0xFF78AD50), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const Spacer(),
+          Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+        ]),
+        const SizedBox(height: 14),
+        const Text("Let's Challenge with Obstacles",
+            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        const Text(
+          "When the game's world is bigger than the screen, use the drag icon ✛ (top right corner) to scroll beyond what is seen. Use the arrow icon to switch back.",
+          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 10),
+        const Text("Let's see how we can add tiles:",
+            style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, fontWeight: FontWeight.bold, height: 1.5)),
+        const SizedBox(height: 6),
+        const Text(
+          "This is done by using the upper right icon menu where you can click on the paintbrush 🖌, choose a pattern and click on the game to add the tiles. You can always erase them.",
+          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 6),
+        const Text("Let's see!", style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
+      ],
+    );
+  }
+}
+
+class _Exercise7OverviewContent extends StatelessWidget {
+  const _Exercise7OverviewContent();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.psychology, size: 34, color: Color(0xFF2E2722)),
+          const SizedBox(width: 10),
+          const Text('OVERVIEW', style: TextStyle(color: Color(0xFF78AD50), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const Spacer(),
+          Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+        ]),
+        const SizedBox(height: 14),
+        const Text("Let's Build a New AI Model",
+            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        const Text(
+          'We have a model that can identify two human poses.',
+          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'This exercise is about building a new model that can identify three different poses - squat, stand, and arms up.',
+          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        ),
+        const SizedBox(height: 16),
+        const _DeepDiveBox(
+          question: 'We have mentioned models and classes, but what do they mean?',
+          shortText:
+              'Models can be thought of as programs that learn from data. The learning is done in the training process. The models analyze and categorize data, and then use that information to make predictions. For example, we can train a model to recognize images of dogs. Then, it will predict if an image is a dog.',
+          longText:
+              '\n\nClasses represent categories of data. It\'s a way for the computer to know which things are similar. The model organizes its data into the classes during the training. For example, if you have two classes: "cats" and "dogs", the model\'s job is to decide if an image is a cat or a dog.',
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise9OverviewContent extends StatelessWidget {
+  const _Exercise9OverviewContent();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+          const SizedBox(width: 10),
+          const Text('OVERVIEW', style: TextStyle(color: Color(0xFF78AD50), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const Spacer(),
+          Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+        ]),
+        const SizedBox(height: 18),
+        Builder(builder: (ctx) {
+          return Row(children: [
+            const Expanded(
+              child: Text('How fast are You?',
+                  style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
+            ),
+            const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+            const SizedBox(width: 5),
+            Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+          ]);
+        }),
+        const SizedBox(height: 12),
+        const Text(
+          "Let's time how many seconds it takes Oliver to get to the end of the game.",
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'We will use the Clock widget to time the seconds.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'We will add another event that detects a collision with the world boundary and pause the game.',
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 18),
+        // CODE EXAMPLE
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF4A90D9), width: 1.4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ScratchBlock(block: _ScratchBlockData.eventC('On Collide With World Bounds', value: 'Right')),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: _ScratchBlock(block: _ScratchBlockData.game('Pause Game')),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 12, top: -12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2665B5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'CODE EXAMPLE',
+                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _Exercise8OverviewContent extends StatelessWidget {
+  const _Exercise8OverviewContent();
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          const Icon(Icons.track_changes, size: 34, color: Color(0xFF2E2722)),
+          const SizedBox(width: 10),
+          const Text('OVERVIEW', style: TextStyle(color: Color(0xFF78AD50), fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+          const Spacer(),
+          Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
+        ]),
+        const SizedBox(height: 18),
+        Builder(builder: (ctx) {
+          return Row(children: [
+            const Expanded(
+              child: Text('AI Comes to Life',
+                  style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
+            ),
+            const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
+            const SizedBox(width: 5),
+            Icon(Icons.speaker_notes_outlined, color: Colors.green.shade400),
+          ]);
+        }),
+        const SizedBox(height: 12),
+        const Text(
+          "Let's play with the new AI model you've created. We'll make Oliver jump, shrink, or grow based on the poses we created.",
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          "When you squat, we will change Oliver's scale to 0.5, and when you stand, we will set it to 1.",
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 4),
+        const _BulletRow(
+          bullet: _Bullet('Use the Set Scale block for this'),
+          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        ),
+        const SizedBox(height: 18),
+        // CODE EXAMPLE
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF4A90D9), width: 1.4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ScratchBlock(block: _ScratchBlockData.event('On Run')),
+                  _ScratchBlock(block: _ScratchBlockData.controlC('Loop')),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: _ScratchBlock(block: _ScratchBlockData.movement('Step', value: '1')),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _ScratchBlock(block: _ScratchBlockData.aiC('On Prediction', value: 'stand')),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 20),
+                            child: _ScratchBlock(block: _ScratchBlockData.display('Set Scale', value: '1')),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _ScratchBlock(block: _ScratchBlockData.aiC('On Prediction', value: 'raise hands')),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 20),
+                            child: _ScratchBlock(block: _ScratchBlockData.display('Set Scale', value: '0.5')),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _ScratchBlock(block: _ScratchBlockData.aiC('On Prediction', value: 'raise hands')),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 20),
+                    child: _ScratchBlock(block: _ScratchBlockData.movement('Jump', value: '1')),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 12, top: -12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2665B5),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'CODE EXAMPLE',
+                  style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -3997,19 +4761,34 @@ class _GiveItATryPanelState extends State<_GiveItATryPanel> {
 }
 
 class _StarryNightBackground extends StatelessWidget {
-  const _StarryNightBackground({this.compact = false});
+  const _StarryNightBackground({this.compact = false, this.asset});
   final bool compact;
+  final String? asset;
 
   @override
   Widget build(BuildContext context) {
+    final path = asset ?? CodeMonkeyScratchAssets.starryNight;
+    final isNetwork = path.startsWith('blob:') ||
+        path.startsWith('http:') ||
+        path.startsWith('https:') ||
+        path.startsWith('data:');
+    if (isNetwork) {
+      return Image.network(
+        path,
+        fit: BoxFit.none,
+        repeat: ImageRepeat.repeat,
+        alignment: Alignment.topLeft,
+        errorBuilder: (_, __, ___) =>
+            CustomPaint(painter: _StarFieldPainter(compact: compact)),
+      );
+    }
     return Image.asset(
-      CodeMonkeyScratchAssets.starryNight,
+      path,
       fit: BoxFit.none,
       repeat: ImageRepeat.repeat,
       alignment: Alignment.topLeft,
-      errorBuilder: (context, error, stackTrace) {
-        return CustomPaint(painter: _StarFieldPainter(compact: compact));
-      },
+      errorBuilder: (_, __, ___) =>
+          CustomPaint(painter: _StarFieldPainter(compact: compact)),
     );
   }
 }
@@ -4112,6 +4891,7 @@ class _BlocksWorkspace extends StatefulWidget {
     required this.onRemoveBlock,
     this.aiClassNames = const [],
     this.textWidgetNames = const [],
+    this.clockWidgetNames = const [],
   });
 
   final String selectedCategory;
@@ -4130,6 +4910,7 @@ class _BlocksWorkspace extends StatefulWidget {
   final ValueChanged<int> onRemoveBlock;
   final List<String> aiClassNames;
   final List<String> textWidgetNames;
+  final List<String> clockWidgetNames;
 
   @override
   State<_BlocksWorkspace> createState() => _BlocksWorkspaceState();
@@ -4203,6 +4984,7 @@ class _BlocksWorkspaceState extends State<_BlocksWorkspace> {
                           onRemove: widget.onRemoveBlock,
                           aiClassNames: widget.aiClassNames,
                           textWidgetNames: widget.textWidgetNames,
+                          clockWidgetNames: widget.clockWidgetNames,
                         ),
                       ),
                       if (widget.workspaceEntries.length == 1)
@@ -4369,6 +5151,15 @@ class _CategoryButton extends StatelessWidget {
   }
 }
 
+// Static dropdown options for blocks whose choices are always fixed.
+const Map<String, List<String>> _blockStaticOptions = {
+  'On Collide With World Bounds': ['Left', 'Right', 'Up', 'Down', 'Any'],
+  'On Swipe':  ['Left', 'Right', 'Up', 'Down'],
+  'On Key':    ['→', '←', '↑', '↓', 'Space'],
+  'On Collide': [],   // filled dynamically with sprite names
+  'Start clock:': ['clock'], // default; replaced by live clockWidgetNames when available
+};
+
 // Converts _ScratchBlockData to a BlockDef so we can render with Scratch3Block.
 BlockDef _scratchDataToBlockDef(_ScratchBlockData block, {List<String>? aiOptions, List<String>? aiClassOptions, String? editedValue, String? editedValue2}) {
   BlockShape blockShape;
@@ -4412,7 +5203,7 @@ BlockDef _scratchDataToBlockDef(_ScratchBlockData block, {List<String>? aiOption
 
   if (block.value != null) {
     if (block.valueDropdown) {
-      final opts = aiOptions ?? const <String>[];
+      final opts = aiOptions ?? _blockStaticOptions[block.label] ?? const <String>[];
       final dropLabel = (editedValue != null && editedValue.isNotEmpty) ? editedValue : block.value!;
       fields.add(BlockFieldDef.dropdown(dropLabel, options: opts));
     } else {
@@ -4531,6 +5322,7 @@ class _WorkspaceCanvas extends StatefulWidget {
     this.trashHighlight,
     this.aiClassNames = const [],
     this.textWidgetNames = const [],
+    this.clockWidgetNames = const [],
   });
 
   final List<_WorkspaceEntry> entries;
@@ -4539,6 +5331,7 @@ class _WorkspaceCanvas extends StatefulWidget {
   final ValueNotifier<bool>? trashHighlight;
   final List<String> aiClassNames;
   final List<String> textWidgetNames;
+  final List<String> clockWidgetNames;
 
   @override
   State<_WorkspaceCanvas> createState() => _WorkspaceCanvasState();
@@ -4863,9 +5656,11 @@ class _WorkspaceCanvasState extends State<_WorkspaceCanvas> {
                       innerHeight: _isCBlockEntry(i) ? _innerSlotHeightForIdx(i) : null,
                       dropdownOptions: widget.entries[i].block.kind == _ScratchBlockKind.ai && widget.aiClassNames.isNotEmpty
                           ? widget.aiClassNames
-                          : widget.entries[i].block.kind == _ScratchBlockKind.widget && widget.textWidgetNames.isNotEmpty
-                              ? widget.textWidgetNames
-                              : null,
+                          : widget.entries[i].block.label == 'Start clock:' && widget.clockWidgetNames.isNotEmpty
+                              ? widget.clockWidgetNames
+                              : widget.entries[i].block.kind == _ScratchBlockKind.widget && widget.textWidgetNames.isNotEmpty
+                                  ? widget.textWidgetNames
+                                  : null,
                       aiClassNames: widget.aiClassNames,
                       editedValue: widget.entries[i].editedValue,
                       editedValue2: widget.entries[i].editedValue2,
@@ -4960,6 +5755,13 @@ class _GameAndSpritePanel extends StatelessWidget {
     this.onGravityChanged,
     this.onPhysicsChanged,
     this.onFullscreen,
+    this.placedTiles = const [],
+    this.onTilesChanged,
+    this.background = 'assets/images/starry_night.png',
+    this.onBackgroundChanged,
+    this.spriteStagePositions = const {},
+    this.onSpritePositionChanged,
+    this.onOliverPositionChanged,
   });
 
   final double owlX;
@@ -4997,6 +5799,13 @@ class _GameAndSpritePanel extends StatelessWidget {
   final ValueChanged<double>? onGravityChanged;
   final ValueChanged<String>? onPhysicsChanged;
   final VoidCallback? onFullscreen;
+  final List<_PlacedTile> placedTiles;
+  final ValueChanged<List<_PlacedTile>>? onTilesChanged;
+  final String background;
+  final ValueChanged<String>? onBackgroundChanged;
+  final Map<_SpriteAssetData, Offset> spriteStagePositions;
+  final void Function(_SpriteAssetData, Offset)? onSpritePositionChanged;
+  final void Function(double, double)? onOliverPositionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -5019,6 +5828,13 @@ class _GameAndSpritePanel extends StatelessWidget {
               worldWidth: worldWidth,
               cameraTarget: cameraTarget,
               onFullscreen: onFullscreen,
+              placedTiles: placedTiles,
+              onTilesChanged: onTilesChanged,
+              background: background,
+              projectSprites: projectSprites,
+              spriteStagePositions: spriteStagePositions,
+              onSpritePositionChanged: onSpritePositionChanged,
+              onOliverPositionChanged: onOliverPositionChanged,
             ),
           ),
           Expanded(
@@ -5056,6 +5872,8 @@ class _GameAndSpritePanel extends StatelessWidget {
               onGravityChanged: onGravityChanged,
               onPhysicsChanged: onPhysicsChanged,
               isRunning: isRunning,
+              background: background,
+              onBackgroundChanged: onBackgroundChanged,
             ),
           ),
         ],
@@ -5064,7 +5882,7 @@ class _GameAndSpritePanel extends StatelessWidget {
   }
 }
 
-class _StagePreview extends StatelessWidget {
+class _StagePreview extends StatefulWidget {
   const _StagePreview({
     required this.owlX,
     required this.owlY,
@@ -5078,6 +5896,13 @@ class _StagePreview extends StatelessWidget {
     this.worldWidth = 600,
     this.cameraTarget = 'None',
     this.onFullscreen,
+    this.placedTiles = const [],
+    this.onTilesChanged,
+    this.background = 'assets/images/starry_night.png',
+    this.projectSprites = const [],
+    this.spriteStagePositions = const {},
+    this.onSpritePositionChanged,
+    this.onOliverPositionChanged,
   });
 
   final double owlX;
@@ -5092,6 +5917,50 @@ class _StagePreview extends StatelessWidget {
   final int worldWidth;
   final String cameraTarget;
   final VoidCallback? onFullscreen;
+  final List<_PlacedTile> placedTiles;
+  final ValueChanged<List<_PlacedTile>>? onTilesChanged;
+  final String background;
+  final List<_SpriteAssetData> projectSprites;
+  final Map<_SpriteAssetData, Offset> spriteStagePositions;
+  final void Function(_SpriteAssetData, Offset)? onSpritePositionChanged;
+  final void Function(double, double)? onOliverPositionChanged;
+
+  @override
+  State<_StagePreview> createState() => _StagePreviewState();
+}
+
+class _StagePreviewState extends State<_StagePreview> {
+  String _tool = 'arrow';
+  _TileType _selectedTileType = _TileType.grass;
+  double _panOffset = 0.0;
+  Offset _hoverPos = Offset.zero;
+  String? _selectedStageId;
+
+  void _onTapDown(TapDownDetails d, BoxConstraints constraints) {
+    const tileSize = 30.0;
+    final bool followCam = widget.cameraTarget == 'Oliver';
+    const spriteSize = 74.0;
+    final double viewCenterX = constraints.maxWidth / 2 - spriteSize / 2;
+    final double maxScroll = math.max(0.0, widget.worldWidth - constraints.maxWidth);
+    final double cameraOffset = followCam
+        ? (widget.owlX - viewCenterX).clamp(0.0, maxScroll)
+        : 0.0;
+    final double worldX = d.localPosition.dx + cameraOffset + _panOffset;
+    final double worldY = d.localPosition.dy;
+    final int gridX = (worldX / tileSize).floor();
+    final int gridY = (worldY / tileSize).floor();
+    if (gridX < 0 || gridY < 0) return;
+    final tiles = List<_PlacedTile>.from(widget.placedTiles);
+    if (_tool == 'paint') {
+      final newTile = _PlacedTile(gridX: gridX, gridY: gridY, type: _selectedTileType);
+      tiles.removeWhere((t) => t.gridX == gridX && t.gridY == gridY);
+      tiles.add(newTile);
+      widget.onTilesChanged?.call(tiles);
+    } else if (_tool == 'erase') {
+      tiles.removeWhere((t) => t.gridX == gridX && t.gridY == gridY);
+      widget.onTilesChanged?.call(tiles);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -5099,117 +5968,243 @@ class _StagePreview extends StatelessWidget {
       builder: (context, constraints) {
         const spriteSize = 74.0;
         final maxTop = math.max(0.0, constraints.maxHeight - spriteSize - 8);
-        final top = owlY.clamp(0.0, maxTop);
+        final top = widget.owlY.clamp(0.0, maxTop);
 
-        final bool followCam = cameraTarget == 'Oliver';
+        final bool followCam = widget.cameraTarget == 'Oliver';
         final double viewCenterX = constraints.maxWidth / 2 - spriteSize / 2;
-        final double maxScroll = math.max(0.0, worldWidth - constraints.maxWidth);
+        final double maxScroll = math.max(0.0, widget.worldWidth - constraints.maxWidth);
         final double cameraOffset = followCam
-            ? (owlX - viewCenterX).clamp(0.0, maxScroll)
+            ? (widget.owlX - viewCenterX).clamp(0.0, maxScroll)
             : 0.0;
-        // When not following, let Oliver walk off the right edge (ClipRect will hide it).
-        final double displayLeft = followCam ? viewCenterX : owlX;
+        // Subtract _panOffset so Oliver moves with the world (same as tiles) when dragging.
+        final double displayLeft = followCam ? viewCenterX : widget.owlX - _panOffset;
 
-        return ClipRect(
-          child: Stack(
-            children: [
-              // Scrolling background
-              Positioned(
-                left: -cameraOffset,
-                top: 0,
-                bottom: 0,
-                width: constraints.maxWidth + worldWidth,
-                child: const _StarryNightBackground(),
-              ),
-              // House decoration (world-space)
-              Positioned(
-                left: constraints.maxWidth * .30 - cameraOffset,
-                bottom: 0,
-                child: Container(
-                  width: 30,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF26323B),
-                    border: Border.all(color: Colors.black, width: 2),
+        return MouseRegion(
+          onHover: (e) => setState(() => _hoverPos = e.localPosition),
+          child: GestureDetector(
+            onTapDown: (_tool == 'paint' || _tool == 'erase')
+                ? (d) => _onTapDown(d, constraints)
+                : null,
+            onTap: _tool == 'arrow'
+                ? () => setState(() => _selectedStageId = null)
+                : null,
+            onPanUpdate: _tool == 'drag'
+                ? (d) => setState(() {
+                    _panOffset = (_panOffset - d.delta.dx)
+                        .clamp(0.0, math.max(0.0, widget.worldWidth.toDouble() - constraints.maxWidth));
+                  })
+                : null,
+            child: ClipRect(
+              child: Stack(
+                children: [
+                  // Scrolling background
+                  Positioned(
+                    left: -cameraOffset - _panOffset,
+                    top: 0,
+                    bottom: 0,
+                    width: constraints.maxWidth + widget.worldWidth,
+                    child: _StarryNightBackground(asset: widget.background),
                   ),
-                ),
-              ),
-              // Oliver
-              AnimatedPositioned(
-                left: displayLeft,
-                top: top,
-                duration: const Duration(milliseconds: 70),
-                curve: Curves.linear,
-                child: Container(
-                  width: spriteSize,
-                  height: spriteSize,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: const Color(0xFF91C75B), width: 4),
-                  ),
-                  alignment: Alignment.center,
-                  child: Opacity(
-                    opacity: owlOpacity.clamp(0.0, 1.0),
-                    child: Transform.scale(
-                      scale: owlScale,
-                      child: Transform.rotate(
-                        angle: (owlRotation * math.pi / 180) + (isRunning ? -.05 : -.16),
-                        child: _OwlSpriteFrame(frame: owlFrame, height: 66),
+                  // House decoration (world-space)
+                  Positioned(
+                    left: constraints.maxWidth * .30 - cameraOffset - _panOffset,
+                    bottom: 0,
+                    child: Container(
+                      width: 30,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF26323B),
+                        border: Border.all(color: Colors.black, width: 2),
                       ),
                     ),
                   ),
-                ),
-              ),
-              // Stage widget overlays (viewport-fixed)
-              for (int i = 0; i < stageWidgets.length; i++)
-                if (stageWidgets[i].show)
-                  if (stageWidgets[i].type == _GameWidgetType.dialog)
+                  // Placed tiles (world-space, before Oliver)
+                  for (final tile in widget.placedTiles)
                     Positioned(
-                      top: 18, left: 18, right: 18, bottom: 60,
-                      child: Opacity(
-                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
-                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
-                      ),
-                    )
-                  else
+                      left: tile.gridX * 30.0 - cameraOffset - _panOffset,
+                      top: tile.gridY * 30.0,
+                      width: 30,
+                      height: 30,
+                      child: _TileWidget(type: tile.type),
+                    ),
+                  // Project sprites (world-space, selectable + draggable)
+                  for (final sprite in widget.projectSprites)
                     Positioned(
-                      top: 12.0 + i * 52,
-                      left: 12,
-                      child: Opacity(
-                        opacity: stageWidgets[i].opacity.clamp(0.0, 1.0),
-                        child: _StageWidgetOverlay(gameWidget: stageWidgets[i], isRunning: isRunning),
+                      left: (widget.spriteStagePositions[sprite]?.dx ?? 50.0) - cameraOffset - _panOffset,
+                      top: widget.spriteStagePositions[sprite]?.dy ?? 50.0,
+                      width: spriteSize,
+                      height: spriteSize,
+                      child: GestureDetector(
+                        behavior: _tool == 'arrow' ? HitTestBehavior.opaque : HitTestBehavior.translucent,
+                        onTap: () => setState(() => _selectedStageId = sprite.assetPath),
+                        onPanUpdate: _tool == 'arrow' ? (d) {
+                          final cur = widget.spriteStagePositions[sprite] ?? const Offset(50, 50);
+                          widget.onSpritePositionChanged?.call(sprite, Offset(
+                            (cur.dx + d.delta.dx).clamp(0.0, widget.worldWidth.toDouble() - spriteSize),
+                            (cur.dy + d.delta.dy).clamp(0.0, constraints.maxHeight - spriteSize),
+                          ));
+                          setState(() => _selectedStageId = sprite.assetPath);
+                        } : null,
+                        child: Container(
+                          width: spriteSize,
+                          height: spriteSize,
+                          decoration: _selectedStageId == sprite.assetPath
+                              ? BoxDecoration(border: Border.all(color: const Color(0xFF91C75B), width: 4))
+                              : null,
+                          alignment: Alignment.center,
+                          child: _SpriteSheetFrame(sprite: sprite, height: spriteSize - 6),
+                        ),
                       ),
                     ),
-              // Tool icons (viewport-fixed)
-              Positioned(
-                top: 0,
-                right: 0,
-                child: Row(
-                  children: const [
-                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDefault),
-                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolDrag),
-                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolErase),
-                    _StageToolAsset(assetPath: CodeMonkeyScratchAssets.toolPaint),
-                  ],
-                ),
-              ),
-              // Fullscreen button
-              Positioned(
-                bottom: 4,
-                right: 4,
-                child: GestureDetector(
-                  onTap: onFullscreen,
-                  child: Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(4),
+                  // Oliver (selectable + draggable when not running)
+                  Positioned(
+                    left: followCam ? displayLeft : displayLeft - _panOffset,
+                    top: top,
+                    width: spriteSize,
+                    height: spriteSize,
+                    child: GestureDetector(
+                      behavior: _tool == 'arrow' ? HitTestBehavior.opaque : HitTestBehavior.translucent,
+                      onTap: () => setState(() => _selectedStageId = 'oliver'),
+                      onPanUpdate: _tool == 'arrow' && !widget.isRunning ? (d) {
+                        widget.onOliverPositionChanged?.call(
+                          (widget.owlX + d.delta.dx).clamp(0.0, widget.worldWidth.toDouble() - spriteSize),
+                          (widget.owlY + d.delta.dy).clamp(0.0, constraints.maxHeight - spriteSize),
+                        );
+                        setState(() => _selectedStageId = 'oliver');
+                      } : null,
+                      child: Container(
+                        width: spriteSize,
+                        height: spriteSize,
+                        decoration: _selectedStageId == 'oliver'
+                            ? BoxDecoration(border: Border.all(color: const Color(0xFF91C75B), width: 4))
+                            : null,
+                        alignment: Alignment.center,
+                        child: Opacity(
+                          opacity: widget.owlOpacity.clamp(0.0, 1.0),
+                          child: Transform.scale(
+                            scale: widget.owlScale,
+                            child: Transform.rotate(
+                              angle: (widget.owlRotation * math.pi / 180) + (widget.isRunning ? -.05 : -.16),
+                              child: _OwlSpriteFrame(frame: widget.owlFrame, height: 66),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                    child: const Icon(Icons.fullscreen, color: Colors.white, size: 22),
                   ),
-                ),
+                  // Stage widget overlays (selectable + draggable)
+                  for (final w in widget.stageWidgets)
+                    if (w.show)
+                      if (w.type == _GameWidgetType.dialog)
+                        Positioned(
+                          top: 18, left: 18, right: 18, bottom: 60,
+                          child: Opacity(
+                            opacity: w.opacity.clamp(0.0, 1.0),
+                            child: _StageWidgetOverlay(gameWidget: w, isRunning: widget.isRunning),
+                          ),
+                        )
+                      else
+                        Positioned(
+                          top: w.stageY,
+                          left: w.stageX,
+                          child: GestureDetector(
+                            behavior: _tool == 'arrow' ? HitTestBehavior.opaque : HitTestBehavior.translucent,
+                            onTap: () => setState(() => _selectedStageId = w.id),
+                            onPanUpdate: _tool == 'arrow' ? (d) {
+                              setState(() {
+                                _selectedStageId = w.id;
+                                w.stageX = (w.stageX + d.delta.dx).clamp(0.0, constraints.maxWidth - 10);
+                                w.stageY = (w.stageY + d.delta.dy).clamp(0.0, constraints.maxHeight - 10);
+                              });
+                            } : null,
+                            child: Container(
+                              decoration: _selectedStageId == w.id
+                                  ? BoxDecoration(border: Border.all(color: const Color(0xFF91C75B), width: 4))
+                                  : null,
+                              child: Opacity(
+                                opacity: w.opacity.clamp(0.0, 1.0),
+                                child: _StageWidgetOverlay(gameWidget: w, isRunning: widget.isRunning),
+                              ),
+                            ),
+                          ),
+                        ),
+                  // Coordinate display (top-left)
+                  Positioned(
+                    top: 2,
+                    left: 4,
+                    child: Text(
+                      'x:${(_hoverPos.dx + cameraOffset + _panOffset).round()}  y:${_hoverPos.dy.round()}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 11, fontFamily: 'monospace'),
+                    ),
+                  ),
+                  // Tool icons (viewport-fixed)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: () => setState(() { _tool = 'arrow'; _panOffset = 0; }),
+                          child: _StageToolAsset(
+                            assetPath: CodeMonkeyScratchAssets.toolDefault,
+                            selected: _tool == 'arrow',
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _tool = 'drag'),
+                          child: _StageToolAsset(
+                            assetPath: CodeMonkeyScratchAssets.toolDrag,
+                            selected: _tool == 'drag',
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _tool = 'erase'),
+                          child: _StageToolAsset(
+                            assetPath: CodeMonkeyScratchAssets.toolErase,
+                            selected: _tool == 'erase',
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => setState(() => _tool = 'paint'),
+                          child: _StageToolAsset(
+                            assetPath: CodeMonkeyScratchAssets.toolPaint,
+                            selected: _tool == 'paint',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Tile palette (right side, visible only in paint mode)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _TilePalette(
+                      selectedType: _selectedTileType,
+                      onSelect: (t) => setState(() => _selectedTileType = t),
+                      visible: _tool == 'paint',
+                    ),
+                  ),
+                  // Fullscreen button
+                  Positioned(
+                    bottom: 4,
+                    right: 4,
+                    child: GestureDetector(
+                      onTap: widget.onFullscreen,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Icon(Icons.fullscreen, color: Colors.white, size: 22),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
@@ -5218,16 +6213,20 @@ class _StagePreview extends StatelessWidget {
 }
 
 class _StageToolAsset extends StatelessWidget {
-  const _StageToolAsset({required this.assetPath});
+  const _StageToolAsset({required this.assetPath, this.selected = false});
 
   final String assetPath;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 41,
       height: 38,
-      color: const Color(0xFFC4C7C8),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFF8ABCD1) : const Color(0xFFC4C7C8),
+        border: selected ? Border.all(color: Colors.white, width: 2) : null,
+      ),
       padding: const EdgeInsets.all(5),
       child: Image.asset(
         assetPath,
@@ -5235,6 +6234,93 @@ class _StageToolAsset extends StatelessWidget {
         errorBuilder: (context, error, stackTrace) {
           return const Icon(Icons.crop_square, color: Colors.black87, size: 22);
         },
+      ),
+    );
+  }
+}
+
+class _TileWidget extends StatelessWidget {
+  const _TileWidget({required this.type});
+  final _TileType type;
+  @override
+  Widget build(BuildContext context) {
+    switch (type) {
+      case _TileType.grass:
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black26, width: 0.5),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF5AAE2E), Color(0xFF5AAE2E), Color(0xFF7B4F2E), Color(0xFF7B4F2E)],
+              stops: [0.0, 0.25, 0.25, 1.0],
+            ),
+          ),
+        );
+      case _TileType.dirt:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF7B4F2E),
+            border: Border.all(color: Colors.black26, width: 0.5),
+          ),
+        );
+      case _TileType.brick:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFC44B32),
+            border: Border.all(color: Colors.black26, width: 0.5),
+          ),
+        );
+      case _TileType.stone:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF7A8A9A),
+            border: Border.all(color: Colors.black26, width: 0.5),
+          ),
+        );
+      case _TileType.sand:
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8C565),
+            border: Border.all(color: Colors.black26, width: 0.5),
+          ),
+        );
+    }
+  }
+}
+
+class _TilePalette extends StatelessWidget {
+  const _TilePalette({required this.selectedType, required this.onSelect, required this.visible});
+  final _TileType selectedType;
+  final ValueChanged<_TileType> onSelect;
+  final bool visible;
+  @override
+  Widget build(BuildContext context) {
+    if (!visible) return const SizedBox.shrink();
+    return Container(
+      width: 36,
+      color: const Color(0xFF1A1A2E).withAlpha(200),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: _TileType.values.map((t) {
+          final isSelected = t == selectedType;
+          return GestureDetector(
+            onTap: () => onSelect(t),
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 3),
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: isSelected ? Colors.yellow : Colors.transparent,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: _TileWidget(type: t),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -5522,6 +6608,8 @@ class _SpriteInspector extends StatefulWidget {
     this.onGravityChanged,
     this.onPhysicsChanged,
     this.isRunning = false,
+    this.background = 'assets/images/starry_night.png',
+    this.onBackgroundChanged,
   });
 
   final int exerciseNumber;
@@ -5556,6 +6644,8 @@ class _SpriteInspector extends StatefulWidget {
   final ValueChanged<double>? onGravityChanged;
   final ValueChanged<String>? onPhysicsChanged;
   final bool isRunning;
+  final String background;
+  final ValueChanged<String>? onBackgroundChanged;
 
   @override
   State<_SpriteInspector> createState() => _SpriteInspectorState();
@@ -5887,10 +6977,22 @@ class _SpriteInspectorState extends State<_SpriteInspector> {
                 children: [
                   Expanded(child: settingCol('Background',
                     Row(children: [
-                      const Text('starry_night', style: TextStyle(fontSize: 12, color: Color(0xFF333333))),
+                      Flexible(
+                        child: Text(
+                          _kBackgrounds.where((b) => b.asset == widget.background).map((b) => b.name).firstOrNull ?? 'starry_night',
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF333333)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () async {
+                          final picked = await showDialog<String>(
+                            context: context,
+                            builder: (_) => _ChooseBackgroundDialog(current: widget.background),
+                          );
+                          if (picked != null) widget.onBackgroundChanged?.call(picked);
+                        },
                         child: const Text('| Change', style: TextStyle(fontSize: 12, color: Color(0xFF2F75B5))),
                       ),
                     ]),
@@ -6997,6 +8099,8 @@ class _AddedGameWidget {
   // button-specific
   int buttonImageIndex = 0;
   double rotation = 0.0;
+  double stageX = 12.0;
+  double stageY = 12.0;
   static const List<String> buttonImages = [
     'assets/images/sprites/default.png',
     'assets/images/sprites/arrow.png',
@@ -9395,4 +10499,860 @@ class _BrickPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── Choose Background Dialog ─────────────────────────────────────────────────
+
+class _ChooseBackgroundDialog extends StatefulWidget {
+  const _ChooseBackgroundDialog({required this.current});
+  final String current;
+
+  @override
+  State<_ChooseBackgroundDialog> createState() => _ChooseBackgroundDialogState();
+}
+
+class _ChooseBackgroundDialogState extends State<_ChooseBackgroundDialog> {
+  late String _selected;
+  String? _uploadedBlobUrl;
+  String _uploadedName = '';
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.current;
+    // If current is already an uploaded URL, remember it
+    if (widget.current.startsWith('blob:') ||
+        widget.current.startsWith('http') ||
+        widget.current.startsWith('data:')) {
+      _uploadedBlobUrl = widget.current;
+      _uploadedName = 'my background';
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickBackground() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+    );
+    if (!mounted) return;
+    if (result != null && result.files.single.bytes != null) {
+      final bytes = result.files.single.bytes!;
+      final name = result.files.single.name;
+      final mime = name.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+      final blob = html.Blob([bytes], mime);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      setState(() {
+        if (_uploadedBlobUrl != null && _uploadedBlobUrl!.startsWith('blob:')) {
+          html.Url.revokeObjectUrl(_uploadedBlobUrl!);
+        }
+        _uploadedBlobUrl = url;
+        _uploadedName = name.replaceAll(RegExp(r'\.[^.]+$'), '');
+        _selected = url;
+      });
+    }
+  }
+
+  Widget _buildTile(String asset, String name, {bool isNetwork = false}) {
+    final isSelected = asset == _selected;
+    return InkWell(
+      onTap: () => setState(() => _selected = asset),
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFF9A9A9A) : const Color(0xFFF2F2F2),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.16),
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: isNetwork
+                        ? Image.network(
+                            asset,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, __, ___) =>
+                                Container(color: const Color(0xFF24343D)),
+                          )
+                        : Image.asset(
+                            asset,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            repeat: ImageRepeat.repeat,
+                            errorBuilder: (_, __, ___) =>
+                                Container(color: const Color(0xFF24343D)),
+                          ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 4),
+                    child: Text(
+                      name,
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF555555)),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (isSelected)
+            Positioned(
+              top: -10,
+              right: -10,
+              child: Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF58C88B),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 26),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasUpload = _uploadedBlobUrl != null;
+    // slot 0 = upload action tile, slot 1 (if hasUpload) = uploaded tile, rest = library
+    final itemCount = _kBackgrounds.length + 1 + (hasUpload ? 1 : 0);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: 1020,
+          maxHeight: 680,
+          minHeight: 460,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title
+              const Text(
+                'CHOOSE A BACKGROUND',
+                style: TextStyle(
+                  color: Color(0xFF7BAE55),
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .3,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(height: 1, color: const Color(0xFF9DCA76)),
+              const SizedBox(height: 16),
+              // Grid
+              Expanded(
+                child: Scrollbar(
+                  controller: _scrollController,
+                  thumbVisibility: true,
+                  child: GridView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(28, 12, 18, 14),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 200,
+                      mainAxisExtent: 148,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 24,
+                    ),
+                    itemCount: itemCount,
+                    itemBuilder: (context, i) {
+                      // Upload action tile
+                      if (i == 0) {
+                        return _SpriteDialogActionTile(
+                          icon: Icons.upload,
+                          label: 'UPLOAD\nBACKGROUND',
+                          onTap: _pickBackground,
+                        );
+                      }
+                      // Uploaded image tile
+                      if (hasUpload && i == 1) {
+                        return _buildTile(
+                          _uploadedBlobUrl!,
+                          _uploadedName,
+                          isNetwork: true,
+                        );
+                      }
+                      final bgIdx = i - 1 - (hasUpload ? 1 : 0);
+                      final bg = _kBackgrounds[bgIdx];
+                      return _buildTile(bg.asset, bg.name);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Footer
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(null),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF3F2016),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 13),
+                    ),
+                    child: const Text('CANCEL', style: TextStyle(fontSize: 16)),
+                  ),
+                  const SizedBox(width: 64),
+                  SizedBox(
+                    width: 176,
+                    height: 47,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.of(context).pop(_selected),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4D861D),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4)),
+                      ),
+                      child: const Text('OK',
+                          style: TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Course Completed Dialog ──────────────────────────────────────────────────
+
+class _CourseCompletedDialog extends StatelessWidget {
+  final VoidCallback onBackToHome;
+
+  const _CourseCompletedDialog({required this.onBackToHome});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(context),
+              _buildProgressRow(),
+              _buildBody(),
+              _buildFooter(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFC107),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Course Completed!',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: const Icon(Icons.close, color: Colors.white, size: 24),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressRow() {
+    return Container(
+      color: const Color(0xFFF5F5F5),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'You Completed: 9 / 9 exercises',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF333333)),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF00BCD4),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              '100%',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.asset(
+              'assets/images/monkey1.png',
+              width: 140,
+              height: 140,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF9C4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.emoji_events, size: 64, color: Color(0xFFFFC107)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Some ideas to tweak your game:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF333333)),
+                ),
+                const SizedBox(height: 8),
+                ...[
+                  'Add sound effects',
+                  'Have the owl move in both directions',
+                  'Make the owl move faster when the player stays in a squat',
+                  'Add enemies that move around',
+                ].map((idea) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ', style: TextStyle(fontSize: 13, color: Color(0xFF00BCD4), fontWeight: FontWeight.w700)),
+                          Expanded(child: Text(idea, style: const TextStyle(fontSize: 13, color: Color(0xFF555555)))),
+                        ],
+                      ),
+                    )),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF9C4),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFFFFC107), width: 1.5),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.emoji_events, color: Color(0xFFFFC107), size: 18),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Achievement Unlocked! Perfect Poser',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF7B6000)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFFFC107),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: const Text('KEEP EDITING', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: const Text('PLAY YOUR GAME', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextButton(
+            onPressed: onBackToHome,
+            child: const Text(
+              'BACK TO HOME',
+              style: TextStyle(color: Color(0xFF00BCD4), fontWeight: FontWeight.w700, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Reference Cards ───────────────────────────────────────────────────────────
+
+class _RefCard {
+  const _RefCard({
+    required this.title,
+    required this.description,
+    required this.tab,
+    this.code,
+  });
+  final String title;
+  final String description;
+  final String tab;
+  final List<List<String>>? code;
+}
+
+const _kRefCards = <_RefCard>[
+  // ── SPRITES ──────────────────────────────────────────────────────────────
+  _RefCard(title: 'Sprite', tab: 'SPRITES', description: 'A game object represented as an image on the screen at specific coordinates. Sprites also allow running animation, events and physics motion.'),
+  _RefCard(title: "Sprite's name", tab: 'SPRITES', description: 'Used to reference the sprite throughout the game.'),
+  _RefCard(title: "Sprite's X", tab: 'SPRITES', description: "A property of the sprite. The sprite's initial x position."),
+  _RefCard(title: "Sprite's Y", tab: 'SPRITES', description: "A property of the sprite. The sprite's initial y position."),
+  _RefCard(title: 'Rotation', tab: 'SPRITES', description: 'A property of the sprite. Changing a sprite\'s rotation changes the way it is "pointing" by turning it about its center point.'),
+  _RefCard(title: 'Scale', tab: 'SPRITES', description: 'A property of the sprite. The scale defines the size of the sprite relative to its original size. A scale of 1 means the original size, 2 means double, 0.5 means half.'),
+  _RefCard(title: 'Immovable', tab: 'SPRITES', description: 'A property of the sprite. This option applies when two sprites collide. Check this option when a sprite should not move during a collision with another sprite. If a sprite is not immovable another sprite that runs into it can push it.'),
+  _RefCard(title: 'Allow gravity', tab: 'SPRITES', description: 'A property of the sprite. Defines if the sprite is affected by gravity (checked) or not (unchecked). This option applies only when the game has gravity. If the game has gravity and this box is checked - when running the game the sprite will fall until it reaches a surface (world boundary, tiles, or another sprite). If the box is unchecked, the sprite will not move upon running the game.'),
+  _RefCard(title: 'Collide world bounds', tab: 'SPRITES', description: "A property of the sprite. Defines whether the sprite collides with the world's bounds (checked) or if it can move beyond it (unchecked)."),
+  _RefCard(title: 'Show sprite', tab: 'SPRITES', description: 'A property of the sprite. Show or hide the sprite on the game screen.'),
+  _RefCard(title: 'Opacity', tab: 'SPRITES', description: 'A property of the sprite. Defines the transparency of the sprite. A value of 1 means fully visible, 0 means fully transparent.'),
+  _RefCard(title: 'Frame', tab: 'SPRITES', description: 'A property of the sprite. Defines which animation frame of the sprite sheet is displayed.'),
+  _RefCard(title: 'Animation name', tab: 'SPRITES', description: 'The name used to reference a specific animation sequence for the sprite.'),
+  _RefCard(title: 'Loop animation', tab: 'SPRITES', description: 'When checked, the animation will repeat continuously. When unchecked, it plays once and stops.'),
+  _RefCard(title: 'On Overlap', tab: 'SPRITES', description: 'This block is called when the sprite overlaps with another sprite. Use it to detect when two sprites touch each other.'),
+  _RefCard(title: 'On Collide', tab: 'SPRITES', description: 'This block is called when the sprite collides with a tile. Use it to detect when a sprite hits the ground or a wall.'),
+  _RefCard(title: 'Set Frame', tab: 'SPRITES', description: 'Changes the displayed animation frame of the sprite to the value in the block.', code: [['E:On Run'], ['A:Set Frame', 'I:0']]),
+  _RefCard(title: 'Set Opacity', tab: 'SPRITES', description: 'Sets the transparency of the sprite. A value of 1 means fully visible, 0 means fully transparent.', code: [['E:On Run'], ['A:Set Opacity', 'I:0.5']]),
+  _RefCard(title: 'Set Scale', tab: 'SPRITES', description: "Sets the scale of the sprite. Changes the sprite's size relative to its original size.", code: [['E:On Run'], ['A:Set Scale', 'I:2']]),
+  _RefCard(title: 'Animate', tab: 'SPRITES', description: 'Plays a named animation on the sprite.', code: [['E:On Run'], ['A:Animate', 'I:walk']]),
+  // ── WIDGETS ──────────────────────────────────────────────────────────────
+  _RefCard(title: 'Widget', tab: 'WIDGETS', description: 'A game object that displays information or interacts with the player.'),
+  _RefCard(title: "Widget's name", tab: 'WIDGETS', description: 'Used to reference the widget throughout the game.'),
+  _RefCard(title: 'Show widget', tab: 'WIDGETS', description: 'Show or hide the widget on the game screen.'),
+  _RefCard(title: 'Sounds', tab: 'WIDGETS', description: 'A game object that represents a sound. The sound can be played using the Play block.'),
+  _RefCard(title: "Sound's name", tab: 'WIDGETS', description: 'Used to reference the sound throughout the game.'),
+  _RefCard(title: 'Play sound', tab: 'WIDGETS', description: 'Plays the selected sound in the game.', code: [['E:On Run'], ['A:Play', 'I:sound1']]),
+  _RefCard(title: 'Stop sound', tab: 'WIDGETS', description: 'Stops the selected sound if it is currently playing.', code: [['E:On Run'], ['A:Stop', 'I:sound1']]),
+  _RefCard(title: 'Counter widget', tab: 'WIDGETS', description: 'The Counter widget is used to keep count and can be displayed in the game.'),
+  _RefCard(title: "Counter's name", tab: 'WIDGETS', description: 'Used to reference the counter throughout the game.'),
+  _RefCard(title: 'Set counter', tab: 'WIDGETS', description: 'Sets the counter to a specific value.', code: [['E:On Run'], ['A:Set counter', 'I:0']]),
+  _RefCard(title: 'Add to counter', tab: 'WIDGETS', description: 'Adds a value to the current counter value.', code: [['E:On Run'], ['A:Add to counter', 'I:1']]),
+  _RefCard(title: 'Text widget', tab: 'WIDGETS', description: "The Text widget is used to display labels or texts on the game's screen."),
+  _RefCard(title: 'Set text', tab: 'WIDGETS', description: 'Sets the text displayed by the Text widget.', code: [['E:On Run'], ['A:Set text', 'I:Hello!']]),
+  _RefCard(title: 'Timer widget', tab: 'WIDGETS', description: 'The Timer widget is used to time activities in the game. It counts the seconds backwards until it reaches zero.'),
+  _RefCard(title: 'On End', tab: 'WIDGETS', description: "This block will be called when the timer's countdown reaches 0.", code: [['E:On End'], ['A:Jump', 'I:1']]),
+  _RefCard(title: 'Start timer', tab: 'WIDGETS', description: 'Starts the countdown of the timer widget.', code: [['E:On Run'], ['A:Start timer']]),
+  _RefCard(title: 'Stop timer', tab: 'WIDGETS', description: 'Stops the countdown of the timer widget.', code: [['E:On Run'], ['A:Stop timer']]),
+  _RefCard(title: 'Clock widget', tab: 'WIDGETS', description: 'The Clock widget is used to show the elapsed time. It counts the elapsed seconds starting from 0.'),
+  _RefCard(title: 'Button widget', tab: 'WIDGETS', description: 'The Button widget is used to create a simple interface in the game.'),
+  _RefCard(title: 'On Down', tab: 'WIDGETS', description: 'This block is called repeatedly when the user clicks on the button for as long as the mouse button is held down.', code: [['E:On Down'], ['A:Jump', 'I:1']]),
+  _RefCard(title: 'button.On Click', tab: 'WIDGETS', description: 'This block is called just once when the user clicks on the button, at the time when the mouse button is released.', code: [['E:On Click'], ['A:Pause Game']]),
+  _RefCard(title: 'Dialog widget', tab: 'WIDGETS', description: 'The Dialog widget is used to display a message to the player. The message is a string.'),
+  _RefCard(title: 'On Confirm', tab: 'WIDGETS', description: 'This block is called when the user presses the check button on the dialog widget.', code: [['E:On Confirm'], ['A:Reset Game']]),
+  _RefCard(title: 'Webcam widget', tab: 'WIDGETS', description: 'The Webcam widget displays the live camera feed inside the game.'),
+  _RefCard(title: 'Video widget', tab: 'WIDGETS', description: 'The Video widget plays a video file inside the game.'),
+  _RefCard(title: 'Arrow widget', tab: 'WIDGETS', description: 'The Arrow widget provides on-screen directional controls for the player.'),
+  // ── GAME ─────────────────────────────────────────────────────────────────
+  _RefCard(title: 'On Run', tab: 'GAME', description: 'This block exists in each sprite and widget and cannot be deleted. When the player clicks on the Run button (to play the game), the blocks attached to the On Run block are executed.'),
+  _RefCard(title: 'Game', tab: 'GAME', description: 'An object representing the game as a whole. Properties of the game object include the width and height of the game world, which sprite the game camera should follow, and the strength of gravity in the game world.'),
+  _RefCard(title: 'World width', tab: 'GAME', description: "Sets the world's width. The visible part of the world is 600 by 400."),
+  _RefCard(title: 'World height', tab: 'GAME', description: "Sets the world's height. The visible part of the world is 600 by 400."),
+  _RefCard(title: 'Gravity', tab: 'GAME', description: 'Defines the level of gravity in the game. Zero means that there is no gravity and the sprites do not fall down.'),
+  _RefCard(title: 'Camera target', tab: 'GAME', description: 'Defines which sprite to follow. This is useful if the game world is bigger than 600 by 400. When the target sprite moves, the game window will scroll to keep up with it.'),
+  _RefCard(title: 'Physics', tab: 'GAME', description: 'In game design physics refers to system used to make game objects behave like objects in the real world. For example, it is the physics system that stops a sprite from moving if it runs into a "solid" object like a tile or immovable sprite. In some games, the physics system also includes gravity that automatically caused objects to fall towards the bottom of the screen unless something stops them. In Game Builder there are two possible physics systems, ARCADE and P2. ARCADE is easier to use and should be the choice for most games. P2 allows for more realistic simulations and provides more control over sprites\' speed and rotation.'),
+  _RefCard(title: 'Tilemap', tab: 'GAME', description: 'A game object made up of individual square tiles. Tiles can be used to "draw" the game world. They take up space and stop sprites from moving through them.'),
+  _RefCard(title: 'x, y coordinates', tab: 'GAME', description: 'The world has width (represented by the x coordinates) and height (represented by the y coordinates). Each sprite in the world has x and y coordinates that define its position. The top left corner of the game world has coordinates x = 0, y = 0 As you move to the right, the value of x get bigger; as you move down, the value of y gets bigger. The x and y coordinates are displayed in the top left corner and are changed as the mouse cursor is moved.'),
+  _RefCard(title: 'Background', tab: 'GAME', description: 'Sets the background image of the game world.'),
+  _RefCard(title: 'Pause game', tab: 'GAME', description: 'Pauses the game. All sprites and widgets stop moving.', code: [['E:On Click'], ['A:Pause Game']]),
+  _RefCard(title: 'Resume game', tab: 'GAME', description: 'Resumes the game after it has been paused.', code: [['E:On Click'], ['A:Resume Game']]),
+  _RefCard(title: 'Reset game', tab: 'GAME', description: 'Resets the game to its initial state. All sprites go back to their starting positions.', code: [['E:On Confirm'], ['A:Reset Game']]),
+  _RefCard(title: 'Add Score', tab: 'GAME', description: 'Adds a value to the current score.', code: [['E:On Overlap'], ['A:Add Score', 'I:10']]),
+  _RefCard(title: 'Get Score', tab: 'GAME', description: 'Returns the current score value.', code: [['E:On Run'], ['A:Set text', 'G:Get Score']]),
+  _RefCard(title: 'Score', tab: 'GAME', description: "The score is a number that keeps track of the player's progress. Use Add Score to increase it and Get Score to read it."),
+  // ── MOVEMENT ─────────────────────────────────────────────────────────────
+  _RefCard(title: 'Step', tab: 'MOVEMENT', description: "Makes the sprite try to move. The sprite's movement can be blocked if there are tiles or other sprites in the way. The value defines the number of pixels the sprite will move. Positive values tell the sprite to move to the right, negative values mean move to the left.", code: [['E:On Run'], ['A:Step', 'I:1']]),
+  _RefCard(title: 'Jump', tab: 'MOVEMENT', description: 'Makes the sprite jump. The sprite will jump to a certain height (based on the gravity of the game).', code: [['E:On Run'], ['A:Jump', 'I:1']]),
+  _RefCard(title: 'Get X', tab: 'MOVEMENT', description: "Returns the sprite's x position.", code: [['E:On Run'], ['A:Set X', 'G:Get X', 'OP:+', 'I:50']]),
+  _RefCard(title: 'Get Y', tab: 'MOVEMENT', description: "Returns the sprite's y position.", code: [['E:On Run'], ['A:Set Y', 'G:Get Y', 'OP:+', 'I:50']]),
+  _RefCard(title: 'Set X', tab: 'MOVEMENT', description: "Sets the sprite's x position based on the value in the block. The sprite is placed at the new position.", code: [['E:On Run'], ['A:Set X', 'I:300']]),
+  _RefCard(title: 'Set Y', tab: 'MOVEMENT', description: "Sets the sprite's y position based on the value in the block. The sprite is placed at the new position.", code: [['E:On Run'], ['A:Set Y', 'I:200']]),
+  _RefCard(title: 'Get Rotation', tab: 'MOVEMENT', description: "Returns the sprite's rotation.", code: [['E:On Run'], ['A:Set Rotation', 'G:Get Rotation']]),
+  _RefCard(title: 'Set Rotation', tab: 'MOVEMENT', description: 'Rotates the sprite based on the value (given in degrees) in the block. Positive values rotate the sprite clockwise, negative values rotate counterclockwise.', code: [['E:On Run'], ['A:Set Rotation', 'I:180']]),
+  _RefCard(title: 'Get Velocity X', tab: 'MOVEMENT', description: "Returns the sprite's horizontal velocity.", code: [['E:On Run'], ['A:Set text', 'G:Get Velocity X']]),
+  _RefCard(title: 'Get Velocity Y', tab: 'MOVEMENT', description: "Returns the sprite's vertical velocity.", code: [['E:On Run'], ['A:Set text', 'G:Get Velocity Y']]),
+  _RefCard(title: 'Set Speed', tab: 'MOVEMENT', description: "Sets the speed of the sprite. This block changes the speed of the sprite in multiples of its default speed (the default is 1). The block Set Speed doesn't move the sprite itself. Instead it affects how fast or slow the sprite moves when the block Step is called.", code: [['E:On Run'], ['A:Set Speed', 'I:2'], ['A:Step', 'I:300']]),
+  _RefCard(title: 'Stop', tab: 'MOVEMENT', description: 'Stops the sprite from moving. Sets the velocity to zero.', code: [['E:On Collide'], ['A:Stop']]),
+  _RefCard(title: 'Face Left', tab: 'MOVEMENT', description: 'Flips the sprite to face left.', code: [['E:On Key', 'I:←'], ['A:Face Left'], ['A:Step', 'I:-5']]),
+  _RefCard(title: 'Face Right', tab: 'MOVEMENT', description: 'Flips the sprite to face right.', code: [['E:On Key', 'I:→'], ['A:Face Right'], ['A:Step', 'I:5']]),
+  _RefCard(title: 'Set Allow Gravity', tab: 'MOVEMENT', description: 'Sets the allow gravity to true. When the block is called, the sprite will be affected by gravity.', code: [['E:On Click'], ['A:Set Allow Gravity', 'B:true']]),
+  _RefCard(title: 'Thrust', tab: 'MOVEMENT', description: 'Applies force that pushes the sprite towards the top of the screen. The number is the amount of force. If the game world includes gravity, this number must be large enough to overcome gravity or the sprite will not move.', code: [['E:On Key', 'I:↑'], ['A:Thrust', 'I:2000']]),
+  _RefCard(title: 'Rotate Left', tab: 'MOVEMENT', description: 'Rotates the sprite to the left. The number is the speed with which the sprite starts rotating. The sprite slows down automatically so it will not spin forever.', code: [['E:On Key', 'I:←'], ['A:Rotate Left', 'I:5']]),
+  _RefCard(title: 'Rotate Right', tab: 'MOVEMENT', description: 'Rotates the sprite to the right. The number is the speed with which the sprite starts rotating. The sprite slows down automatically so it will not spin forever.', code: [['E:On Key', 'I:→'], ['A:Rotate Right', 'I:5']]),
+  _RefCard(title: 'Flip', tab: 'MOVEMENT', description: 'Flips the sprite horizontally, mirroring its image.', code: [['E:On Run'], ['A:Flip']]),
+  _RefCard(title: 'On Key', tab: 'MOVEMENT', description: 'This block is called when the specified key is pressed. Use it to control sprites with keyboard input.', code: [['E:On Key', 'I:Space'], ['A:Jump', 'I:1']]),
+  _RefCard(title: 'If / Else', tab: 'MOVEMENT', description: 'Executes the blocks inside based on a condition. If the condition is true, the first set of blocks runs; otherwise the else blocks run.'),
+  _RefCard(title: 'Repeat', tab: 'MOVEMENT', description: 'Repeats the blocks inside a set number of times.', code: [['E:On Run'], ['A:Repeat', 'I:5'], ['A:Step', 'I:10']]),
+  _RefCard(title: 'Wait', tab: 'MOVEMENT', description: 'Pauses execution for a number of seconds before continuing.', code: [['E:On Run'], ['A:Wait', 'I:2'], ['A:Jump', 'I:1']]),
+  _RefCard(title: 'Add to X', tab: 'MOVEMENT', description: "Adds a value to the sprite's current x position.", code: [['E:On Run'], ['A:Add to X', 'I:50']]),
+  _RefCard(title: 'Add to Y', tab: 'MOVEMENT', description: "Adds a value to the sprite's current y position.", code: [['E:On Run'], ['A:Add to Y', 'I:50']]),
+  _RefCard(title: 'Set Velocity X', tab: 'MOVEMENT', description: "Sets the sprite's horizontal velocity directly.", code: [['E:On Run'], ['A:Set Velocity X', 'I:200']]),
+  _RefCard(title: 'Set Velocity Y', tab: 'MOVEMENT', description: "Sets the sprite's vertical velocity directly.", code: [['E:On Run'], ['A:Set Velocity Y', 'I:-400']]),
+  _RefCard(title: 'Set Immovable', tab: 'MOVEMENT', description: 'Sets whether the sprite is immovable. When true, other sprites cannot push this sprite on collision.', code: [['E:On Run'], ['A:Set Immovable', 'B:true']]),
+  _RefCard(title: 'Get Distance', tab: 'MOVEMENT', description: 'Returns the distance in pixels between this sprite and another sprite.', code: [['E:On Run'], ['A:Set text', 'G:Get Distance']]),
+];
+
+// ── Reference Cards overlay ───────────────────────────────────────────────────
+
+class _ReferenceCardsOverlay extends StatefulWidget {
+  const _ReferenceCardsOverlay({required this.onClose});
+  final VoidCallback onClose;
+
+  @override
+  State<_ReferenceCardsOverlay> createState() => _ReferenceCardsOverlayState();
+}
+
+class _ReferenceCardsOverlayState extends State<_ReferenceCardsOverlay> {
+  String _search = '';
+  final TextEditingController _searchCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  List<_RefCard> get _filtered {
+    final q = _search.trim().toLowerCase();
+    if (q.isEmpty) return _kRefCards;
+    return _kRefCards
+        .where((c) =>
+            c.title.toLowerCase().contains(q) ||
+            c.description.toLowerCase().contains(q) ||
+            c.tab.toLowerCase().contains(q))
+        .toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cards = _filtered;
+    return Stack(
+      children: [
+        GestureDetector(
+          onTap: widget.onClose,
+          child: Container(color: Colors.black.withValues(alpha: 0.35)),
+        ),
+        Positioned(
+          top: 0, right: 0, bottom: 0,
+          width: 480,
+          child: Container(
+            color: const Color(0xFFF5C830),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Reference Cards (${cards.length})',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF222222)),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: widget.onClose,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(Icons.close, color: Color(0xFF444444), size: 22),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  child: SizedBox(
+                    height: 40,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      onChanged: (v) => setState(() => _search = v),
+                      decoration: InputDecoration(
+                        hintText: 'Search',
+                        hintStyle: const TextStyle(color: Color(0xFF999999), fontSize: 15),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        suffixIcon: const Icon(Icons.search, color: Color(0xFF888888), size: 20),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF78AD50), width: 1.5)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF78AD50), width: 1.5)),
+                        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: Color(0xFF78AD50), width: 2)),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Scrollbar(
+                    controller: _scrollCtrl,
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: _scrollCtrl,
+                      padding: const EdgeInsets.only(bottom: 24),
+                      itemCount: cards.length,
+                      itemBuilder: (context, i) => _RefCardItem(card: cards[i]),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RefCardItem extends StatefulWidget {
+  const _RefCardItem({required this.card});
+  final _RefCard card;
+
+  @override
+  State<_RefCardItem> createState() => _RefCardItemState();
+}
+
+class _RefCardItemState extends State<_RefCardItem> {
+  bool _codeExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = widget.card;
+    final hasCode = card.code != null && card.code!.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: const Color(0xFF78AD50), width: 1.5),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              color: const Color(0xFFE8E8E8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text(card.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Color(0xFF333333))),
+            ),
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(card.description, style: const TextStyle(fontSize: 13, color: Color(0xFF3E7A28), height: 1.45)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('Appears in tab:', style: TextStyle(fontSize: 12, color: Color(0xFF888888))),
+                      const SizedBox(width: 6),
+                      _TabChip(label: card.tab),
+                    ],
+                  ),
+                  if (hasCode) ...[
+                    const SizedBox(height: 8),
+                    GestureDetector(
+                      onTap: () => setState(() => _codeExpanded = !_codeExpanded),
+                      child: Text(
+                        _codeExpanded ? 'Code Example ∧' : 'Code Example ∨',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF4A7AB5)),
+                      ),
+                    ),
+                    if (_codeExpanded) ...[
+                      const SizedBox(height: 8),
+                      _CodeExampleWidget(rows: card.code!),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TabChip extends StatelessWidget {
+  const _TabChip({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF78AD50)),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 10, color: Color(0xFF527A2F), fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+class _CodeExampleWidget extends StatelessWidget {
+  const _CodeExampleWidget({required this.rows});
+  final List<List<String>> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(maxHeight: 220),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: const Color(0xFFDDDDDD)),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < rows.length; i++)
+                Padding(
+                  padding: EdgeInsets.only(top: i == 0 ? 0 : 4, left: i == 0 ? 0 : 18),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (int j = 0; j < rows[i].length; j++) ...[
+                        if (j > 0) const SizedBox(width: 3),
+                        _buildToken(rows[i][j]),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToken(String token) {
+    final colon = token.indexOf(':');
+    if (colon < 0) return Text(token);
+    final type = token.substring(0, colon);
+    final text = token.substring(colon + 1);
+    switch (type) {
+      case 'E': return _block(text, const Color(0xFF8B3A3A));
+      case 'A': return _block(text, const Color(0xFF527A2F));
+      case 'G': return _block(text, const Color(0xFF7B6B45), oval: true);
+      case 'I': return _input(text);
+      case 'B': return _boolBox(text);
+      case 'OP': return _block(text, const Color(0xFF7B6B45), small: true);
+      default:   return Text(text, style: const TextStyle(fontSize: 12));
+    }
+  }
+
+  Widget _block(String text, Color color, {bool oval = false, bool small = false}) => Container(
+    padding: EdgeInsets.symmetric(horizontal: small ? 8 : 12, vertical: small ? 4 : 6),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(oval ? 20 : 4)),
+    child: Text(text, style: TextStyle(color: Colors.white, fontSize: small ? 11 : 12, fontWeight: FontWeight.w600)),
+  );
+
+  Widget _input(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(color: const Color(0xFFE8D9A8), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFC8B878))),
+    child: Text(text, style: const TextStyle(color: Color(0xFF444444), fontSize: 12, fontWeight: FontWeight.w500)),
+  );
+
+  Widget _boolBox(String text) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+    decoration: BoxDecoration(color: const Color(0xFF2D3B2D), borderRadius: BorderRadius.circular(4)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(text, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(width: 2),
+        const Icon(Icons.arrow_drop_down, color: Colors.white, size: 16),
+      ],
+    ),
+  );
 }
