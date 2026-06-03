@@ -17,7 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import 'package:client/aicourse/blocks_flutter_page.dart';
-import 'package:client/services/game_api_service.dart';
+import 'package:client/features/home/services/game_api_service.dart';
 
 
 // Put these uploaded images in your Flutter project at:

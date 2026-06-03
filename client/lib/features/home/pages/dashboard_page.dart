@@ -13,6 +13,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:client/features/home/services/game_api_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
+import 'package:client/aicourse/ai_hoot_page_game.dart';
 
 class DashboardPage extends StatefulWidget {
   final AuthSession session;
@@ -2061,6 +2062,8 @@ class _CourseDialogState extends State<_CourseDialog> {
         return const DigitalLiteracyPage();
       case 'Data is Everywhere':
         return const DataCoursePage();
+      case 'Coding Chatbots':
+        return const CodeMonkeyScratchPage();
       default:
         return null;
     }
@@ -2252,10 +2255,11 @@ class _CourseDialogState extends State<_CourseDialog> {
                   }
                   final page = _getGamePage(widget.course.title);
                   if (page != null) {
-                    final routeName =
-                        widget.course.title == 'Data is Everywhere'
-                        ? 'data_course_hub'
-                        : 'digital_literacy_hub';
+                    final routeName = switch (widget.course.title) {
+                      'Data is Everywhere' => 'data_course_hub',
+                      'Coding Chatbots' => 'ai_hoot_hub',
+                      _ => 'digital_literacy_hub',
+                    };
                     Navigator.push(
                       context,
                       MaterialPageRoute(
