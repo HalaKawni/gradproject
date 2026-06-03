@@ -9,13 +9,30 @@ import 'package:client/features/auth/pages/codejr.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 
+// void main() async {
+//   WidgetsFlutterBinding.ensureInitialized();
+//   EasyLocalization.logger.enableLevels.removeWhere(
+//     (level) => level.name == 'debug',
+//   );
+//   await EasyLocalization.ensureInitialized();
+//   await AppLanguage.instance.load();
+//   runApp(
+//     EasyLocalization(
+//       supportedLocales: const [Locale('en'), Locale('ar')],
+//       path: 'assets/translations',
+//       fallbackLocale: const Locale('en'),
+//       startLocale: AppLanguage.instance.locale,
+//       useOnlyLangCode: true,
+//       child: const LanguageScope(child: MyApp()),
+//     ),
+//   );
+// }
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  EasyLocalization.logger.enableLevels.removeWhere(
-    (level) => level.name == 'debug',
-  );
+
   await EasyLocalization.ensureInitialized();
   await AppLanguage.instance.load();
+
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('en'), Locale('ar')],
@@ -807,15 +824,22 @@ class _CourseDropdownState extends State<_CourseDropdown> {
     setState(() => _hovered = true);
   }
 
-  void _hideDropdown() {
+  void _removeDropdownOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
+  }
+
+  void _hideDropdown() {
+    _removeDropdownOverlay();
+    if (!mounted) {
+      return;
+    }
     setState(() => _hovered = false);
   }
 
   @override
   void dispose() {
-    _hideDropdown();
+    _removeDropdownOverlay();
     super.dispose();
   }
 

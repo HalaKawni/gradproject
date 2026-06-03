@@ -1,12 +1,13 @@
+import 'dart:convert';
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/services/api_service.dart' as LegacyApiService;
 import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
-// import 'game_webview.dart';
-// import 'monkey_game_page.dart';
 import 'world_map_page.dart';
 import '../widgets/unlock_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -14,6 +15,9 @@ import 'package:client/features/home/services/game_api_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
 import 'package:client/aicourse/ai_hoot_page_game.dart';
+import 'package:client/utils/responsive.dart';
+import 'package:client/mycourses/course_detail_page.dart';
+import 'package:client/mycourses/create_course_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final AuthSession session;
@@ -28,11 +32,12 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-enum _DashboardSection { courses, discover }
+enum _DashboardSection { courses, discover, myCreations }
 
 enum _DiscoverContentTab { challenges, assets }
 
 class _DashboardPageState extends State<DashboardPage> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _showFilterExpanded = false;
   bool _showLevelError = false;
   bool _showCategoryError = false;
@@ -48,6 +53,11 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoadingPublishedAssets = false;
   String? _publishedAssetsErrorMessage;
   List<_PublishedBuilderAsset> _publishedAssets = const [];
+  Future<List<Map<String, dynamic>>>? _coursesFuture;
+  String? _linkCode;
+  bool _linkCodeLoading = false;
+  String? _linkCodeError;
+  Map<String, dynamic>? _myStats;
 
   @override
   void initState() {
@@ -55,9 +65,20 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadPublicCourses();
     _loadPublishedGames();
     _loadPublishedAssets();
+    _loadMyStats();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
       showDialog(context: context, builder: (_) => const UnlockDialog());
     });
+  }
+
+  Future<void> _loadMyStats() async {
+    final stats = await LegacyApiService.ApiService.getMyStats();
+    if (mounted) {
+      setState(() => _myStats = stats);
+    }
   }
 
   Future<void> _loadPublicCourses() async {
@@ -210,6 +231,28 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+    final content = _activeSection == _DashboardSection.myCreations
+        ? _buildMyCreationsView()
+        : SingleChildScrollView(child: _buildMainSection());
+
+    if (isMobile) {
+      return Scaffold(
+        key: _scaffoldKey,
+        backgroundColor: const Color(0xFFF0F0ED),
+        drawer: Drawer(
+          width: 220,
+          child: SafeArea(child: _buildSidebar()),
+        ),
+        body: Column(
+          children: [
+            _buildMobileTopNavbar(),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF0F0ED),
       body: Row(
@@ -219,11 +262,7 @@ class _DashboardPageState extends State<DashboardPage> {
             child: Column(
               children: [
                 _buildTopNavbar(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: _buildMainSection(),
-                  ),
-                ),
+                Expanded(child: content),
               ],
             ),
           ),
@@ -233,6 +272,45 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // ── SIDEBAR ──
+  Widget _buildMobileTopNavbar() {
+    return Container(
+      color: const Color.fromARGB(255, 252, 183, 199),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => _scaffoldKey.currentState?.openDrawer(),
+            child: const Icon(Icons.menu, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              'nameofweb',
+              style: GoogleFonts.montserrat(
+                color: const Color.fromARGB(255, 202, 97, 128),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: const Color(0xFF4A7DBF),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white24, width: 2),
+            ),
+            child: const Icon(Icons.person, color: Colors.white, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSidebar() {
     return Container(
       width: 200,
@@ -250,8 +328,11 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           _SidebarItem(
             label: 'dashboard.my_creations'.tr(),
-            isActive: false,
-            onTap: () {},
+            isActive: _activeSection == _DashboardSection.myCreations,
+            onTap: () => setState(() {
+              _activeSection = _DashboardSection.myCreations;
+              _coursesFuture = LegacyApiService.ApiService.getCourses();
+            }),
           ),
           _SidebarItem(
             label: 'dashboard.discover'.tr(),
@@ -281,8 +362,12 @@ class _DashboardPageState extends State<DashboardPage> {
     return Column(
       children: [
         _buildHeroBanner(),
+        _buildStreakBanner(),
+        _buildShareWithParentBanner(),
         _buildFilterSection(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+        _buildMyScoresSection(),
+        const SizedBox(height: 16),
         _buildCoursesSection(),
         const SizedBox(height: 40),
       ],
@@ -548,6 +633,336 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   // ── FILTER SECTION ──
+  Widget _buildShareWithParentBanner() {
+    return Container(
+      color: const Color(0xFFF0F6FF),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          const Icon(Icons.link, color: Color(0xFF4A7DBF), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _linkCodeLoading
+                ? Row(children: [
+                    const SizedBox(height: 18, width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4A7DBF))),
+                    const SizedBox(width: 10),
+                    Text('dashboard.generate_code'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF888888))),
+                  ])
+                : _linkCode != null
+                    ? Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, children: [
+                        Text('dashboard.your_link_code'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
+                        MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: _linkCode!));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Copied!',
+                                      style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+                                  duration: const Duration(seconds: 2),
+                                  backgroundColor: const Color(0xFF4A7DBF),
+                                  behavior: SnackBarBehavior.floating,
+                                  width: 120,
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4A7DBF),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(_linkCode!,
+                                      style: GoogleFonts.robotoMono(
+                                          fontSize: 18, fontWeight: FontWeight.w900,
+                                          color: Colors.white, letterSpacing: 5)),
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.copy, size: 14, color: Colors.white70),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        Text('dashboard.share_code_hint'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                      ])
+                    : _linkCodeError != null
+                        ? Row(children: [
+                            const Icon(Icons.error_outline, color: Color(0xFFE53935), size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(_linkCodeError!,
+                                  style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFFE53935))),
+                            ),
+                          ])
+                        : Text('dashboard.share_with_parent'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w600,
+                                color: const Color(0xFF4A7DBF))),
+          ),
+          const SizedBox(width: 8),
+          if (_linkCode != null)
+            TextButton(
+              onPressed: () => setState(() { _linkCode = null; _linkCodeError = null; }),
+              child: Text('dashboard.hide_code'.tr(),
+                  style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700,
+                      color: const Color(0xFF4A7DBF))),
+            )
+          else if (!_linkCodeLoading)
+            TextButton(
+              onPressed: () async {
+                setState(() { _linkCodeLoading = true; _linkCodeError = null; });
+                try {
+                  final code = await LegacyApiService.ApiService.generateLinkCode();
+                  if (mounted) { setState(() { _linkCode = code; _linkCodeLoading = false; }); }
+                } catch (e) {
+                  if (mounted) setState(() {
+                    _linkCodeError = e.toString().replaceFirst('Exception: ', '');
+                    _linkCodeLoading = false;
+                  });
+                }
+              },
+              child: Text(
+                _linkCodeError != null ? 'dashboard.retry'.tr() : 'dashboard.generate_code'.tr(),
+                style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700,
+                    color: _linkCodeError != null ? const Color(0xFFE53935) : const Color(0xFF4A7DBF)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStreakBanner() {
+    final s      = _myStats ?? {};
+    final streak = s['streak'] as int? ?? 0;
+    final last7  = (s['last7Days'] as List?)?.map((v) => v as bool).toList()
+        ?? List.filled(7, false);
+    const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFF7A00), Color(0xFFFFB347)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          const Text('🔥', style: TextStyle(fontSize: 22)),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                streak == 0 ? 'Start your streak today!' : '$streak Day Streak!',
+                style: GoogleFonts.nunito(
+                    fontSize: 15, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+              Text(
+                streak == 0 ? 'Play a course to begin' : 'Keep coding every day!',
+                style: GoogleFonts.nunito(fontSize: 11, color: Colors.white70),
+              ),
+            ],
+          ),
+          const Spacer(),
+          // 7-day activity dots
+          Row(
+            children: List.generate(7, (i) {
+              final active = i < last7.length && last7[i];
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    decoration: BoxDecoration(
+                      color: active ? Colors.white : Colors.white.withOpacity(0.25),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                    child: active
+                        ? const Icon(Icons.check, size: 13, color: Color(0xFFFF7A00))
+                        : null,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(dayLabels[i],
+                      style: GoogleFonts.nunito(fontSize: 9, color: Colors.white70)),
+                ],
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static const _scoreGameNames = {
+    'codemonkey-jr': 'CodeMonkey Jr.',
+    'linus-lemur': 'Linus the Lemur',
+    'data-everywhere': 'Data is Everywhere',
+    'digital-literacy': 'Digital Literacy',
+    'ai-hoot': 'Coding Chatbots',
+    'scratch-game': 'Coding Chatbots',
+  };
+
+  Widget _buildMyScoresSection() {
+    final s     = _myStats ?? {};
+    final games = (s['games'] as List? ?? [])
+        .map((g) => g as Map<String, dynamic>)
+        .toList();
+    if (games.isEmpty) return const SizedBox.shrink();
+
+    final totalScore = s['totalScore'] as int? ?? 0;
+    final totalStars = s['totalStars'] as int? ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF4A7DBF),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.emoji_events, color: Colors.amber, size: 20),
+                const SizedBox(width: 10),
+                Text('MY SCORES',
+                    style: GoogleFonts.montserrat(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                        letterSpacing: 1)),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.star, color: Colors.amber, size: 14),
+                    const SizedBox(width: 4),
+                    Text('$totalStars stars',
+                        style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                    const SizedBox(width: 12),
+                    const Icon(Icons.sports_score,
+                        color: Colors.white70, size: 14),
+                    const SizedBox(width: 4),
+                    Text('$totalScore pts',
+                        style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+          // Game rows
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+            child: Column(
+              children: games.map((g) {
+                final gameId     = g['gameId'] as String? ?? '';
+                final name       = _scoreGameNames[gameId] ?? gameId;
+                final levelCount = g['levelCount'] as int? ?? 0;
+                final stars      = g['totalStars'] as int? ?? 0;
+                final score      = g['totalScore'] as int? ?? 0;
+                // Cap star display at 3 icons (scale from raw star count)
+                final starFill = (stars / 5.0).clamp(0.0, 3.0);
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 7),
+                  child: Row(children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.videogame_asset,
+                          color: Color(0xFF4A7DBF), size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name,
+                              style: GoogleFonts.nunito(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF333333))),
+                          Text('$levelCount activities completed',
+                              style: GoogleFonts.nunito(
+                                  fontSize: 11, color: const Color(0xFF888888))),
+                        ],
+                      ),
+                    ),
+                    // Star display
+                    Row(
+                      children: List.generate(3, (i) => Icon(
+                        i < starFill.round() ? Icons.star : Icons.star_border,
+                        color: Colors.amber,
+                        size: 16,
+                      )),
+                    ),
+                    const SizedBox(width: 14),
+                    // Score badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4A7DBF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text('$score pts',
+                          style: GoogleFonts.nunito(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white)),
+                    ),
+                  ]),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFilterSection() {
     return Container(
       margin: const EdgeInsets.fromLTRB(24, 24, 24, 0),
@@ -1271,6 +1686,188 @@ class _DashboardPageState extends State<DashboardPage> {
 
     await Navigator.of(context).pushNamed(routeName, arguments: routeData);
   }
+
+  Widget _buildMyCreationsView() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header bar
+        Container(
+          color: const Color(0xFFB8D9E8),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'dashboard.my_creations'.tr(),
+                style: GoogleFonts.montserrat(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF2C3E50),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () {},
+                icon: const Icon(Icons.arrow_forward, size: 16, color: Color(0xFF1A73E8)),
+                label: Text(
+                  'MY PROFILE',
+                  style: GoogleFonts.montserrat(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF1A73E8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Controls row
+        Container(
+          color: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+          child: Row(
+            children: [
+              // All Types dropdown
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('All Types',
+                        style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF333333))),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_drop_down, color: Color(0xFF555555)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Search bar
+              SizedBox(
+                width: 220,
+                height: 40,
+                child: TextField(
+                  decoration: InputDecoration(
+                    hintText: 'Search',
+                    hintStyle: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFFAAAAAA)),
+                    prefixIcon: const Icon(Icons.search, size: 18, color: Color(0xFFAAAAAA)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFFCCCCCC)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(6),
+                      borderSide: const BorderSide(color: Color(0xFF44ACFF)),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              // Create a Course button
+              ElevatedButton.icon(
+                onPressed: () => _showCreateCourseDialog(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6DB84A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(
+                  'Create a Course',
+                  style: GoogleFonts.montserrat(
+                      fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Courses list
+        Expanded(
+          child: Container(
+            color: const Color(0xFFEEEEEE),
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _coursesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final courses = snapshot.data ?? [];
+                if (courses.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No courses yet. Create your first one!',
+                      style: GoogleFonts.montserrat(
+                        fontSize: 18, fontWeight: FontWeight.w600,
+                        color: const Color(0xFF888888),
+                      ),
+                    ),
+                  );
+                }
+                return Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Wrap(
+                    spacing: 20,
+                    runSpacing: 20,
+                    children: courses.map((course) {
+                      final lessons = (course['lessons'] as List? ?? []);
+                      return _CreationCard(
+                        title: course['title'] as String? ?? 'Untitled',
+                        description: course['description'] as String? ?? '',
+                        lessonCount: lessons.length,
+                        imageBase64: course['courseImageBase64'] as String?,
+                        isPublished: course['isPublished'] as bool? ?? false,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CourseDetailPage(
+                                course: course,
+                                onRefresh: () => setState(() { _coursesFuture = LegacyApiService.ApiService.getCourses(); }),
+                              ),
+                            ),
+                          );
+                          if (mounted) setState(() { _coursesFuture = LegacyApiService.ApiService.getCourses(); });
+                        },
+                        onDelete: () async {
+                          final id = course['_id'] as String?;
+                          if (id == null) return;
+                          await LegacyApiService.ApiService.deleteCourse(id);
+                          if (mounted) setState(() { _coursesFuture = LegacyApiService.ApiService.getCourses(); });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _showCreateCourseDialog() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreateCoursePage()),
+    );
+    if (mounted) setState(() { _coursesFuture = LegacyApiService.ApiService.getCourses(); });
+  }
 }
 
 class _DashboardDiscoverTabButton extends StatelessWidget {
@@ -1709,6 +2306,13 @@ class _CourseCard extends StatefulWidget {
 class _CourseCardState extends State<_CourseCard> {
   bool _hovered = false;
 
+  void _setHovered(bool value) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _hovered = value);
+  }
+
   void _showCourseDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -1720,8 +2324,8 @@ class _CourseCardState extends State<_CourseCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
       child: GestureDetector(
         onTap: () => _showCourseDialog(context),
         child: AnimatedContainer(
@@ -1899,11 +2503,18 @@ class _SidebarItem extends StatefulWidget {
 class _SidebarItemState extends State<_SidebarItem> {
   bool _hovered = false;
 
+  void _setHovered(bool value) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _hovered = value);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
@@ -2240,34 +2851,35 @@ class _CourseDialogState extends State<_CourseDialog> {
               ),
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pop();
-                  if (widget.course.isPublicCourse) {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => _DashboardPublicCourseLevelsPage(
+                  final navigator = Navigator.of(context);
+                  final publicCoursePage = widget.course.isPublicCourse
+                      ? _DashboardPublicCourseLevelsPage(
                           session: widget.session,
                           course: widget.course,
-                        ),
-                      ),
-                    );
+                        )
+                      : null;
+                  final page =
+                      publicCoursePage ?? _getGamePage(widget.course.title);
+                  if (page == null) {
+                    navigator.pop();
                     return;
                   }
-                  final page = _getGamePage(widget.course.title);
-                  if (page != null) {
-                    final routeName = switch (widget.course.title) {
-                      'Data is Everywhere' => 'data_course_hub',
-                      'Coding Chatbots' => 'ai_hoot_hub',
-                      _ => 'digital_literacy_hub',
-                    };
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: RouteSettings(name: routeName),
-                        builder: (_) => page,
-                      ),
-                    );
-                  }
+
+                  final routeName = switch (widget.course.title) {
+                    'Data is Everywhere' => 'data_course_hub',
+                    'Coding Chatbots' => 'ai_hoot_hub',
+                    _ => widget.course.isPublicCourse
+                        ? 'public_course_levels'
+                        : 'digital_literacy_hub',
+                  };
+
+                  navigator.pop();
+                  navigator.push(
+                    MaterialPageRoute(
+                      settings: RouteSettings(name: routeName),
+                      builder: (_) => page,
+                    ),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6DB84A),
@@ -2502,8 +3114,159 @@ class _DashboardScrollableMessage extends StatelessWidget {
   }
 }
 
-class _AngledClipper extends CustomClipper<Path> {
+class _CreationCard extends StatefulWidget {
+  final String title;
+  final String description;
+  final int lessonCount;
+  final String? imageBase64;
+  final bool isPublished;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _CreationCard({
+    required this.title,
+    required this.description,
+    required this.lessonCount,
+    required this.onTap,
+    required this.onDelete,
+    this.imageBase64,
+    this.isPublished = false,
+  });
+
   @override
+  State<_CreationCard> createState() => _CreationCardState();
+}
+
+class _CreationCardState extends State<_CreationCard> {
+  bool _hovered = false;
+
+  void _setHovered(bool value) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _hovered = value);
+  }
+
+  Widget _fallbackHeader() => Container(
+        height: 120,
+        width: double.infinity,
+        color: const Color(0xFF4DD0C4),
+        child: Center(
+          child: Icon(Icons.menu_book_rounded, size: 38,
+              color: Colors.white.withValues(alpha: 0.9)),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: 240,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: _hovered
+                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 14, offset: const Offset(0, 6))]
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.07), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                child: widget.imageBase64 != null
+                    ? Image.memory(
+                        base64Decode(widget.imageBase64!),
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, e) => _fallbackHeader(),
+                      )
+                    : _fallbackHeader(),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(widget.title,
+                              style: GoogleFonts.montserrat(
+                                  fontSize: 14, fontWeight: FontWeight.w700,
+                                  color: const Color(0xFF222222)),
+                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: widget.isPublished ? const Color(0xFF4DD0C4) : const Color(0xFFFFC83D),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            widget.isPublished ? 'Published' : 'Draft',
+                            style: GoogleFonts.montserrat(
+                                fontSize: 10, fontWeight: FontWeight.w700,
+                                color: widget.isPublished ? Colors.white : const Color(0xFF1A1A2E)),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (widget.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(widget.description,
+                          style: GoogleFonts.nunito(
+                              fontSize: 12, color: const Color(0xFF888888)),
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.layers_outlined, size: 14, color: Color(0xFF888888)),
+                        const SizedBox(width: 4),
+                        Text('${widget.lessonCount} lesson${widget.lessonCount == 1 ? '' : 's'}',
+                            style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => AlertDialog(
+                                title: const Text('Delete Course?'),
+                                content: Text('Delete "${widget.title}"?'),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                                  TextButton(
+                                    onPressed: () { Navigator.pop(context); widget.onDelete(); },
+                                    child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFCCCCCC)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AngledClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     final path = Path();
