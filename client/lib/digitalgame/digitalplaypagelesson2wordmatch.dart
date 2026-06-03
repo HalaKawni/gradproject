@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import 'cyber_match_game.dart';
+import 'lesson_slide_texts.dart';
 
 class DigitalPlayPageLesson2WordMatch extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -24,28 +25,16 @@ class _DigitalPlayPageLesson2WordMatchState
   final Map<String, double> _lineProgress = {};
 
   // ── PAIRS — Lesson 2 content ──
-  final List<_Pair> _pairs = [
-    _Pair(
-      word: 'Phishing',
-      definition: 'Stealing personal information, usually through email messages.',
-    ),
-    _Pair(
-      word: 'Digital balance',
-      definition: 'Healthy combination of digital and non-digital activities in life.',
-    ),
-    _Pair(
-      word: 'Cyberbullying',
-      definition: 'Mean behavior to others when online.',
-    ),
-    _Pair(
-      word: 'Strong password',
-      definition: 'A combination of letters, numbers, and characters to protect your information.',
-    ),
-    _Pair(
-      word: 'Fake news',
-      definition: 'Stories and images that are not real.',
-    ),
+  static final List<_Pair> _fallbackPairs = [
+    _Pair(word: 'Phishing',        definition: 'Stealing personal information, usually through email messages.'),
+    _Pair(word: 'Digital balance', definition: 'Healthy combination of digital and non-digital activities in life.'),
+    _Pair(word: 'Cyberbullying',   definition: 'Mean behavior to others when online.'),
+    _Pair(word: 'Strong password', definition: 'A combination of letters, numbers, and characters to protect your information.'),
+    _Pair(word: 'Fake news',       definition: 'Stories and images that are not real.'),
   ];
+
+  List<_Pair> _pairs = List.of(_fallbackPairs);
+  bool _isLoading = false;
 
   // ── STATE ──
   String? _selectedWord;
@@ -84,12 +73,68 @@ class _DigitalPlayPageLesson2WordMatchState
   @override
   void initState() {
     super.initState();
-    for (final p in _pairs) {
+    _initPairs(_pairs);
+  }
+
+  void _initPairs(List<_Pair> pairs) {
+    _wordKeys.clear();
+    _defKeys.clear();
+    for (final p in pairs) {
       _wordKeys[p.word] = GlobalKey();
       _defKeys[p.definition] = GlobalKey();
     }
-    _shuffledWords = List.from(_pairs)..shuffle(Random());
-    _shuffledDefs = List.from(_pairs)..shuffle(Random());
+    _shuffledWords = List.from(pairs)..shuffle(Random());
+    _shuffledDefs  = List.from(pairs)..shuffle(Random());
+  }
+
+  Future<void> _loadAiPairs() async {
+    setState(() => _isLoading = true);
+    final lessonNumber = widget.lesson['number'] as int;
+    final slideTexts = LessonSlideTexts.forLesson(lessonNumber);
+    if (slideTexts.isEmpty) { setState(() => _isLoading = false); return; }
+
+    final aiPairs = await ApiService.generateWordMatchPairs(
+      lessonNumber: lessonNumber,
+      slideTexts: slideTexts,
+    );
+    if (!mounted) return;
+
+    if (aiPairs.length >= 2) {
+      final newPairs = aiPairs
+          .map((p) => _Pair(word: p['word']!, definition: p['definition']!))
+          .toList();
+      setState(() {
+        _pairs = newPairs;
+        _matched.clear();
+        _lines.clear();
+        _lineProgress.clear();
+        _selectedWord = null;
+        _selectedDef = null;
+        _wrongWords.clear();
+        _wrongDefs.clear();
+        _playScore = 0;
+        _initPairs(newPairs);
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✨ New pairs generated from lesson!',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } else {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('⚠️ AI unavailable — using default pairs.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFE53935),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
   }
 
   void _onWordTap(String word) {
@@ -342,6 +387,26 @@ class _DigitalPlayPageLesson2WordMatchState
                   fontFamily: 'Chennai',
                   color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiPairs,
+            child: Opacity(
+              opacity: _isLoading ? 0.4 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5A623),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 5),
+                  Text('AI', style: GoogleFonts.nunito(
+                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(
             icon: Icons.menu_book,
             iconColor: const Color(0xFF5B8FD4),
@@ -467,6 +532,33 @@ class _DigitalPlayPageLesson2WordMatchState
             'assets/images/digitalbackground.png',
             width: w, height: h, fit: BoxFit.cover,
           ),
+
+          // ── AI LOADING OVERLAY ──
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const CircularProgressIndicator(color: Color(0xFFF5A623)),
+                      const SizedBox(height: 14),
+                      Text('Generating new pairs…',
+                          style: GoogleFonts.nunito(
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
 
           // ── MATCH LINES ──
           Positioned.fill(

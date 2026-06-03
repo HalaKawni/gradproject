@@ -2,26 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'my_account_page.dart';
+import 'parent_signup_page.dart';
+import '../services/api_service.dart';
 
 // ── palette from dashboard_page.dart ──────────────────────────────────────
 const _kSidebarBg  = Color.fromARGB(255, 158, 211, 220);
 const _kNavbarBg   = Color.fromARGB(255, 252, 183, 199);
 const _kActiveItem = Color.fromARGB(255, 68,  172, 255);
-const _kYellow     = Color.fromARGB(255, 254, 253, 153);
 const _kYellowShadow = Color.fromARGB(255, 195, 158, 222);
 const _kPageBg     = Color(0xFFF0F0ED);
 const _kBannerBg   = Color(0xFFD0EAF5);
 
 class ParentDashboardPage extends StatefulWidget {
   final String parentName;
-  final String childName;
-  final String childEmail;
 
   const ParentDashboardPage({
     super.key,
     this.parentName = 'Parent',
-    this.childName  = 'Child',
-    this.childEmail = 'child@example.com',
   });
 
   @override
@@ -32,6 +29,58 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
   String _activeTab        = 'Summary';
   String _activeSidebar    = 'PARENT_DASHBOARD';
   bool   _showProfileMenu  = false;
+  List<Map<String, dynamic>> _linkedChildren = [];
+  int    _selectedChildIndex = 0;
+  bool   _loadingChildren  = true;
+  Map<String, dynamic>? _childStats;
+  bool   _statsLoading     = false;
+
+  static const _gameNames = {
+    'codemonkey-jr':    'CodeMonkey Jr.',
+    'linus-lemur':      'Linus the Lemur',
+    'data-everywhere':  'Data is Everywhere',
+    'digital-literacy': 'Digital Literacy',
+    'ai-hoot':          'Coding Chatbots',
+    'scratch-game':     'Coding Chatbots',
+  };
+  static const _gameImages = {
+    'codemonkey-jr':    'assets/images/course1.jpg',
+    'linus-lemur':      'assets/images/course2.jpg',
+    'data-everywhere':  'assets/images/datacourse.png',
+    'digital-literacy': 'assets/images/digitalcourse.png',
+    'ai-hoot':          'assets/images/aicourse.png',
+    'scratch-game':     'assets/images/aicourse.png',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadChildren();
+  }
+
+  Future<void> _loadChildren() async {
+    final children = await ApiService.getLinkedChildren();
+    if (!mounted) return;
+    setState(() { _linkedChildren = children; _loadingChildren = false; });
+    if (children.isNotEmpty) _loadChildStats(children[0]['_id'] as String);
+  }
+
+  Future<void> _loadChildStats(String childId) async {
+    if (!mounted) return;
+    setState(() { _statsLoading = true; _childStats = null; });
+    final stats = await ApiService.getChildStats(childId);
+    if (mounted) setState(() { _childStats = stats; _statsLoading = false; });
+  }
+
+  void _selectChild(int i) {
+    setState(() => _selectedChildIndex = i);
+    final childId = _linkedChildren[i]['_id'] as String?;
+    if (childId != null) _loadChildStats(childId);
+  }
+
+  String get _currentChildName =>
+      _linkedChildren.isNotEmpty ? (_linkedChildren[_selectedChildIndex]['name'] ?? 'Child') : '';
+
 
   @override
   Widget build(BuildContext context) {
@@ -244,8 +293,6 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                       MaterialPageRoute(
                         builder: (_) => MyAccountPage(
                           parentName: widget.parentName,
-                          childName:  widget.childName,
-                          childEmail: widget.childEmail,
                         ),
                       ),
                     );
@@ -360,21 +407,41 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
       color:   _kBannerBg,
       padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       child: Row(children: [
-        Container(
-          padding:    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.only(topLeft: Radius.circular(6), topRight: Radius.circular(6)),
+        if (_loadingChildren)
+          const SizedBox(height: 40, child: Center(child: CircularProgressIndicator(strokeWidth: 2))),
+        // One tab per linked child
+        ..._linkedChildren.asMap().entries.map((entry) {
+          final i = entry.key;
+          final child = entry.value;
+          final isSelected = i == _selectedChildIndex;
+          return GestureDetector(
+            onTap: () => _selectChild(i),
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: isSelected ? Colors.white : Colors.white38,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(6), topRight: Radius.circular(6)),
+              ),
+              child: Text(child['name'] ?? 'Child',
+                  style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700,
+                      color: isSelected ? const Color(0xFF333333) : const Color(0xFF555555))),
+            ),
+          );
+        }),
+        // Link another child
+        GestureDetector(
+          onTap: () async {
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const LinkChildPage()));
+            _loadChildren();
+          },
+          child: Container(
+            padding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(color: _kActiveItem, borderRadius: BorderRadius.circular(6)),
+            child: Text('parent_dash.add_child'.tr(),
+                style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
           ),
-          child: Text(widget.childName,
-              style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
-        ),
-        const SizedBox(width: 8),
-        Container(
-          padding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          decoration: BoxDecoration(color: _kActiveItem, borderRadius: BorderRadius.circular(6)),
-          child: Text('parent_dash.add_child'.tr(),
-              style: GoogleFonts.nunito(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
         ),
       ]),
     );
@@ -453,38 +520,29 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
                 ),
               ),
               const SizedBox(width: 20),
-              // Info column
+              // Info column (read-only — child manages their own account)
               Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('parent_dash.child_email'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
-                  const SizedBox(height: 2),
-                  Text(widget.childEmail,
-                      style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF222222))),
-                  const SizedBox(height: 6),
-                  Text('parent_dash.change_password'.tr(),
-                      style: GoogleFonts.nunito(fontSize: 13, color: _kActiveItem, decoration: TextDecoration.underline)),
+                  if (_linkedChildren.isEmpty)
+                    Text('parent_dash.no_children_yet'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF888888)))
+                  else ...[
+                    Text('parent_dash.child_name_label'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
+                    const SizedBox(height: 2),
+                    Text(_currentChildName,
+                        style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w800, color: const Color(0xFF222222))),
+                    const SizedBox(height: 6),
+                    Row(children: [
+                      const Icon(Icons.lock_outline, size: 13, color: Color(0xFF888888)),
+                      const SizedBox(width: 4),
+                      Text('parent_dash.readonly_hint'.tr(),
+                          style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                    ]),
+                  ],
                 ],
               )),
-              // Login button
-              Container(
-                decoration: BoxDecoration(color: _kYellowShadow, borderRadius: BorderRadius.circular(24)),
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 3),
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _kYellow,
-                      foregroundColor: const Color(0xFF3A2A00),
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                    ),
-                    child: Text('parent_dash.login_child'.tr(),
-                        style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -500,11 +558,19 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
   }
 
   Widget _statsCard() {
+    if (_statsLoading) {
+      return _card(child: const Center(child: CircularProgressIndicator()));
+    }
+    final s = _childStats ?? {};
+    final solutions      = '${s['totalSolutions']  ?? 0}';
+    final courses        = '${s['coursesStarted']  ?? 0}';
+    final stars          = '${s['totalStars']      ?? 0}';
+    final coursesCreated = '${s['coursesCreated']  ?? 0}';
     final stats = [
-      ('76',    'parent_dash.stat_solutions'.tr()),
-      ('6 /96', 'parent_dash.stat_courses'.tr()),
-      ('0',     'parent_dash.stat_challenges'.tr()),
-      ('0',     'parent_dash.stat_games'.tr()),
+      (solutions,      'parent_dash.stat_solutions'.tr()),
+      (courses,        'parent_dash.stat_courses'.tr()),
+      (stars,          'parent_dash.stat_challenges'.tr()),
+      (coursesCreated, 'parent_dash.stat_games'.tr()),
     ];
     return _card(
       child: Column(
@@ -676,64 +742,87 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
   }
 
   Widget _currentCourseCard() {
+    if (_statsLoading) {
+      return _card(child: const Center(child: CircularProgressIndicator()));
+    }
+    final currentGame = _childStats?['currentGame'] as Map<String, dynamic>?;
+    final gameId   = currentGame?['gameId'] as String? ?? '';
+    final gameName = _gameNames[gameId] ?? (gameId.isNotEmpty ? gameId : 'No course yet');
+    final imagePath = _gameImages[gameId];
+    final highLevel = currentGame?['highestLevel'] as int? ?? 0;
+    final stars     = currentGame?['totalStars']   as int? ?? 0;
+
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _cardTitle('parent_dash.card_current_course'.tr()),
           const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              border:       Border.all(color: const Color(0xFFDDDDDD)),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(children: [
-              Container(
-                padding:    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _kActiveItem,
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(6), topRight: Radius.circular(6)),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('parent_dash.text_coding'.tr(),
-                        style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                    Container(
-                      padding:    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
-                      child: Text('parent_dash.beginner'.tr(),
-                          style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
-                    ),
-                  ],
-                ),
+          if (currentGame == null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text('parent_dash.no_data'.tr(),
+                    style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF888888))),
               ),
-              Image.asset('assets/images/elephant2.png',
-                  width:  double.infinity,
-                  height: 100,
-                  fit:    BoxFit.cover,
-                  errorBuilder: (_, e, s) => Container(
-                    height: 100,
-                    color:  _kActiveItem.withValues(alpha: 0.15),
-                    child:  const Icon(Icons.image, color: _kActiveItem, size: 40),
-                  )),
-            ]),
-          ),
-          const SizedBox(height: 10),
-          Center(child: Column(children: [
-            Text('parent_dash.coding_adventure'.tr(),
-                style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
-            Text('parent_dash.part_fundamentals'.tr(),
-                style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
-          ])),
+            )
+          else ...[
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0xFFDDDDDD)),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _kActiveItem,
+                    borderRadius: const BorderRadius.only(topLeft: Radius.circular(6), topRight: Radius.circular(6)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(gameName,
+                          style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                      Row(children: [
+                        const Icon(Icons.star, color: Colors.amber, size: 13),
+                        const SizedBox(width: 3),
+                        Text('$stars',
+                            style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                      ]),
+                    ],
+                  ),
+                ),
+                imagePath != null
+                    ? Image.asset(imagePath,
+                        width: double.infinity, height: 100, fit: BoxFit.cover,
+                        errorBuilder: (_, e, s) => Container(height: 100, color: _kActiveItem.withValues(alpha: 0.15),
+                            child: const Icon(Icons.image, color: _kActiveItem, size: 40)))
+                    : Container(height: 100, color: _kActiveItem.withValues(alpha: 0.15),
+                        child: const Icon(Icons.school, color: _kActiveItem, size: 40)),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            Center(child: Column(children: [
+              Text(gameName,
+                  style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
+              Text('Level $highLevel reached',
+                  style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+            ])),
+          ],
         ],
       ),
     );
   }
 
   Widget _timeSpentCard() {
-    const days   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const values = [0.0,    0.0,   0.0,   0.0,   0.08,  0.0,   0.0];
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final rawMinutes = (_childStats?['weeklyMinutes'] as List?)
+            ?.map((v) => (v as num).toDouble())
+            .toList() ??
+        List.filled(7, 0.0);
+    final maxVal = rawMinutes.fold<double>(0.0, (m, v) => v > m ? v : m);
+    final values = rawMinutes.map((v) => maxVal > 0 ? v / maxVal : 0.0).toList();
     const maxH   = 80.0;
 
     return _card(
@@ -802,79 +891,74 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
   }
 
   Widget _proficiencyCard() {
-    final skills = [
-      ('Sequencing',            'Novice',       true),
-      ('Objects',               'Novice',       true),
-      ('Simple loops',          'Novice',       true),
-      ('Variables',             'Not Acquired', false),
-      ('Indexes/Arrays/Lists',  'Novice',       true),
-      ('For loops',             'Not Acquired', false),
-      ('Functions',             'Not Acquired', false),
-      ('Conditional loops',     'Novice',       true),
-      ('Conditionals',          'Novice',       true),
-      ('Boolean operators',     'Not Acquired', false),
-      ('Events',                'Not Acquired', false),
-      ('Classes',               'Not Acquired', false),
-      ('AI predictions',        'Not Acquired', false),
-      ('Simple Data Types *',   'Not Acquired', false),
-      ('Advanced Data Types *', 'Not Acquired', false),
-      ('Input/Output *',        'Not Acquired', false),
-      ('Sort *',                'Not Acquired', false),
-      ('Modules/Import *',      'Not Acquired', false),
-    ];
+    final games = ((_childStats ?? {})['games'] as List? ?? [])
+        .map((g) => g as Map<String, dynamic>)
+        .toList();
 
     return _card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _cardTitle('parent_dash.card_proficiency'.tr()),
-              Container(
-                width: 20, height: 20,
-                decoration: const BoxDecoration(color: Color(0xFF3A3A3A), shape: BoxShape.circle),
-                child: const Icon(Icons.info_outline, color: Colors.white, size: 13),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(height: 1.5, color: _kActiveItem),
+          _cardTitle('parent_dash.game_progress'.tr()),
           const SizedBox(height: 8),
-          // Scrollable skill list
           SizedBox(
             height: 200,
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  ...skills.map((s) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(children: [
-                      Expanded(
-                        child: Text(s.$1,
-                            style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF333333))),
-                      ),
-                      Text(s.$2,
-                          style: GoogleFonts.nunito(fontSize: 11, color: const Color(0xFF666666))),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 18, height: 18,
-                        decoration: BoxDecoration(
-                          color:        s.$3 ? _kActiveItem : const Color(0xFFCCCCCC),
-                          borderRadius: BorderRadius.circular(4),
+            child: _statsLoading
+                ? const Center(child: CircularProgressIndicator())
+                : games.isEmpty
+                    ? Center(
+                        child: Text('parent_dash.no_data'.tr(),
+                            style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF888888))),
+                      )
+                    : SingleChildScrollView(
+                        child: Column(
+                          children: games.map((g) {
+                            final gameId     = g['gameId'] as String? ?? '';
+                            final name       = _gameNames[gameId] ?? gameId;
+                            final levels     = g['levelCount'] as int? ?? 0;
+                            final stars      = g['totalStars'] as int? ?? 0;
+                            // approximate max levels per game
+                            const maxLevels = 15;
+                            final progress   = (levels / maxLevels).clamp(0.0, 1.0);
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 6),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(children: [
+                                    Expanded(
+                                      child: Text(name,
+                                          style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700,
+                                              color: const Color(0xFF333333))),
+                                    ),
+                                    const Icon(Icons.star, color: Colors.amber, size: 13),
+                                    const SizedBox(width: 3),
+                                    Text('$stars',
+                                        style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF666666))),
+                                    const SizedBox(width: 8),
+                                    Text('$levels activities',
+                                        style: GoogleFonts.nunito(fontSize: 12, color: _kActiveItem,
+                                            fontWeight: FontWeight.w700)),
+                                  ]),
+                                  const SizedBox(height: 4),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 6,
+                                      backgroundColor: const Color(0xFFDDDDDD),
+                                      valueColor: const AlwaysStoppedAnimation<Color>(_kActiveItem),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text('$levels levels completed',
+                                      style: GoogleFonts.nunito(fontSize: 10, color: const Color(0xFF888888))),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
-                    ]),
-                  )),
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('parent_dash.max_level_note'.tr(),
-                        style: GoogleFonts.nunito(fontSize: 11, color: const Color(0xFF888888), fontStyle: FontStyle.italic)),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),

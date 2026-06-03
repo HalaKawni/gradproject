@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'digitalplaypagelesson2wordmatch.dart';
 import '../services/api_service.dart';
+import 'lesson_slide_texts.dart';
 
 // ── COLORS ──────────────────────────────────────────────────────────────────
 class _C {
@@ -55,7 +56,7 @@ class _Concept {
   });
 }
 
-const _concepts = [
+const _kFallbackConcepts = [
   _Concept(
     text: "STRONG\nPASSWORD", positive: true,
     sender: "PASSGUARD",
@@ -311,6 +312,10 @@ class _DigitalPlayPageLesson2State extends State<DigitalPlayPageLesson2>
   bool _safePressed = false;
   bool _riskPressed = false;
 
+  // ── AI ──
+  List<_Concept> _concepts = List.of(_kFallbackConcepts);
+  bool _isLoading = false;
+
   final Random _rng = Random();
 
   @override
@@ -561,6 +566,45 @@ class _DigitalPlayPageLesson2State extends State<DigitalPlayPageLesson2>
     _saveScore();
   }
 
+  Future<void> _loadAiConcepts() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final rawConcepts = await ApiService.generateSwipeConcepts(
+        lessonNumber: lessonNumber,
+        slideTexts: LessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (rawConcepts.isNotEmpty) {
+        final newConcepts = rawConcepts.asMap().entries.map((e) {
+          final c = e.value;
+          final icon = _kFallbackConcepts[e.key % _kFallbackConcepts.length].icon;
+          return _Concept(
+            text: (c['text'] as String).replaceAll(r'\n', '\n'),
+            positive: c['positive'] as bool,
+            sender: c['sender'] as String,
+            preview: c['preview'] as String,
+            icon: icon,
+          );
+        }).toList();
+        setState(() => _concepts = newConcepts);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('AI loaded ${newConcepts.length} concepts!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI failed. Using original concepts.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _saveScore() async {
     final lessonNumber = widget.lesson['number'] as int;
     await ApiService.saveLevelResult(
@@ -699,6 +743,45 @@ class _DigitalPlayPageLesson2State extends State<DigitalPlayPageLesson2>
                     color: Colors.white70,
                     fontSize: 10, fontWeight: FontWeight.w600)),
           ),
+          const SizedBox(height: 12),
+          // AI button — only visible when not actively playing
+          if (!_running)
+            GestureDetector(
+              onTap: _isLoading ? null : _loadAiConcepts,
+              child: Container(
+                width: 72, height: 44,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: _isLoading
+                      ? Colors.grey.withOpacity(0.5)
+                      : const Color(0xFFF5A623),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: _isLoading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        ),
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.auto_awesome_rounded,
+                              color: Colors.white, size: 14),
+                          const SizedBox(height: 2),
+                          Text('AI MODE',
+                              style: GoogleFonts.nunito(
+                                  color: Colors.white,
+                                  fontSize: 6,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1),
+                              textAlign: TextAlign.center),
+                        ],
+                      ),
+              ),
+            ),
           const Spacer(),
           // PREVIOUS button
           _buildSideButton(

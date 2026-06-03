@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
 import 'digital_quiz_page_lesson3.dart';
+import 'lesson_slide_texts.dart';
 
 // ===========================================================================
 //  THEME
@@ -73,11 +74,12 @@ class _DigitalReviewPageLesson3State extends State<DigitalReviewPageLesson3>
 
   late List<_Sentence> _sentences;
 
-  final List<String> _allWords = [
+  List<String> _allWords = [
     'trend', 'host', 'video', 'mute',
     'immersive', 'senses', 'friends', 'thread',
     'attendee', 'increase', 'collaborate', 'global',
   ];
+  bool _isLoading = false;
   late List<String> _bank;
 
   final Map<String, String> _filled  = {};
@@ -222,6 +224,70 @@ class _DigitalReviewPageLesson3State extends State<DigitalReviewPageLesson3>
         setState(() => _hintMsg = 'Select a word below, then tap a blank — or drag!');
       }
     });
+  }
+
+  Future<void> _loadAiSentences() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final data = await ApiService.generateFillBlanks(
+        lessonNumber: lessonNumber,
+        slideTexts: LessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (data.isNotEmpty) {
+        final rawSentences = List<String>.from(data['sentences'] as List? ?? []);
+        final distractors  = List<String>.from(data['distractors'] as List? ?? []);
+        final blankRx = RegExp(r'\{\{(.+?)\}\}');
+        final newSentences = <_Sentence>[];
+        final answers = <String>[];
+        int bIdx = 0;
+        for (final raw in rawSentences) {
+          final parts = <_SentencePart>[];
+          int last = 0;
+          for (final m in blankRx.allMatches(raw)) {
+            if (m.start > last) parts.add(_SentencePart.text(raw.substring(last, m.start)));
+            final ans = m.group(1)!.trim().toLowerCase();
+            bIdx++;
+            parts.add(_SentencePart.blank(_Blank(id: 'b$bIdx', answer: ans)));
+            answers.add(ans);
+            last = m.end;
+          }
+          if (last < raw.length) parts.add(_SentencePart.text(raw.substring(last)));
+          if (parts.isNotEmpty) newSentences.add(_Sentence(parts));
+        }
+        if (newSentences.isNotEmpty) {
+          final newWords = [...answers, ...distractors];
+          setState(() {
+            _sentences = newSentences;
+            _allWords  = newWords;
+            _bank      = List.from(newWords)..shuffle(math.Random());
+            _filled.clear();
+            _correct.clear();
+            _wrongKey     = null;
+            _sparkleKey   = null;
+            _selectedChip = null;
+            _dragTargetKey = null;
+            _score = 0;
+            _done  = false;
+            _hintMsg = 'Select a word below, then tap a blank — or drag!';
+          });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('AI sentences loaded!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ));
+          return;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('AI failed. Using original sentences.'),
+        backgroundColor: Colors.red,
+        duration: Duration(seconds: 2),
+      ));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _reset() {
@@ -591,6 +657,12 @@ class _DigitalReviewPageLesson3State extends State<DigitalReviewPageLesson3>
             onTap: () => Navigator.of(context).pop()),
         const SizedBox(height: 14),
         _RailButton(icon: Icons.refresh_rounded, onTap: _reset),
+        const SizedBox(height: 14),
+        _RailButton(
+          icon: Icons.auto_awesome_rounded,
+          color: const Color(0xFFF5A623),
+          onTap: _isLoading ? null : _loadAiSentences,
+        ),
         const SizedBox(height: 14),
         _RailButton(icon: Icons.lightbulb_rounded, onTap: _giveHint),
         const Spacer(),
@@ -1012,9 +1084,11 @@ class _SpeechArrowPainter extends CustomPainter {
 class _RailButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
-  const _RailButton({required this.icon, this.onTap});
+  final Color? color;
+  const _RailButton({required this.icon, this.onTap, this.color});
   @override
   Widget build(BuildContext context) {
+    final bg = color ?? _WPColors.purple;
     return Opacity(
       opacity: onTap != null ? 1 : 0.5,
       child: GestureDetector(
@@ -1022,7 +1096,7 @@ class _RailButton extends StatelessWidget {
         child: Container(
           width: 56, height: 56,
           decoration: BoxDecoration(
-            color: _WPColors.purple,
+            color: bg,
             borderRadius: BorderRadius.circular(14),
             boxShadow: const [BoxShadow(color: _WPColors.purpleDeep, offset: Offset(0, 4))],
           ),

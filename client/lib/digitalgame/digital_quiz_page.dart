@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import 'lesson_slide_texts.dart';
 
 // ===========================================================================
 //  DATA
@@ -15,7 +16,7 @@ class _Question {
     required this.correctIndex,
   });
 }
-const List<_Question> _kQuestions = [
+final List<_Question> _kFallbackQuestions = [
   _Question(
     question: 'What are the building blocks that make up the internet?',
     options: [
@@ -67,7 +68,8 @@ const List<_Question> _kQuestions = [
 // ===========================================================================
 class DigitalQuizPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalQuizPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalQuizPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalQuizPage> createState() => _DigitalQuizPageState();
@@ -79,12 +81,68 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
   int? _hoveredIdx;
   bool _submitted = false;
   int _score = 0;
+  bool _isLoading = false;
+
+  List<_Question> _questions = List.of(_kFallbackQuestions);
 
   static const _labels = ['A', 'B', 'C', 'D'];
 
-  _Question get _q => _kQuestions[_currentQ];
-  bool get _isLast => _currentQ == _kQuestions.length - 1;
+  _Question get _q => _questions[_currentQ];
+  bool get _isLast => _currentQ == _questions.length - 1;
   bool get _canNext => _submitted;
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  Future<void> _loadAiQuestions() async {
+    setState(() => _isLoading = true);
+    final lessonNumber = widget.lesson['number'] as int;
+    final slideTexts = LessonSlideTexts.forLesson(lessonNumber);
+    if (slideTexts.isEmpty) { setState(() => _isLoading = false); return; }
+
+    final aiData = await ApiService.generateQuizQuestions(
+      lessonNumber: lessonNumber,
+      slideTexts: slideTexts,
+    );
+    if (!mounted) return;
+
+    if (aiData.length >= 3) {
+      final newQuestions = aiData.map((q) => _Question(
+        question: q['question'] as String,
+        options: List<String>.from(q['options']),
+        correctIndex: q['correctIndex'] as int,
+      )).toList();
+      setState(() {
+        _questions = newQuestions;
+        _currentQ = 0;
+        _selectedIdx = null;
+        _hoveredIdx = null;
+        _submitted = false;
+        _score = 0;
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✨ New questions generated from lesson!',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } else {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('⚠️ AI unavailable — using default questions.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFE53935),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
+  }
 
   void _selectAnswer(int idx) {
     if (_submitted) return;
@@ -128,13 +186,13 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
       gameId: 'digital-literacy',
       lessonNumber: lessonNumber,
       correctAnswers: _score,
-      totalQuestions: _kQuestions.length,
+      totalQuestions: _questions.length,
     );
     await ApiService.saveLevelResult(
       gameId: 'digital-literacy',
       level: lessonNumber,
       completed: true,
-      score: ((_score / _kQuestions.length) * 100).round(),
+      score: ((_score / _questions.length) * 100).round(),
     );
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -143,9 +201,9 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
           lessonTitle: widget.lesson['title'] as String,
           lessonNumber: lessonNumber,
           score: _score,
-          total: _kQuestions.length,
+          total: _questions.length,
           onBack: () => Navigator.of(context).pop(),
-          onNext: () => Navigator.of(context).pop(),
+          onNext: widget.onChainFinished ?? () => Navigator.of(context).pop(),
         ),
       ),
     );
@@ -173,9 +231,30 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 60),
-                    child: Container(
-                      color: Colors.white,
-                      child: _buildContent(),
+                    child: Stack(
+                      children: [
+                        Container(color: Colors.white, child: _buildContent()),
+                        if (_isLoading)
+                          Container(
+                            color: Colors.black45,
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                                  const CircularProgressIndicator(color: Color(0xFF1FB5C9)),
+                                  const SizedBox(height: 14),
+                                  Text('Generating new questions…',
+                                      style: GoogleFonts.nunito(
+                                          fontSize: 16, fontWeight: FontWeight.w700)),
+                                ]),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -275,6 +354,26 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
               style: const TextStyle(
                   fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiQuestions,
+            child: Opacity(
+              opacity: _isLoading ? 0.4 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5A623),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 5),
+                  Text('AI', style: GoogleFonts.nunito(
+                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
               label: 'LEARN', value: '18/18',
               bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
@@ -344,7 +443,7 @@ class _DigitalQuizPageState extends State<DigitalQuizPage> {
                 color: const Color(0xFF555555))),
             const SizedBox(height: 2),
             Row(
-              children: List.generate(_kQuestions.length, (i) {
+              children: List.generate(_questions.length, (i) {
                 Color dotColor;
                 Widget? child;
                 if (i < _currentQ) {

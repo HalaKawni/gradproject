@@ -8,7 +8,21 @@
       "Bash(python gen_game2.py)",
       "Bash(rm gen_game2.py)",
       "Bash(node -e ' *)",
-      "Bash(ls -la \"C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Rocks/\"*)"
+      "Bash(ls -la \"C:/Users/magic/Downloads/Tiny Swords/Tiny Swords \\(Update 010\\)/Terrain/Water/Rocks/\"*)",
+      "Bash(head -n 956 \"c:/Users/magic/Downloads/gradproj/client/lib/mycourses/lesson_editor_page.dart\")",
+      "Bash(tail -n +1295 \"c:/Users/magic/Downloads/gradproj/client/lib/mycourses/lesson_editor_page.dart\")",
+      "Read(//tmp/**)",
+      "Bash(grep -v \"^$\")",
+      "Bash(node -e \"const j = JSON.parse\\(require\\('fs'\\).readFileSync\\('c:/Users/magic/Downloads/gradproj/client/assets/translations/en.json','utf8'\\)\\); console.log\\('dashboard keys:', Object.keys\\(j.dashboard\\)\\);\")",
+      "Bash(flutter clean *)",
+      "Bash(dir \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\assets\\\\images\\\\digital*\")",
+      "Bash(dart --version)",
+      "Read(//c/Users/magic/Downloads/sdkflutter/flutter/packages/flutter/lib/src/rendering/**)",
+      "Read(//c/Users/magic/.claude/projects/c--Users-magic-Downloads-gradproj/42b7781f-79d2-45fe-90f7-210b106b8149/tool-results/**)",
+      "Read(//c/Users/magic/Downloads/sdkflutter/flutter/packages/flutter/lib/src/widgets/**)",
+      "Bash(findstr /i \"error\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\lib\" -Recurse -File)",
+      "Bash(Select-Object FullName)"
     ]
   }
 }

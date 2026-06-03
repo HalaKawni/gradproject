@@ -61,7 +61,8 @@
     "or_login_with": "or log in with:",
     "more_options": "More options",
     "no_account": "Don't have an account? ",
-    "signup_now": "Sign up now!"
+    "signup_now": "Sign up now!",
+    "invalid_credentials": "Invalid email or password."
   },
   "signup": {
     "who_are_you": "WHO ARE YOU?",
@@ -127,14 +128,14 @@
   },
   "parent": {
     "signup_label": "PARENT SIGNUP",
-    "create_child_user": "Create a user for your child",
-    "child_account_details": "Child account details",
-    "username_label": "Username (Must be unique)",
-    "age_optional": "Age (Optional)",
-    "experience_optional": "Experience (Optional)",
-    "important": "Important",
-    "important_desc": "To protect your child's privacy, please do not use any personal information, such as your child's full name. Also, we keep this username private and never share it with others.",
-    "child_privacy_hint": "To protect your child's privacy, please do not use any personal information, such as your child's full name",
+    "link_child_title": "LINK A CHILD",
+    "link_child_subtitle": "Enter the code your child generated from their dashboard",
+    "link_code_label": "Child's Link Code",
+    "link_code_hint": "6-character code",
+    "link_btn": "LINK CHILD",
+    "link_success": "{name} has been linked to your account!",
+    "link_instructions_title": "How it works",
+    "link_instructions": "1. Your child logs into their account\n2. They click \"Share with Parent\" in their dashboard\n3. They tap \"Generate Code\" to get a 6-character code\n4. Enter that code here to link their account",
     "exp_none": "No experience",
     "exp_little": "A little experience",
     "exp_some": "Some experience",
@@ -186,7 +187,13 @@
     "internet_safety": "Internet Safety",
     "functions_variables": "Functions & Variables",
     "loops_conditions": "Loops & Conditions",
-    "computers": "Computers"
+    "computers": "Computers",
+    "share_with_parent": "Share your progress with a parent",
+    "generate_code": "Generate Code",
+    "retry": "Retry",
+    "your_link_code": "Your link code:",
+    "share_code_hint": "Give this code to your parent so they can view your progress",
+    "hide_code": "Hide"
   },
   "parent_dash": {
     "sidebar_dashboard": "PARENT DASHBOARD",
@@ -211,8 +218,10 @@
     "start_playing_hint": "To start playing, log in to your child's account.",
     "stat_solutions": "Solutions Submitted",
     "stat_courses": "Courses Started",
-    "stat_challenges": "Challenges Created",
-    "stat_games": "Games Created",
+    "stat_challenges": "Total Stars",
+    "stat_games": "Courses Created",
+    "no_data": "No activity yet",
+    "game_progress": "Game Progress",
     "card_current_course": "CURRENT COURSE",
     "card_time_spent": "TIME SPENT ON SITE",
     "card_proficiency": "PROFICIENCY",
@@ -245,7 +254,11 @@
     "text_coding": "Text Coding",
     "beginner": "Beginner",
     "coding_adventure": "Coding Adventure",
-    "part_fundamentals": "Part I: Fundamentals"
+    "part_fundamentals": "Part I: Fundamentals",
+    "add_child": "Link a child +",
+    "no_children_yet": "No children linked yet. Use \"Link a child +\" to get started.",
+    "child_name_label": "Child Name:",
+    "readonly_hint": "Child manages their own account"
   },
   "account": {
     "title": "MY ACCOUNT",
@@ -277,7 +290,12 @@
     "delete_account": "Delete account",
     "delete_desc": "Click on the button below only if you are sure that you want to delete your account. After deleting your account you will not be able to access the game, your progress or the challenges you created anymore. This action can not be undone. This action will also cancel your auto renewal and you will not be charged again.",
     "delete_children_note": "By deleting your account, your children's account will be deleted as well.",
-    "delete_btn": "DELETE MY ACCOUNT"
+    "delete_linked_note": "By deleting your account, your linked children will be automatically unlinked. Their accounts will not be deleted.",
+    "delete_btn": "DELETE MY ACCOUNT",
+    "linked_children": "Linked Children",
+    "no_linked_children": "No children linked yet.",
+    "child_privacy_note": "Child manages their own account",
+    "unlink_child": "Unlink"
   },
   "data": {
     "course_title": "DATA IS EVERYWHERE: MINI COURSE",

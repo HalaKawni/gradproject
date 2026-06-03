@@ -191,8 +191,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/game.html
-    - assets/phaser.min.js
     - assets/images/background1.jpg
     - assets/images/monkey.png
     - assets/images/monkey1.png
@@ -311,16 +309,16 @@ flutter:
     - assets/images/wrong.svg
     - assets/images/star.svg
     - assets/translations/
-
-
-  
-
-
-
-
-
-
-
+    - assets/images/aicourse.png
+    - assets/images/owl.png
+    - assets/images/starry_night.png
+    - assets/images/default.png
+    - assets/images/drag.png
+    - assets/images/erase.png
+    - assets/images/paint.png
+    - assets/images/sprites/
+    - assets/images/templates/
+    - assets/images/
 
 
 

@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../services/api_service.dart';
 
 class MyAccountPage extends StatefulWidget {
   final String parentName;
-  final String childName;
-  final String childEmail;
 
   const MyAccountPage({
     super.key,
     this.parentName = 'Parent',
-    this.childName  = 'Child',
-    this.childEmail = 'child@example.com',
   });
 
   @override
@@ -25,6 +22,8 @@ class _MyAccountPageState extends State<MyAccountPage>
 
   bool _hideDiscover  = false;
   bool _turnOffHints  = false;
+  List<Map<String, dynamic>> _linkedChildren = [];
+  bool _loadingChildren = true;
 
   @override
   void initState() {
@@ -34,6 +33,17 @@ class _MyAccountPageState extends State<MyAccountPage>
       duration: const Duration(seconds: 20),
     )..repeat();
     _cloudAnim = Tween<double>(begin: 0, end: 1).animate(_cloudController);
+    _loadChildren();
+  }
+
+  Future<void> _loadChildren() async {
+    final children = await ApiService.getLinkedChildren();
+    if (mounted) setState(() { _linkedChildren = children; _loadingChildren = false; });
+  }
+
+  Future<void> _unlink(String childId) async {
+    await ApiService.unlinkChild(childId);
+    _loadChildren();
   }
 
   @override
@@ -104,7 +114,7 @@ class _MyAccountPageState extends State<MyAccountPage>
                           children: [
                             _buildSection('account.user_details'.tr(), _buildUserDetails()),
                             const SizedBox(height: 32),
-                            _buildSection('account.children_details'.tr(), _buildChildDetails()),
+                            _buildSection('account.linked_children'.tr(), _buildChildDetails()),
                             const SizedBox(height: 32),
                             _buildSubscriptionsSection(),
                             const SizedBox(height: 32),
@@ -198,54 +208,61 @@ class _MyAccountPageState extends State<MyAccountPage>
     );
   }
 
-  // ── CHILD DETAILS ─────────────────────────────────────────────────────────
+  // ── LINKED CHILDREN ───────────────────────────────────────────────────────
   Widget _buildChildDetails() {
+    if (_loadingChildren) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_linkedChildren.isEmpty) {
+      return Text('account.no_linked_children'.tr(),
+          style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF888888)));
+    }
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            _avatar('assets/images/avatar.png'),
-            const SizedBox(width: 20),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text(widget.childName,
-                      style: GoogleFonts.nunito(
-                          fontSize: 20, fontWeight: FontWeight.w800,
-                          color: const Color(0xFF222222))),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.edit, size: 14, color: Color(0xFF1A73E8)),
-                  Text(' ${'account.edit'.tr()}',
-                      style: GoogleFonts.nunito(
-                          fontSize: 13, color: const Color(0xFF1A73E8),
-                          decoration: TextDecoration.underline,
-                          decorationColor: const Color(0xFF1A73E8))),
-                ]),
-                const SizedBox(height: 4),
-                Text('account.child_role'.tr(),
-                    style: GoogleFonts.nunito(
-                        fontSize: 14, color: const Color(0xFF888888))),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Text('account.email_username'.tr(),
-            style: GoogleFonts.nunito(
-                fontSize: 14, fontWeight: FontWeight.w800,
-                color: const Color(0xFF333333))),
-        const SizedBox(height: 4),
-        Text(widget.childEmail,
-            style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF444444))),
-        const SizedBox(height: 8),
-        Text('account.change_password'.tr(),
-            style: GoogleFonts.nunito(
-                fontSize: 13, color: const Color(0xFF1A73E8),
-                decoration: TextDecoration.underline,
-                decorationColor: const Color(0xFF1A73E8))),
-      ],
+      children: _linkedChildren.map((child) {
+        final id = child['_id'] as String? ?? child['id'] as String? ?? '';
+        final name = child['name'] as String? ?? 'Child';
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Row(
+            children: [
+              _avatar('assets/images/avatar.png'),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        style: GoogleFonts.nunito(
+                            fontSize: 18, fontWeight: FontWeight.w800,
+                            color: const Color(0xFF222222))),
+                    const SizedBox(height: 4),
+                    Text('account.child_role'.tr(),
+                        style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF888888))),
+                    const SizedBox(height: 4),
+                    Row(children: [
+                      const Icon(Icons.lock_outline, size: 13, color: Color(0xFF888888)),
+                      const SizedBox(width: 4),
+                      Text('account.child_privacy_note'.tr(),
+                          style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888))),
+                    ]),
+                  ],
+                ),
+              ),
+              OutlinedButton(
+                onPressed: () => _unlink(id),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFE53935)),
+                  foregroundColor: const Color(0xFFE53935),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                ),
+                child: Text('account.unlink_child'.tr(),
+                    style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -452,7 +469,7 @@ class _MyAccountPageState extends State<MyAccountPage>
           ),
           const SizedBox(height: 12),
           Text(
-            'account.delete_children_note'.tr(),
+            'account.delete_linked_note'.tr(),
             style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555), height: 1.6),
           ),
           const SizedBox(height: 20),

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'digital_quiz_page.dart';
 import '../services/api_service.dart';
+import 'digital_review_page.dart';
+import 'lesson_slide_texts.dart';
 
 // ===========================================================================
 //  COLORS
@@ -129,7 +131,8 @@ List<_Cell>? _getLineCells(int sr, int sc, int er, int ec) {
 // ===========================================================================
 class DigitalWordSearchPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
-  const DigitalWordSearchPage({super.key, required this.lesson});
+  final VoidCallback? onChainFinished;
+  const DigitalWordSearchPage({super.key, required this.lesson, this.onChainFinished});
 
   @override
   State<DigitalWordSearchPage> createState() => _DigitalWordSearchPageState();
@@ -138,10 +141,13 @@ class DigitalWordSearchPage extends StatefulWidget {
 class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
     with TickerProviderStateMixin {
 
-  // Words to find for lesson 1
-  final List<String> _words = [
+  // Fallback words used while AI words are loading or if the request fails
+  static const List<String> _fallbackWords = [
     'SOFTWARE', 'HARDWARE', 'INBOX', 'WEBPAGE', 'BROWSER', 'INTERNET',
   ];
+
+  List<String> _words = List.of(_fallbackWords);
+  bool _isLoading = true;
 
   late _GameData _game;
   final Map<String, _Found> _found = {};
@@ -165,6 +171,57 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
     _bounceCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 700));
     _game = _generateGrid(_words, _kSize);
+    _loadAiWords();
+  }
+
+  Future<void> _loadAiWords() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    final slideTexts = LessonSlideTexts.forLesson(lessonNumber);
+    if (slideTexts.isEmpty) {
+      setState(() => _isLoading = false);
+      return;
+    }
+    final aiWords = await ApiService.generateWordSearchWords(
+      lessonNumber: lessonNumber,
+      slideTexts: slideTexts,
+    );
+    if (!mounted) return;
+    if (aiWords.length >= 4) {
+      setState(() {
+        _words = aiWords;
+        _game = _generateGrid(_words, _kSize);
+        _found.clear();
+        _stars = 0;
+        _done = false;
+        _hintMsg = 'New words loaded! Drag to find them!';
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✨ New words generated from lesson!',
+                style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+            backgroundColor: _WSColors.grassDeep,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else {
+      setState(() {
+        _isLoading = false;
+        _hintMsg = 'Could not reach AI — using default words.';
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('⚠️ AI unavailable — is the server running?',
+                style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+            backgroundColor: _WSColors.coral,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -315,7 +372,34 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
                   : const SizedBox.shrink(),
             ),
             if (_done) _buildWinOverlay(),
+            if (_isLoading) _buildLoadingOverlay(),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ── LOADING OVERLAY ──
+  Widget _buildLoadingOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: const Color(0x88000000),
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+            decoration: BoxDecoration(
+              color: _WSColors.paper,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [BoxShadow(color: Color(0x44000000), blurRadius: 30)],
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const CircularProgressIndicator(color: _WSColors.purple),
+              const SizedBox(height: 16),
+              Text('Generating new words…',
+                  style: GoogleFonts.nunito(
+                      fontSize: 16, fontWeight: FontWeight.w700, color: _WSColors.ink)),
+            ]),
+          ),
         ),
       ),
     );
@@ -626,16 +710,22 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
         _RailButton(icon: Icons.arrow_back_ios_rounded,
             onTap: () => Navigator.of(context).pop()),
         const SizedBox(height: 14),
-        _RailButton(icon: Icons.refresh_rounded, onTap: _resetPuzzle),
+        _RailButton(icon: Icons.refresh_rounded, onTap: _isLoading ? null : _resetPuzzle),
         const SizedBox(height: 14),
-        _RailButton(icon: Icons.lightbulb_rounded, onTap: _giveHint),
+        _RailButton(
+          icon: Icons.auto_awesome_rounded,
+          onTap: _isLoading ? null : _loadAiWords,
+          color: _WSColors.sun,
+        ),
+        const SizedBox(height: 14),
+        _RailButton(icon: Icons.lightbulb_rounded, onTap: _isLoading ? null : _giveHint),
         const Spacer(),
         _NextButton(
           pulsing: _done,
 // In _buildSideRail and win overlay:
 onTap: _done ? () => Navigator.of(context).push(
   MaterialPageRoute(
-    builder: (_) => DigitalQuizPage(lesson: widget.lesson),
+    builder: (_) => DigitalQuizPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
   ),
 ) : null,        ),
       ]),
@@ -671,7 +761,7 @@ onTap: _done ? () => Navigator.of(context).push(
               GestureDetector(
 onTap: _done ? () => Navigator.of(context).push(
   MaterialPageRoute(
-    builder: (_) => DigitalQuizPage(lesson: widget.lesson),
+    builder: (_) => DigitalQuizPage(lesson: widget.lesson, onChainFinished: widget.onChainFinished),
   ),
 ) : null,                child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
@@ -950,9 +1040,11 @@ class _SpeechArrowPainter extends CustomPainter {
 class _RailButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback? onTap;
-  const _RailButton({required this.icon, this.onTap});
+  final Color? color;
+  const _RailButton({required this.icon, this.onTap, this.color});
   @override
   Widget build(BuildContext context) {
+    final bg = color ?? _WSColors.purple;
     return Opacity(
       opacity: onTap != null ? 1 : 0.5,
       child: GestureDetector(
@@ -960,9 +1052,9 @@ class _RailButton extends StatelessWidget {
         child: Container(
           width: 56, height: 56,
           decoration: BoxDecoration(
-            color: _WSColors.purple,
+            color: bg,
             borderRadius: BorderRadius.circular(14),
-            boxShadow: const [BoxShadow(color: _WSColors.purpleDeep, offset: Offset(0, 4))],
+            boxShadow: [BoxShadow(color: bg.withValues(alpha: 0.6), offset: const Offset(0, 4))],
           ),
           child: Icon(icon, color: Colors.white, size: 26),
         ),

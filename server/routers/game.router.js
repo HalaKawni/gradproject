@@ -3,6 +3,7 @@ const GameController = require('../controller/game.controller');
 const authMiddleware = require('../middleware/auth.middleware');
 
 // All game routes are protected
+router.get('/my-stats', authMiddleware, GameController.getMyStats);
 router.get('/:gameId/progress', authMiddleware, GameController.getProgress);
 router.post('/:gameId/level', authMiddleware, GameController.saveLevelResult);
 router.get('/:gameId/leaderboard', authMiddleware, GameController.getLeaderboard);

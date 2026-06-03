@@ -12,4 +12,11 @@ router.get('/verify-email', UserController.verifyEmail);
 
 module.exports = router;
 
+// Parent-child linking
+router.post('/generate-link-code', authMiddleware, UserController.generateLinkCode);
+router.get('/link-code', authMiddleware, UserController.getLinkCode);
+router.post('/link-child', authMiddleware, UserController.linkChild);
+router.delete('/unlink-child/:childId', authMiddleware, UserController.unlinkChild);
+router.get('/linked-children', authMiddleware, UserController.getLinkedChildren);
+router.get('/children/:childId/stats', authMiddleware, UserController.getChildStats);
 

@@ -12,6 +12,7 @@ import '../widgets/google_sign_in_button_stub.dart'
     if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
     as google_button;
 import 'package:easy_localization/easy_localization.dart';
+import '../services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -25,12 +26,12 @@ class _LoginPageState extends State<LoginPage>
   late AnimationController _cloudController;
   bool _obscurePassword = true;
   bool _rememberMe = false;
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _showError = false;
   bool isLoading = false;
   bool isGoogleLoading = false;
   bool _isOpeningGoogleSession = false;
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  String? _errorText;
   StreamSubscription<GoogleSignInAuthenticationEvent>?
   _googleSignInSubscription;
 
@@ -66,51 +67,6 @@ class _LoginPageState extends State<LoginPage>
       )..onError(_handleGoogleSignInError);
     } catch (e) {
       _handleGoogleSignInError(e);
-    }
-  }
-
-  Future<void> _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      setState(() => _showError = true);
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-    });
-
-    try {
-      final result = await ApiService.login(email: email, password: password);
-
-      if (!mounted) {
-        return;
-      }
-
-      if (result['success'] == true) {
-        _openAuthenticatedSession(result['data']);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message']?.toString() ?? 'Login failed'),
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          isLoading = false;
-        });
-      }
     }
   }
 
@@ -325,6 +281,11 @@ class _LoginPageState extends State<LoginPage>
                                   const SizedBox(height: 6),
                                   TextField(
                                     controller: _emailController,
+                                    onChanged: (_) {
+                                      if (_errorText != null) {
+                                        setState(() => _errorText = null);
+                                      }
+                                    },
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
@@ -332,14 +293,18 @@ class _LoginPageState extends State<LoginPage>
                                             vertical: 14,
                                           ),
                                       enabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                          color: _errorText != null
+                                              ? const Color(0xFFE53935)
+                                              : const Color(0xFFBDBDBD),
                                         ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       focusedBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                          color: _errorText != null
+                                              ? const Color(0xFFE53935)
+                                              : const Color(0xFF1A73E8),
                                           width: 2,
                                         ),
                                         borderRadius: BorderRadius.circular(6),
@@ -360,6 +325,11 @@ class _LoginPageState extends State<LoginPage>
                                   TextField(
                                     controller: _passwordController,
                                     obscureText: _obscurePassword,
+                                    onChanged: (_) {
+                                      if (_errorText != null) {
+                                        setState(() => _errorText = null);
+                                      }
+                                    },
                                     decoration: InputDecoration(
                                       contentPadding:
                                           const EdgeInsets.symmetric(
@@ -367,14 +337,18 @@ class _LoginPageState extends State<LoginPage>
                                             vertical: 14,
                                           ),
                                       enabledBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                          color: _errorText != null
+                                              ? const Color(0xFFE53935)
+                                              : const Color(0xFFBDBDBD),
                                         ),
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       focusedBorder: OutlineInputBorder(
-                                        borderSide: const BorderSide(
-                                          color: Color(0xFFE53935),
+                                        borderSide: BorderSide(
+                                          color: _errorText != null
+                                              ? const Color(0xFFE53935)
+                                              : const Color(0xFF1A73E8),
                                           width: 2,
                                         ),
                                         borderRadius: BorderRadius.circular(6),
@@ -447,33 +421,44 @@ class _LoginPageState extends State<LoginPage>
                                       child: SizedBox(
                                         width: double.infinity,
                                         child: ElevatedButton(
-                                          //  onPressed: () async {
-                                          //       if (_emailController.text.isEmpty ||
-                                          //           _passwordController.text.isEmpty) {
-                                          //         setState(() => _showError = true);
-                                          //         return;
-                                          //       }
-                                          //       setState(() => _showError = false);
-                                          //       try {
-                                          //         final result = await AuthService.login(
-                                          //           email: _emailController.text.trim(),
-                                          //           password: _passwordController.text.trim(),
-                                          //         );
-                                          //         if (!mounted) return;
-                                          //         Navigator.of(context).pushReplacement(
-                                          //           MaterialPageRoute(
-                                          //             builder: (_) => DashboardPage(
-                                          //               username: result['user']['name'] ?? 'Student',
-                                          //             ),
-                                          //           ),
-                                          //         );
-                                          //       } catch (e) {
-                                          //         setState(() {
-                                          //           _showError = true;
-                                          //         });
-                                          //       }
-                                          //     },
-                                          onPressed: isLoading ? null : _login,
+                                          onPressed: () async {
+                                            if (_emailController.text.isEmpty ||
+                                                _passwordController
+                                                    .text
+                                                    .isEmpty) {
+                                              setState(
+                                                () => _errorText =
+                                                    'error.required'.tr(),
+                                              );
+                                              return;
+                                            }
+                                            setState(() => _errorText = null);
+                                            try {
+                                              final result =
+                                                  await AuthService.login(
+                                                    email: _emailController.text
+                                                        .trim(),
+                                                    password:
+                                                        _passwordController.text
+                                                            .trim(),
+                                                  );
+                                              if (!mounted) {
+                                                return;
+                                              }
+                                              _openAuthenticatedSession(result);
+                                            } catch (e) {
+                                              if (mounted) {
+                                                setState(
+                                                  () => _errorText = e
+                                                      .toString()
+                                                      .replaceFirst(
+                                                        'Exception: ',
+                                                        '',
+                                                      ),
+                                                );
+                                              }
+                                            }
+                                          },
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 const Color.fromARGB(
@@ -508,10 +493,10 @@ class _LoginPageState extends State<LoginPage>
                                   ),
 
                                   // Error message
-                                  if (_showError) ...[
+                                  if (_errorText != null) ...[
                                     const SizedBox(height: 12),
                                     Text(
-                                      'error.required'.tr(),
+                                      _errorText!,
                                       style: GoogleFonts.nunito(
                                         color: const Color(0xFFE53935),
                                         fontSize: 13,

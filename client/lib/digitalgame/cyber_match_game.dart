@@ -91,6 +91,9 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
   Timer? _timer;
   bool _won = false;
   String _speech = "Hi friend! Flip two cheese cards to find a matching pair. Ready?";
+  bool _previewing = false;
+  int _previewCountdown = 5;
+  Timer? _previewTimer;
   final _rng = Random();
 
   @override
@@ -102,27 +105,48 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
   @override
   void dispose() {
     _timer?.cancel();
+    _previewTimer?.cancel();
     super.dispose();
   }
 
   void _reset() {
     _timer?.cancel();
+    _previewTimer?.cancel();
     final deck = <_Card>[];
     for (final p in _pairs) {
       deck.add(_Card(pairId: p.id, isText: true));
       deck.add(_Card(pairId: p.id, isText: false));
     }
     deck.shuffle(_rng);
+    // Show all cards face-up for preview
+    for (final c in deck) { c.flipped = true; }
     setState(() {
-      _cards   = deck;
-      _firstPick = null;
-      _lock    = false;
-      _moves   = 0;
-      _matched = 0;
-      _secs    = 0;
-      _won     = false;
-      _speech  = "Hi friend! Flip two cheese cards to find a matching pair. Ready?";
-      _timer   = null;
+      _cards        = deck;
+      _firstPick    = null;
+      _lock         = false;
+      _moves        = 0;
+      _matched      = 0;
+      _secs         = 0;
+      _won          = false;
+      _timer        = null;
+      _previewing   = true;
+      _previewCountdown = 5;
+      _speech       = "Memorize the cards! Starting in 5...";
+    });
+    _previewTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      setState(() => _previewCountdown--);
+      if (_previewCountdown <= 0) {
+        t.cancel();
+        _previewTimer = null;
+        setState(() {
+          for (final c in _cards) { c.flipped = false; }
+          _previewing = false;
+          _speech = "Hi friend! Flip two cheese cards to find a matching pair. Ready?";
+        });
+      } else {
+        setState(() => _speech = "Memorize the cards! Starting in $_previewCountdown...");
+      }
     });
   }
 
@@ -160,7 +184,7 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
   String _pickMsg(List<String> list) => list[_rng.nextInt(list.length)];
 
   void _onTap(_Card card) {
-    if (_lock) return;
+    if (_lock || _previewing) return;
     if (card.flipped || card.matched) return;
 
     _startTimer();
@@ -512,27 +536,59 @@ class _CyberMatchGameState extends State<CyberMatchGame> {
 
   // ── BOARD ─────────────────────────────────────────────────────────────────
   Widget _buildBoardWrap() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _K.paper,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white, width: 4),
-        boxShadow: const [
-          BoxShadow(color: Color(0x1A2D2150), offset: Offset(0, 10), blurRadius: 0),
-          BoxShadow(color: Color(0x1A2D2150), blurRadius: 30, offset: Offset(0, 20)),
-        ],
-      ),
-      padding: const EdgeInsets.all(18),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4,
-          crossAxisSpacing: 7,
-          mainAxisSpacing: 7,
-          childAspectRatio: 1.8,
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: _K.paper,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white, width: 4),
+            boxShadow: const [
+              BoxShadow(color: Color(0x1A2D2150), offset: Offset(0, 10), blurRadius: 0),
+              BoxShadow(color: Color(0x1A2D2150), blurRadius: 30, offset: Offset(0, 20)),
+            ],
+          ),
+          padding: const EdgeInsets.all(18),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 7,
+              mainAxisSpacing: 7,
+              childAspectRatio: 1.8,
+            ),
+            itemCount: _cards.length,
+            itemBuilder: (_, i) => _buildCard(_cards[i]),
+          ),
         ),
-        itemCount: _cards.length,
-        itemBuilder: (_, i) => _buildCard(_cards[i]),
-      ),
+        if (_previewing)
+          Positioned(
+            top: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: _K.cheese,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: const Border(
+                  bottom: BorderSide(color: _K.cheeseD, width: 2),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.timer_rounded, color: _K.ink, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Memorize the cards!  $_previewCountdown',
+                    style: GoogleFonts.fredoka(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: _K.ink),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 

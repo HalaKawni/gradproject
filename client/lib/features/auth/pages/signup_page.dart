@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'student.dart';
 import 'parent.dart';
 
@@ -14,7 +15,7 @@ class _SignupPageState extends State<SignupPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _cloudController;
   late Animation<double> _cloudAnimation;
-  
+
   @override
   void initState() {
     super.initState();
@@ -30,7 +31,6 @@ class _SignupPageState extends State<SignupPage>
     _cloudController.dispose();
     super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -173,7 +173,7 @@ class _SignupPageState extends State<SignupPage>
                                   size: 20,
                                 ),
                                 Text(
-                                  'BACK',
+                                  'nav.back'.tr(),
                                   style: GoogleFonts.montserrat(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -190,7 +190,7 @@ class _SignupPageState extends State<SignupPage>
 
                       // ── SIGN UP label ──
                       Text(
-                        'SIGN UP',
+                        'nav.signup'.tr(),
                         style: GoogleFonts.montserrat(
                           color: Colors.white,
                           fontSize: 13,
@@ -203,7 +203,7 @@ class _SignupPageState extends State<SignupPage>
 
                       // ── WHO ARE YOU? ──
                       Text(
-                        'WHO ARE YOU?',
+                        'signup.who_are_you'.tr(),
                         style: GoogleFonts.roboto(
                           color: Colors.white,
                           fontSize: 52,
@@ -221,7 +221,7 @@ class _SignupPageState extends State<SignupPage>
 
                       // ── Subtitle ──
                       Text(
-                        'Start your free trial today!',
+                        'signup.free_trial'.tr(),
                         style: GoogleFonts.nunito(
                           color: Colors.white,
                           fontSize: 14,
@@ -236,9 +236,8 @@ class _SignupPageState extends State<SignupPage>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           _RoleCard(
-                            title: 'STUDENT',
-                            subtitle:
-                                'Join your classmates in fun coding games',
+                            title: 'signup.student'.tr(),
+                            subtitle: 'signup.student_subtitle'.tr(),
                             imagePath: 'assets/images/student.jpg',
                             onTap: () {
                               Navigator.push(
@@ -251,9 +250,8 @@ class _SignupPageState extends State<SignupPage>
                           ),
                           const SizedBox(width: 24),
                           _RoleCard(
-                            title: 'PARENT',
-                            subtitle:
-                                'Introduce your child to Computer Science and track their progress',
+                            title: 'signup.parent'.tr(),
+                            subtitle: 'signup.parent_subtitle'.tr(),
                             imagePath: 'assets/images/parent.jpg',
                             onTap: () {
                               Navigator.push(
@@ -277,12 +275,12 @@ class _SignupPageState extends State<SignupPage>
                             color: const Color(0xFF333333),
                           ),
                           children: [
-                            const TextSpan(text: 'Already a member? '),
+                            TextSpan(text: 'common.already_member'.tr()),
                             WidgetSpan(
                               child: GestureDetector(
                                 onTap: () => Navigator.pop(context),
                                 child: Text(
-                                  'Log in to your account',
+                                  'common.login_to_account'.tr(),
                                   style: GoogleFonts.nunito(
                                     fontSize: 14,
                                     color: const Color(0xFF1A73E8),
@@ -334,10 +332,14 @@ class _SignupPageState extends State<SignupPage>
           Row(
             children: [
               _HoverNavButton(
-                label: 'LOG IN',
+                label: 'nav.login'.tr(),
                 onPressed: () => Navigator.pop(context),
               ),
-              _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true),
+              _HoverNavButton(
+                label: 'nav.signup'.tr(),
+                onPressed: () {},
+                filled: true,
+              ),
             ],
           ),
         ],

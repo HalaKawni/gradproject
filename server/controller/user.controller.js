@@ -194,3 +194,60 @@ exports.verifyEmail = async (req, res) => {
 };
 
 
+exports.generateLinkCode = async (req, res) => {
+    try {
+        const code = await UserService.generateLinkCode(req.user._id);
+        res.json({ status: true, linkCode: code });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};
+
+exports.getLinkCode = async (req, res) => {
+    try {
+        const code = await UserService.getLinkCode(req.user._id);
+        res.json({ status: true, linkCode: code });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};
+
+exports.linkChild = async (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code) return res.status(400).json({ status: false, error: 'Code is required' });
+        const result = await UserService.linkChild(req.user._id, code);
+        res.json({ status: true, child: result });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};
+
+exports.unlinkChild = async (req, res) => {
+    try {
+        const { childId } = req.params;
+        await UserService.unlinkChild(req.user._id, childId);
+        res.json({ status: true, message: 'Child unlinked' });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};
+
+exports.getLinkedChildren = async (req, res) => {
+    try {
+        const children = await UserService.getLinkedChildren(req.user._id);
+        res.json({ status: true, children });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};
+
+exports.getChildStats = async (req, res) => {
+    try {
+        const { childId } = req.params;
+        const stats = await UserService.getChildStats(req.user._id, childId);
+        res.json({ status: true, stats });
+    } catch (err) {
+        res.status(400).json({ status: false, error: err.message });
+    }
+};

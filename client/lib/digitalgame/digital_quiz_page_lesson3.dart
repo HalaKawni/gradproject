@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/api_service.dart';
+import 'lesson_slide_texts.dart';
 
 // ===========================================================================
 //  DATA
@@ -16,7 +17,7 @@ class _Question {
   });
 }
 
-const List<_Question> _kQuestions = [
+const List<_Question> _kFallbackQuestions = [
   _Question(
     question: 'What does digital collaboration mean?',
     options: [
@@ -81,6 +82,9 @@ class DigitalQuizPageLesson3 extends StatefulWidget {
 }
 
 class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
+  List<_Question> _questions = List.of(_kFallbackQuestions);
+  bool _isLoading = false;
+
   int _currentQ = 0;
   int? _selectedIdx;
   int? _hoveredIdx;
@@ -89,8 +93,8 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
 
   static const _labels = ['A', 'B', 'C', 'D'];
 
-  _Question get _q => _kQuestions[_currentQ];
-  bool get _isLast => _currentQ == _kQuestions.length - 1;
+  _Question get _q => _questions[_currentQ];
+  bool get _isLast => _currentQ == _questions.length - 1;
   bool get _canNext => _submitted;
 
   void _selectAnswer(int idx) {
@@ -130,19 +134,58 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
     });
   }
 
+  Future<void> _loadAiQuestions() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final raw = await ApiService.generateQuizQuestions(
+        lessonNumber: lessonNumber,
+        slideTexts: LessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (raw.isNotEmpty) {
+        setState(() {
+          _questions = raw.map((q) => _Question(
+            question: q['question'] as String,
+            options: List<String>.from(q['options'] as List),
+            correctIndex: q['correctIndex'] as int,
+          )).toList();
+          _currentQ = 0;
+          _selectedIdx = null;
+          _hoveredIdx = null;
+          _submitted = false;
+          _score = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI questions loaded!'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI failed. Using original questions.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   void _showCompletedDialog() async {
     final lessonNumber = widget.lesson['number'] as int;
     await ApiService.saveQuizScore(
       gameId: 'digital-literacy',
       lessonNumber: lessonNumber,
       correctAnswers: _score,
-      totalQuestions: _kQuestions.length,
+      totalQuestions: _questions.length,
     );
     await ApiService.saveLevelResult(
       gameId: 'digital-literacy',
       level: lessonNumber,
       completed: true,
-      score: ((_score / _kQuestions.length) * 100).round(),
+      score: ((_score / _questions.length) * 100).round(),
     );
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -151,7 +194,7 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
           lessonTitle: widget.lesson['title'] as String,
           lessonNumber: lessonNumber,
           score: _score,
-          total: _kQuestions.length,
+          total: _questions.length,
           onBack: () => Navigator.of(context).pop(),
           onNext: () => Navigator.of(context).pop(),
         ),
@@ -181,9 +224,20 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 60),
-                    child: Container(
-                      color: Colors.white,
-                      child: _buildContent(),
+                    child: Stack(
+                      children: [
+                        Container(
+                          color: Colors.white,
+                          child: _buildContent(),
+                        ),
+                        if (_isLoading)
+                          Container(
+                            color: Colors.black26,
+                            child: const Center(
+                              child: CircularProgressIndicator(color: Color(0xFFF5A623)),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -283,6 +337,38 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
               style: const TextStyle(
                   fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiQuestions,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _isLoading
+                    ? Colors.grey.withOpacity(0.4)
+                    : const Color(0xFFF5A623),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _isLoading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ),
+                    )
+                  : Row(children: [
+                      const Icon(Icons.auto_awesome_rounded,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text('✨ AI',
+                          style: GoogleFonts.nunito(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800)),
+                    ]),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
               label: 'LEARN', value: '12/12',
               bgColor: const Color(0xFF5B8FD4).withOpacity(0.15)),
@@ -352,7 +438,7 @@ class _DigitalQuizPageLesson3State extends State<DigitalQuizPageLesson3> {
                 color: const Color(0xFF555555))),
             const SizedBox(height: 2),
             Row(
-              children: List.generate(_kQuestions.length, (i) {
+              children: List.generate(_questions.length, (i) {
                 Color dotColor;
                 Widget? child;
                 if (i < _currentQ) {

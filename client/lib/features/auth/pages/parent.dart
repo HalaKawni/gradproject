@@ -15,7 +15,6 @@ import '../widgets/google_sign_in_button_stub.dart'
     if (dart.library.js_util) '../widgets/google_sign_in_button_web.dart'
     as google_button;
 import 'package:easy_localization/easy_localization.dart';
-import 'package:client/parent/parent_signup_page.dart';
 
 class parentAccountPage extends StatefulWidget {
   const parentAccountPage({super.key});
@@ -247,19 +246,6 @@ class _parentAccountPageState extends State<parentAccountPage>
     setState(() {
       _apiError = error.toString().replaceAll('Exception: ', '');
     });
-
-    final hasError = _emailController.text.isEmpty ||
-        _displayNameController.text.isEmpty ||
-        _passwordController.text.isEmpty ||
-        _rePasswordController.text.isEmpty ||
-        _passwordController.text != _rePasswordController.text;
-
-    if (!hasError) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const ParentSignupPage()),
-      );
-    }
   }
 
   @override
@@ -501,10 +487,9 @@ class _parentAccountPageState extends State<parentAccountPage>
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _loading
-                                                    ? null
-                                                    : _onSignUp,
-                                                style: ElevatedButton.styleFrom(
+                                                onPressed: _loading ? null : _onSignUp,
+                                                style:
+                                                    ElevatedButton.styleFrom(
                                                   backgroundColor:
                                                       const Color.fromARGB(
                                                         255,
@@ -526,20 +511,39 @@ class _parentAccountPageState extends State<parentAccountPage>
                                                             6),
                                                   ),
                                                 ),
-                                                child: Text(
-                                                  'nav.signup'.tr(),
-                                                  style:
-                                                      GoogleFonts.montserrat(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 1.5,
-                                                  ),
-                                                ),
-                                                
+                                                child: _loading
+                                                    ? const SizedBox(
+                                                        height: 18,
+                                                        width: 18,
+                                                        child: CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                          color: Color(0xFF3A2A00),
+                                                        ),
+                                                      )
+                                                    : Text(
+                                                        'nav.signup'.tr(),
+                                                        style:
+                                                            GoogleFonts.montserrat(
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight.w800,
+                                                          letterSpacing: 1.5,
+                                                        ),
+                                                      ),
                                               ),
                                             ),
                                           ),
                                         ),
+                                        if (_apiError != null) ...[
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            _apiError!,
+                                            style: GoogleFonts.nunito(
+                                              color: const Color(0xFFE53935),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
                                   ),

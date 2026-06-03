@@ -71,11 +71,22 @@ const userSchema = new Schema({
     lastLoginAt: {
         type: Date
     },
-},
+
+    linkCode: {
+        type: String,
+        unique: true,
+        sparse: true
+    },
+    linkedChildren: [{
+        type: Schema.Types.ObjectId,
+        ref: 'user'
+    }]
+    },
     {
         timestamps: true
     }
 );
+
 
 userSchema.pre('save', async function () {
     try {
