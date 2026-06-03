@@ -135,7 +135,11 @@ class FourthDemoProject {
       ],
       widgets: <FourthDemoScreenWidget>[],
       sounds: <FourthDemoSound>[
-        FourthDemoSound(id: 'collect', name: 'Collect sparkle'),
+        FourthDemoSound(
+          id: 'collect',
+          name: 'Ding cartoon',
+          assetPath: 'assets/game_builder/sound effects/ding-cartoon.mp3',
+        ),
       ],
       tilemap: FourthDemoTilemap(
         columns: 15,
@@ -816,23 +820,74 @@ class FourthDemoScreenWidget {
 class FourthDemoSound {
   final String id;
   final String name;
+  final String assetPath;
 
-  const FourthDemoSound({required this.id, required this.name});
+  const FourthDemoSound({
+    required this.id,
+    required this.name,
+    required this.assetPath,
+  });
 
-  FourthDemoSound copyWith({String? name}) {
-    return FourthDemoSound(id: id, name: name ?? this.name);
+  FourthDemoSound copyWith({String? name, String? assetPath}) {
+    return FourthDemoSound(
+      id: id,
+      name: name ?? this.name,
+      assetPath: assetPath ?? this.assetPath,
+    );
   }
 
-  Map<String, dynamic> toJson() => <String, dynamic>{'id': id, 'name': name};
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'id': id,
+    'name': name,
+    'assetPath': assetPath,
+  };
 
   factory FourthDemoSound.fromJson(Map<String, dynamic> json) {
+    final name = json['name']?.toString() ?? 'Sound';
     return FourthDemoSound(
       id:
           json['id']?.toString() ??
           'sound-${DateTime.now().microsecondsSinceEpoch}',
-      name: json['name']?.toString() ?? 'Sound',
+      name: name,
+      assetPath: _normalizeSoundAssetPath(
+        json['assetPath']?.toString() ??
+            _legacySoundAssetPath(json['id']?.toString(), name),
+      ),
     );
   }
+}
+
+String _normalizeSoundAssetPath(String assetPath) {
+  var path = assetPath.trim().replaceAll('\\', '/');
+  for (var i = 0; i < 3; i++) {
+    try {
+      final decoded = Uri.decodeFull(path);
+      if (decoded == path) {
+        break;
+      }
+      path = decoded;
+    } on FormatException {
+      break;
+    }
+  }
+  return path.replaceAll('%20', ' ');
+}
+
+String _legacySoundAssetPath(String? id, String name) {
+  final normalized = '${id ?? ''} $name'.toLowerCase();
+  if (normalized.contains('jump')) {
+    return 'assets/game_builder/sound effects/cartoon-jump.mp3';
+  }
+  if (normalized.contains('fail') || normalized.contains('warning')) {
+    return 'assets/game_builder/sound effects/cartoon-fail-trumpet.mp3';
+  }
+  if (normalized.contains('bonus') || normalized.contains('success')) {
+    return 'assets/game_builder/sound effects/game-bonus.mp3';
+  }
+  if (normalized.contains('blink')) {
+    return 'assets/game_builder/sound effects/cartoon-blinking.mp3';
+  }
+  return 'assets/game_builder/sound effects/ding-cartoon.mp3';
 }
 
 class FourthDemoTilemap {

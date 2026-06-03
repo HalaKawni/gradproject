@@ -245,9 +245,10 @@ async function getAllProjects(user) {
 async function getPublishedProjects() {
   return await BuilderProject.find({
     status: 'published',
+    ownerRole: { $ne: 'admin' },
   })
     .select(
-      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails updatedAt ownerName'
+      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails updatedAt ownerName ownerRole'
     )
     .sort({ updatedAt: -1 });
 }

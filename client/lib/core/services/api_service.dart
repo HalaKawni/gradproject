@@ -393,6 +393,17 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getPublishedBuilderAssets({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/builder/assets/public',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch published assets',
+    );
+  }
+
   static Future<Map<String, dynamic>> getBuilderAsset({
     required String authToken,
     required String assetId,

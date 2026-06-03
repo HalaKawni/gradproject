@@ -5,6 +5,7 @@ class SavedBuilderProject {
   final String status;
   final String builderType;
   final String publisherName;
+  final String ownerRole;
   final String difficulty;
   final String courseId;
   final int orderInCourse;
@@ -17,6 +18,7 @@ class SavedBuilderProject {
     required this.status,
     required this.builderType,
     required this.publisherName,
+    required this.ownerRole,
     required this.difficulty,
     required this.courseId,
     required this.orderInCourse,
@@ -31,6 +33,7 @@ class SavedBuilderProject {
       status: json['status']?.toString() ?? 'draft',
       builderType: _readBuilderType(json),
       publisherName: _readPublisherName(json),
+      ownerRole: _readOwnerRole(json),
       difficulty: json['difficulty']?.toString() ?? 'medium',
       courseId: json['courseId']?.toString() ?? '',
       orderInCourse: _readInt(json['orderInCourse']),
@@ -41,6 +44,10 @@ class SavedBuilderProject {
   bool get isTopView => builderType == 'topView';
 
   bool get isScratch => builderType == 'scratch';
+
+  bool get isPublished => status.trim().toLowerCase() == 'published';
+
+  bool get isUserCreated => ownerRole.trim().toLowerCase() != 'admin';
 
   static String _readBuilderType(Map<String, dynamic> json) {
     final directType = json['builderType']?.toString().trim();
@@ -84,6 +91,28 @@ class SavedBuilderProject {
     }
 
     return 'Unknown publisher';
+  }
+
+  static String _readOwnerRole(Map<String, dynamic> json) {
+    final ownerRole = json['ownerRole']?.toString().trim();
+    if (ownerRole != null && ownerRole.isNotEmpty) {
+      return ownerRole;
+    }
+
+    final draftData = json['draftData'];
+    if (draftData is Map) {
+      final draftDataMap = Map<String, dynamic>.from(draftData);
+      final owner = draftDataMap['owner'];
+      if (owner is Map) {
+        final ownerMap = Map<String, dynamic>.from(owner);
+        final draftOwnerRole = ownerMap['role']?.toString().trim() ?? '';
+        if (draftOwnerRole.isNotEmpty) {
+          return draftOwnerRole;
+        }
+      }
+    }
+
+    return '';
   }
 
   static DateTime? _tryParseDateTime(String? value) {

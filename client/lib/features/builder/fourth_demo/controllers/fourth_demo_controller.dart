@@ -18,6 +18,7 @@ class FourthDemoController extends ChangeNotifier {
   static const double _jumpVelocity = 430;
   static const double _defaultGravity = 980;
   static const double _groundControlSpeed = 260;
+  static const double _speechDurationSeconds = 2.5;
   static const int maxInstructionsPerEvent = 1000;
   static const int maxLoopIterations = 500;
   static const Set<String> supportedBackgrounds = <String>{
@@ -42,10 +43,12 @@ class FourthDemoController extends ChangeNotifier {
   final GameRuntime _runtime = const GameRuntime();
   final Map<String, _SpriteMotion> _motions = <String, _SpriteMotion>{};
   final Map<String, _PhysicsBody> _physicsBodies = <String, _PhysicsBody>{};
+  Map<String, _SpriteSpeech>? _speechBubbles;
   final Set<LogicalKeyboardKey> _pressedKeys = <LogicalKeyboardKey>{};
   String? _continuousHorizontalSpriteId;
   double _continuousHorizontalVelocity = 0;
   final Map<String, String> _loopSpriteVariables = <String, String>{};
+  FourthDemoProject? _preRunProject;
   int _instructionCount = 0;
 
   FourthDemoSprite? get selectedSprite => project.selectedSprite;
@@ -69,6 +72,14 @@ class FourthDemoController extends ChangeNotifier {
     return motion.position;
   }
 
+  String? speechTextFor(String spriteId) {
+    return _activeSpeechBubbles[spriteId]?.text;
+  }
+
+  Map<String, _SpriteSpeech> get _activeSpeechBubbles {
+    return _speechBubbles ??= <String, _SpriteSpeech>{};
+  }
+
   String get selectedCode {
     return project.codeBySpriteId[project.selectedSpriteId] ??
         FourthDemoProject.starterCode;
@@ -90,11 +101,18 @@ class FourthDemoController extends ChangeNotifier {
   }
 
   void updateSelectedCode(String code, {bool notify = true}) {
+    updateCodeForSprite(project.selectedSpriteId, code, notify: notify);
+  }
+
+  void updateCodeForSprite(String spriteId, String code, {bool notify = true}) {
     if (isPlaying) {
       return;
     }
+    if (!project.sprites.any((sprite) => sprite.id == spriteId)) {
+      return;
+    }
     final nextCode = Map<String, String>.from(project.codeBySpriteId);
-    nextCode[project.selectedSpriteId] = code;
+    nextCode[spriteId] = code;
     project = project.copyWith(codeBySpriteId: nextCode);
     if (codeError != null || diagnostics.isNotEmpty) {
       codeError = null;
@@ -190,10 +208,11 @@ class FourthDemoController extends ChangeNotifier {
       parsedHandlers.addAll(parsed.handlers);
     }
 
+    _preRunProject = project;
+    _clearRuntimeState();
     project = project.copyWith(events: parsedHandlers);
     codeError = null;
     diagnostics = const <GameDiagnostic>[];
-    resetRuntime(keepMode: true);
     isPlaying = true;
     statusMessage = 'Running. Press an arrow key to move ${sprite.name}.';
     notifyListeners();
@@ -209,6 +228,8 @@ class FourthDemoController extends ChangeNotifier {
   }
 
   void restartExercise() {
+    _clearRuntimeState();
+    _preRunProject = null;
     project = FourthDemoProject.sample();
     isPlaying = false;
     showPreviousSolution = false;
@@ -220,32 +241,28 @@ class FourthDemoController extends ChangeNotifier {
   }
 
   void resetRuntime({bool keepMode = false}) {
-    _motions.clear();
-    _physicsBodies.clear();
-    _pressedKeys.clear();
-    _stopContinuousHorizontalMovement();
-    final resetSprites = project.sprites
-        .map(
-          (sprite) => sprite.copyWith(
-            x: sprite.startX,
-            y: sprite.startY,
-            visible: true,
-            currentAnimation: '',
-          ),
-        )
-        .toList();
-    final resetWidgets = project.widgets
-        .map(
-          (widget) => widget.type == FourthDemoWidgetKind.counter
-              ? widget.copyWith(value: 0, visible: true)
-              : widget.copyWith(visible: true),
-        )
-        .toList();
-    project = project.copyWith(sprites: resetSprites, widgets: resetWidgets);
+    _clearRuntimeState();
+    final snapshot = _preRunProject;
+    if (snapshot != null) {
+      project = snapshot;
+      _preRunProject = null;
+    } else {
+      project = project.copyWith(events: const <FourthDemoEventHandler>[]);
+    }
     exerciseComplete = false;
     if (!keepMode) {
       isPlaying = false;
     }
+  }
+
+  void _clearRuntimeState() {
+    _motions.clear();
+    _physicsBodies.clear();
+    _activeSpeechBubbles.clear();
+    _pressedKeys.clear();
+    _loopSpriteVariables.clear();
+    draggingSpriteId = null;
+    _stopContinuousHorizontalMovement();
   }
 
   void handleKey(LogicalKeyboardKey key) {
@@ -288,6 +305,10 @@ class FourthDemoController extends ChangeNotifier {
     _runHandlers('onSwipe', direction: direction);
   }
 
+  FourthDemoSprite? spriteAt(Offset worldPosition) {
+    return _spriteAt(worldPosition);
+  }
+
   void handleAnimationEnd(String spriteId, String animationName) {
     if (!isPlaying) {
       return;
@@ -317,6 +338,7 @@ class FourthDemoController extends ChangeNotifier {
     _advanceMotions(dt);
     _advancePhysics(dt);
     _advanceContinuousHorizontalMovement(dt);
+    _advanceSpeechBubbles(dt);
     _runCollisionHandlers();
     _runWorldBoundsHandlers();
     _runHandlers('onUpdate');
@@ -560,10 +582,14 @@ class FourthDemoController extends ChangeNotifier {
     return copy;
   }
 
-  FourthDemoSound addSound(String name) {
+  FourthDemoSound addSoundFromAsset({
+    required String name,
+    required String assetPath,
+  }) {
     final sound = FourthDemoSound(
       id: 'sound-${DateTime.now().microsecondsSinceEpoch}',
       name: name,
+      assetPath: assetPath,
     );
     project = project.copyWith(
       sounds: <FourthDemoSound>[...project.sounds, sound],
@@ -679,6 +705,8 @@ class FourthDemoController extends ChangeNotifier {
         throw FormatException(validation.join(' '));
       }
       project = imported;
+      _clearRuntimeState();
+      _preRunProject = null;
       isPlaying = false;
       exerciseComplete = false;
       codeError = null;
@@ -1038,7 +1066,12 @@ class FourthDemoController extends ChangeNotifier {
       case FourthDemoActionType.stopAnimation:
         next = sprite.copyWith(currentAnimation: '');
       case FourthDemoActionType.say:
-        statusMessage = action.text.isEmpty ? 'Hello!' : action.text;
+        final message = action.text.isEmpty ? 'Hello!' : action.text;
+        _activeSpeechBubbles[sprite.id] = _SpriteSpeech(
+          text: message,
+          remainingSeconds: _speechDurationSeconds,
+        );
+        statusMessage = message;
         shouldNotify = true;
       case FourthDemoActionType.wait:
       case FourthDemoActionType.repeat:
@@ -1332,6 +1365,28 @@ class FourthDemoController extends ChangeNotifier {
     _handleCollections();
   }
 
+  void _advanceSpeechBubbles(double dt) {
+    final speechBubbles = _activeSpeechBubbles;
+    if (speechBubbles.isEmpty) {
+      return;
+    }
+
+    final expired = <String>[];
+    for (final entry in speechBubbles.entries) {
+      entry.value.remainingSeconds -= dt;
+      if (entry.value.remainingSeconds <= 0) {
+        expired.add(entry.key);
+      }
+    }
+    if (expired.isEmpty) {
+      return;
+    }
+    for (final id in expired) {
+      speechBubbles.remove(id);
+    }
+    notifyListeners();
+  }
+
   void _handleCollections() {
     final player = project.sprites
         .where(
@@ -1354,6 +1409,9 @@ class FourthDemoController extends ChangeNotifier {
       if (!_intersects(player, sprite)) {
         continue;
       }
+      if (_hasCustomCollisionHandler(player, sprite)) {
+        continue;
+      }
       final sprites = project.sprites
           .map(
             (item) =>
@@ -1373,6 +1431,28 @@ class FourthDemoController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+  }
+
+  bool _hasCustomCollisionHandler(
+    FourthDemoSprite player,
+    FourthDemoSprite collectible,
+  ) {
+    return project.events.any((handler) {
+      if (handler.event != 'onCollide') {
+        return false;
+      }
+      if (handler.targetSpriteId == player.id) {
+        return handler.argument.isEmpty ||
+            _normalizeSpriteLookup(handler.argument) ==
+                _normalizeSpriteLookup(collectible.name);
+      }
+      if (handler.targetSpriteId == collectible.id) {
+        return handler.argument.isEmpty ||
+            _normalizeSpriteLookup(handler.argument) ==
+                _normalizeSpriteLookup(player.name);
+      }
+      return false;
+    });
   }
 
   void _runCollisionHandlers() {
@@ -1545,4 +1625,11 @@ class _SpriteMotion {
 class _PhysicsBody {
   Offset velocity = Offset.zero;
   bool grounded = true;
+}
+
+class _SpriteSpeech {
+  final String text;
+  double remainingSeconds;
+
+  _SpriteSpeech({required this.text, required this.remainingSeconds});
 }

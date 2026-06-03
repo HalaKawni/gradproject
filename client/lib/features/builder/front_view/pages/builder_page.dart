@@ -25,6 +25,8 @@ import '../solver/front_view_solution_converter.dart';
 import '../solver/front_view_solver.dart';
 import '../widgets/builder_status_bar.dart';
 import '../widgets/builder_toolbar.dart';
+import '../../shared/widgets/game_builder_back_icon.dart';
+import '../../shared/widgets/game_builder_level_title_field.dart';
 
 class BuilderPage extends StatefulWidget {
   final AuthSession session;
@@ -402,17 +404,13 @@ class _BuilderPageState extends State<BuilderPage> {
       textDirection: TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(
-          title: TextField(
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const GameBuilderBackIcon(),
+          ),
+          title: GameBuilderLevelTitleField(
             controller: titleController,
-            decoration: InputDecoration(
-              hintText: language.t('builder.gameName'),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-            ),
-            style: Theme.of(context).textTheme.titleLarge,
-            cursorColor: Colors.black,
-            maxLines: 1,
+            hintText: language.t('builder.gameName'),
             onChanged: _handleTitleChanged,
           ),
           actions: [

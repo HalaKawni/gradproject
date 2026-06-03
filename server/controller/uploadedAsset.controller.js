@@ -31,6 +31,21 @@ async function listAssets(req, res) {
   }
 }
 
+async function listPublicAssets(req, res) {
+  try {
+    const assets = await uploadedAssetService.listPublicAssets();
+    return res.status(200).json({
+      success: true,
+      data: assets,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to fetch public assets.',
+    });
+  }
+}
+
 async function getAssetMetadata(req, res) {
   try {
     const asset = await uploadedAssetService.getAssetMetadata(
@@ -138,6 +153,7 @@ async function deleteAsset(req, res) {
 module.exports = {
   createAsset,
   listAssets,
+  listPublicAssets,
   getAssetMetadata,
   getAssetData,
   updateAsset,

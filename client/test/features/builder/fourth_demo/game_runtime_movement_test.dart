@@ -168,6 +168,145 @@ void main() {
       controller.handleUpdate(0.13);
       expect(player(controller).facing, FourthDemoSpriteFacing.left);
     });
+
+    test('custom collectible collision code prevents automatic collection', () {
+      final controller = FourthDemoController();
+      controller.selectSprite('banana');
+      controller.updateSelectedCode('''
+@onCollide polar, () =>
+    @setX 100
+    @setY 100
+''', notify: false);
+      controller.selectSprite('polar');
+      controller.updateSelectedCode('''
+@onStart = () =>
+    @setX 462
+    @setY 286
+''', notify: false);
+
+      expect(controller.runCode(), isTrue);
+      controller.handleUpdate();
+
+      final banana = controller.project.sprites.firstWhere(
+        (sprite) => sprite.id == 'banana',
+      );
+      expect(banana.x, 100);
+      expect(banana.y, 100);
+      expect(banana.visible, isTrue);
+      expect(controller.exerciseComplete, isFalse);
+    });
+
+    test('stop restores a sprite destroyed during the run', () {
+      final controller = FourthDemoController();
+      controller.selectSprite('banana');
+      controller.updateSelectedCode('''
+@onCollide polar, () =>
+    @destroy()
+''', notify: false);
+      controller.selectSprite('polar');
+      controller.updateSelectedCode('''
+@onStart = () =>
+    @setX 462
+    @setY 286
+''', notify: false);
+
+      expect(controller.runCode(), isTrue);
+      controller.handleUpdate();
+
+      var banana = controller.project.sprites.firstWhere(
+        (sprite) => sprite.id == 'banana',
+      );
+      expect(banana.destroyed, isTrue);
+      expect(banana.visible, isFalse);
+      expect(banana.enabled, isFalse);
+
+      controller.stop();
+      banana = controller.project.sprites.firstWhere(
+        (sprite) => sprite.id == 'banana',
+      );
+      expect(banana.destroyed, isFalse);
+      expect(banana.visible, isTrue);
+      expect(banana.enabled, isTrue);
+      expect(banana.x, banana.startX);
+      expect(banana.y, banana.startY);
+    });
+
+    test('stop restores the exact project state from before run', () {
+      final controller = FourthDemoController();
+      controller.updateSettings(
+        controller.project.settings.copyWith(background: 'forest'),
+      );
+      controller.updateSelectedCode('''
+@onStart = () =>
+    @setX 123
+    @setY 111
+    @hide()
+    @setScale 2
+    @say "changed"
+    game.setBackground "desert"
+''', notify: false);
+      final beforeRun = controller.project.encode();
+
+      expect(controller.runCode(), isTrue);
+      expect(player(controller).x, 123);
+      expect(player(controller).visible, isFalse);
+      expect(player(controller).scale, 2);
+      expect(controller.project.settings.background, 'desert');
+      expect(controller.speechTextFor('polar'), 'changed');
+
+      controller.stop();
+      expect(controller.project.encode(), beforeRun);
+      expect(controller.speechTextFor('polar'), isNull);
+      expect(controller.exerciseComplete, isFalse);
+      expect(controller.isPlaying, isFalse);
+    });
+
+    test('say shows temporary speech for the current sprite', () {
+      final controller = controllerWithCode('''
+@onStart = () =>
+    @say "Hello!"
+''');
+
+      expect(controller.speechTextFor('polar'), 'Hello!');
+      controller.handleUpdate(1.2);
+      expect(controller.speechTextFor('polar'), 'Hello!');
+      controller.handleUpdate(1.4);
+      expect(controller.speechTextFor('polar'), isNull);
+    });
+
+    test('stop clears active speech bubbles', () {
+      final controller = controllerWithCode('''
+@onStart = () =>
+    @say "Still here"
+''');
+
+      expect(controller.speechTextFor('polar'), 'Still here');
+      controller.stop();
+      expect(controller.speechTextFor('polar'), isNull);
+    });
+
+    test('sprite code is stored separately by sprite id', () {
+      final controller = FourthDemoController();
+      const polarCode = '''
+@onKey = (key) =>
+    @step 1
+''';
+      const bananaCode = '''
+@onCollide polar, () =>
+    @say "banana"
+''';
+
+      controller.updateCodeForSprite('polar', polarCode, notify: false);
+      controller.updateCodeForSprite('banana', bananaCode, notify: false);
+      controller.selectSprite('polar');
+      expect(controller.selectedCode, polarCode);
+
+      controller.selectSprite('banana');
+      expect(controller.selectedCode, bananaCode);
+
+      controller.selectSprite('polar');
+      expect(controller.selectedCode, polarCode);
+    });
   });
 
   group('condition evaluation', () {

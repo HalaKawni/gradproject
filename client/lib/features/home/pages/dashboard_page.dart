@@ -27,19 +27,33 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
+enum _DashboardSection { courses, discover }
+
+enum _DiscoverContentTab { challenges, assets }
+
 class _DashboardPageState extends State<DashboardPage> {
   bool _showFilterExpanded = false;
   bool _showLevelError = false;
   bool _showCategoryError = false;
   bool _showTopicError = false;
   String _activeTab = 'Filter'; // internal key, not displayed directly
+  _DashboardSection _activeSection = _DashboardSection.courses;
+  _DiscoverContentTab _discoverContentTab = _DiscoverContentTab.challenges;
   bool _isLoadingPublicCourses = false;
   List<_CourseData> _publicCourses = const [];
+  bool _isLoadingPublishedGames = false;
+  String? _publishedGamesErrorMessage;
+  List<SavedBuilderProject> _publishedGames = const [];
+  bool _isLoadingPublishedAssets = false;
+  String? _publishedAssetsErrorMessage;
+  List<_PublishedBuilderAsset> _publishedAssets = const [];
 
   @override
   void initState() {
     super.initState();
     _loadPublicCourses();
+    _loadPublishedGames();
+    _loadPublishedAssets();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       showDialog(context: context, builder: (_) => const UnlockDialog());
     });
@@ -73,6 +87,103 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _isLoadingPublicCourses = false;
     });
+  }
+
+  Future<void> _loadPublishedGames() async {
+    setState(() {
+      _isLoadingPublishedGames = true;
+      _publishedGamesErrorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.getPublishedBuilderProjects(
+        authToken: widget.session.token,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        final games = _parseList(result['data'])
+            .map(SavedBuilderProject.fromJson)
+            .where(
+              (project) =>
+                  project.id.isNotEmpty &&
+                  project.isPublished &&
+                  project.isUserCreated,
+            )
+            .toList();
+        setState(() {
+          _publishedGames = games;
+          _isLoadingPublishedGames = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _publishedGamesErrorMessage =
+            result['message']?.toString() ??
+            'Failed to load published challenges.';
+        _isLoadingPublishedGames = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _publishedGamesErrorMessage = 'Failed to load published challenges: $e';
+        _isLoadingPublishedGames = false;
+      });
+    }
+  }
+
+  Future<void> _loadPublishedAssets() async {
+    setState(() {
+      _isLoadingPublishedAssets = true;
+      _publishedAssetsErrorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.getPublishedBuilderAssets(
+        authToken: widget.session.token,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        final assets = _parseList(result['data'])
+            .map(_PublishedBuilderAsset.fromJson)
+            .where(
+              (asset) =>
+                  asset.id.isNotEmpty && asset.isPublic && asset.isUserCreated,
+            )
+            .toList();
+        setState(() {
+          _publishedAssets = assets;
+          _isLoadingPublishedAssets = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _publishedAssetsErrorMessage =
+            result['message']?.toString() ?? 'Failed to load published assets.';
+        _isLoadingPublishedAssets = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _publishedAssetsErrorMessage = 'Failed to load published assets: $e';
+        _isLoadingPublishedAssets = false;
+      });
+    }
   }
 
   List<Map<String, dynamic>> _parseList(Object? value) {
@@ -109,15 +220,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 _buildTopNavbar(),
                 Expanded(
                   child: SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _buildHeroBanner(),
-                        _buildFilterSection(),
-                        const SizedBox(height: 24),
-                        _buildCoursesSection(),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
+                    child: _buildMainSection(),
                   ),
                 ),
               ],
@@ -139,11 +242,10 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 16),
           _SidebarItem(
             label: 'dashboard.courses_section'.tr(),
-            isActive: true,
-            onTap: () => showDialog(
-              context: context,
-              builder: (_) => const UnlockDialog(),
-            ),
+            isActive: _activeSection == _DashboardSection.courses,
+            onTap: () => setState(() {
+              _activeSection = _DashboardSection.courses;
+            }),
           ),
           _SidebarItem(
             label: 'dashboard.my_creations'.tr(),
@@ -152,8 +254,10 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           _SidebarItem(
             label: 'dashboard.discover'.tr(),
-            isActive: false,
-            onTap: () {},
+            isActive: _activeSection == _DashboardSection.discover,
+            onTap: () => setState(() {
+              _activeSection = _DashboardSection.discover;
+            }),
           ),
           const Spacer(),
           _SidebarItem(
@@ -165,6 +269,22 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+
+  Widget _buildMainSection() {
+    if (_activeSection == _DashboardSection.discover) {
+      return _buildDiscoverSection();
+    }
+
+    return Column(
+      children: [
+        _buildHeroBanner(),
+        _buildFilterSection(),
+        const SizedBox(height: 24),
+        _buildCoursesSection(),
+        const SizedBox(height: 40),
+      ],
     );
   }
 
@@ -956,7 +1076,536 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
+
+  Widget _buildDiscoverSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildDiscoverBannerAndTabs(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 24, 24, 8),
+          child: Text(
+            _discoverContentTab == _DiscoverContentTab.challenges
+                ? 'Discover Challenges'
+                : 'Assets',
+            style: GoogleFonts.nunito(
+              color: const Color(0xFF243A1B),
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        if (_discoverContentTab == _DiscoverContentTab.assets)
+          _buildDiscoverAssets()
+        else
+          _buildDiscoverChallenges(),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  Widget _buildDiscoverBannerAndTabs() {
+    return Stack(
+      children: [
+        SizedBox(
+          height: 220,
+          child: Column(
+            children: [
+              Expanded(child: _DashboardDiscoverBannerPlaceholder()),
+              const SizedBox(height: 42),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 10,
+          bottom: 42,
+          child: Row(
+            children: [
+              _DashboardDiscoverTabButton(
+                label: 'CHALLENGES',
+                isSelected:
+                    _discoverContentTab == _DiscoverContentTab.challenges,
+                onTap: () => setState(() {
+                  _discoverContentTab = _DiscoverContentTab.challenges;
+                }),
+              ),
+              const SizedBox(width: 6),
+              _DashboardDiscoverTabButton(
+                label: 'ASSETS',
+                isSelected: _discoverContentTab == _DiscoverContentTab.assets,
+                onTap: () => setState(() {
+                  _discoverContentTab = _DiscoverContentTab.assets;
+                }),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDiscoverChallenges() {
+    if (_isLoadingPublishedGames) {
+      return const _DashboardDiscoverMessage(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_publishedGamesErrorMessage != null) {
+      return _DashboardDiscoverMessage(
+        icon: Icons.error_outline,
+        message: _publishedGamesErrorMessage!,
+        actionLabel: 'Try Again',
+        onAction: _loadPublishedGames,
+      );
+    }
+
+    if (_publishedGames.isEmpty) {
+      return const _DashboardDiscoverMessage(
+        icon: Icons.extension_outlined,
+        message: 'No published challenges are available yet.',
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = (constraints.maxWidth / 4 - 12).clamp(210.0, 260.0);
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: _publishedGames
+                .map(
+                  (game) => SizedBox(
+                    width: cardWidth,
+                    child: _DashboardPublishedGameCard(
+                      game: game,
+                      onTap: () => _openPublishedGame(game),
+                    ),
+                  ),
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDiscoverAssets() {
+    if (_isLoadingPublishedAssets) {
+      return const _DashboardDiscoverMessage(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (_publishedAssetsErrorMessage != null) {
+      return _DashboardDiscoverMessage(
+        icon: Icons.error_outline,
+        message: _publishedAssetsErrorMessage!,
+        actionLabel: 'Try Again',
+        onAction: _loadPublishedAssets,
+      );
+    }
+
+    if (_publishedAssets.isEmpty) {
+      return const _DashboardDiscoverMessage(
+        icon: Icons.auto_awesome_outlined,
+        message: 'No published user assets are available yet.',
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cardWidth = (constraints.maxWidth / 5 - 13).clamp(170.0, 220.0);
+          return Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            children: _publishedAssets
+                .map(
+                  (asset) => SizedBox(
+                    width: cardWidth,
+                    child: _DashboardPublishedAssetCard(
+                      asset: asset,
+                      authToken: widget.session.token,
+                    ),
+                  ),
+                )
+                .toList(),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _openPublishedGame(SavedBuilderProject game) async {
+    final routeName = game.isTopView
+        ? AppRoutes.topViewBuilder
+        : game.isScratch
+        ? AppRoutes.scratchBuilder
+        : AppRoutes.builderPlay;
+    final routeData = game.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+          )
+        : game.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: game.id,
+            initialTitle: game.title,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+  }
 }
+
+class _DashboardDiscoverTabButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _DashboardDiscoverTabButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: isSelected ? const Color(0xFFF7F7F7) : const Color(0xFF8DB75C),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+        child: SizedBox(
+          width: 150,
+          height: 42,
+          child: Center(
+            child: Text(
+              label,
+              style: GoogleFonts.montserrat(
+                color: isSelected ? const Color(0xFF8EA231) : Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardDiscoverBannerPlaceholder extends StatelessWidget {
+  const _DashboardDiscoverBannerPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    // This zooms the IMAGE itself, not the parent/container.
+    const double imageZoom = 1.0;
+
+    // x: -1 left, 0 center, 1 right
+    // y: -1 top, 0 center, 1 bottom
+    const Alignment imagePosition = Alignment(0.0, -0.15);
+
+    return ClipRect(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return OverflowBox(
+            alignment: imagePosition,
+            minWidth: constraints.maxWidth * imageZoom,
+            maxWidth: constraints.maxWidth * imageZoom,
+            minHeight: constraints.maxHeight * imageZoom,
+            maxHeight: constraints.maxHeight * imageZoom,
+            child: Image.asset(
+              'assets/images/discovery banner.png',
+              width: constraints.maxWidth * imageZoom,
+              height: constraints.maxHeight * imageZoom,
+              fit: BoxFit.cover,
+              alignment: imagePosition,
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _DashboardPublishedGameCard extends StatelessWidget {
+  final SavedBuilderProject game;
+  final VoidCallback onTap;
+
+  const _DashboardPublishedGameCard({
+    required this.game,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          height: 300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const AspectRatio(
+                aspectRatio: 16 / 9,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: Color(0xFFDDEDC7)),
+                  child: Center(
+                    child: Icon(
+                      Icons.videogame_asset_outlined,
+                      size: 44,
+                      color: Color(0xFF6C9D43),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        game.title,
+                        style: GoogleFonts.nunito(
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF243A1B),
+                          fontSize: 18,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'By ${game.publisherName}',
+                        style: GoogleFonts.nunito(
+                          color: const Color(0xFF667064),
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.play_circle_fill,
+                            color: Color(0xFF6C9D43),
+                            size: 20,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            game.difficulty.toUpperCase(),
+                            style: GoogleFonts.montserrat(
+                              color: const Color(0xFF6C9D43),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardPublishedAssetCard extends StatelessWidget {
+  final _PublishedBuilderAsset asset;
+  final String authToken;
+
+  const _DashboardPublishedAssetCard({
+    required this.asset,
+    required this.authToken,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: 250,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(color: Color(0xFFDDEDC7)),
+                child: Image.network(
+                  '${ApiService.baseUrl}/api/builder/assets/${asset.id}/data',
+                  headers: {'Authorization': 'Bearer $authToken'},
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        size: 40,
+                        color: Color(0xFF6C9D43),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      asset.name,
+                      style: GoogleFonts.nunito(
+                        color: const Color(0xFF243A1B),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'By ${asset.ownerName}',
+                      style: GoogleFonts.nunito(
+                        color: const Color(0xFF667064),
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Text(
+                      asset.type.toUpperCase(),
+                      style: GoogleFonts.montserrat(
+                        color: const Color(0xFF6C9D43),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PublishedBuilderAsset {
+  final String id;
+  final String name;
+  final String type;
+  final String ownerName;
+  final String ownerRole;
+  final bool isPublic;
+
+  const _PublishedBuilderAsset({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.ownerName,
+    required this.ownerRole,
+    required this.isPublic,
+  });
+
+  bool get isUserCreated => ownerRole.trim().toLowerCase() != 'admin';
+
+  factory _PublishedBuilderAsset.fromJson(Map<String, dynamic> json) {
+    return _PublishedBuilderAsset(
+      id: (json['id'] ?? json['_id'])?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Untitled asset',
+      type: json['type']?.toString() ?? 'asset',
+      ownerName: json['ownerName']?.toString() ?? 'Unknown creator',
+      ownerRole: json['ownerRole']?.toString() ?? '',
+      isPublic: json['isPublic'] == true,
+    );
+  }
+}
+
+class _DashboardDiscoverMessage extends StatelessWidget {
+  final Widget? child;
+  final IconData? icon;
+  final String? message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _DashboardDiscoverMessage({
+    this.child,
+    this.icon,
+    this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 76, 24, 24),
+      child: Center(
+        child:
+            child ??
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 44, color: const Color(0xFF6C9D43)),
+                const SizedBox(height: 12),
+                Text(
+                  message ?? '',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.nunito(
+                    color: const Color(0xFF45523F),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (actionLabel != null && onAction != null) ...[
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: onAction,
+                    child: Text(actionLabel!),
+                  ),
+                ],
+              ],
+            ),
+      ),
+    );
+  }
+}
+
 
 // // ── COURSE DATA MODEL ──
 // class _CourseData {

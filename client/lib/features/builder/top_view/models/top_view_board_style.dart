@@ -1,3 +1,4 @@
+import 'package:client/features/builder/front_view/shared/builder_collectable.dart';
 import 'package:client/core/localization/app_language.dart';
 
 class TopViewBackground {
@@ -24,8 +25,34 @@ class TopViewObstacleStyle {
   });
 }
 
+class TopViewCollectableStyle {
+  final String id;
+  final String label;
+  final String assetPath;
+
+  const TopViewCollectableStyle({
+    required this.id,
+    required this.label,
+    required this.assetPath,
+  });
+}
+
+class TopViewGoalStyle {
+  final String id;
+  final String label;
+  final String assetPath;
+
+  const TopViewGoalStyle({
+    required this.id,
+    required this.label,
+    required this.assetPath,
+  });
+}
+
 const String defaultTopViewBackgroundId = 'grass';
 const String defaultTopViewObstacleStyleId = 'bush1';
+const String defaultTopViewCollectableStyleId = defaultBuilderCollectableId;
+const String defaultTopViewGoalStyleId = 'chest-closed';
 
 const List<TopViewBackground> topViewBackgrounds = <TopViewBackground>[
   TopViewBackground(
@@ -103,6 +130,25 @@ const List<TopViewObstacleStyle> topViewObstacleStyles = <TopViewObstacleStyle>[
   ),
 ];
 
+final List<TopViewCollectableStyle> topViewCollectableStyles =
+    builderCollectables
+        .map(
+          (collectable) => TopViewCollectableStyle(
+            id: collectable.id,
+            label: collectable.label,
+            assetPath: collectable.flutterAssetPath,
+          ),
+        )
+        .toList(growable: false);
+
+const List<TopViewGoalStyle> topViewGoalStyles = <TopViewGoalStyle>[
+  TopViewGoalStyle(
+    id: 'chest-closed',
+    label: 'Chest',
+    assetPath: 'game_builder/goal/chest_closed.png',
+  ),
+];
+
 TopViewBackground topViewBackgroundById(String? id) {
   for (final background in topViewBackgrounds) {
     if (background.id == id) {
@@ -123,6 +169,26 @@ TopViewObstacleStyle topViewObstacleStyleById(String? id) {
   return topViewObstacleStyles.first;
 }
 
+TopViewCollectableStyle topViewCollectableStyleById(String? id) {
+  for (final collectable in topViewCollectableStyles) {
+    if (collectable.id == id) {
+      return collectable;
+    }
+  }
+
+  return topViewCollectableStyles.first;
+}
+
+TopViewGoalStyle topViewGoalStyleById(String? id) {
+  for (final goal in topViewGoalStyles) {
+    if (goal.id == id) {
+      return goal;
+    }
+  }
+
+  return topViewGoalStyles.first;
+}
+
 String localizedTopViewBackgroundLabel(AppLanguage language, String id) {
   final background = topViewBackgroundById(id);
   return language.tr('builder.topViewBackground.$id', background.label);
@@ -131,4 +197,14 @@ String localizedTopViewBackgroundLabel(AppLanguage language, String id) {
 String localizedTopViewObstacleLabel(AppLanguage language, String id) {
   final obstacle = topViewObstacleStyleById(id);
   return language.tr('builder.topViewObstacle.$id', obstacle.label);
+}
+
+String localizedTopViewCollectableLabel(AppLanguage language, String id) {
+  final collectable = topViewCollectableStyleById(id);
+  return language.tr('builder.collectable.$id', collectable.label);
+}
+
+String localizedTopViewGoalLabel(AppLanguage language, String id) {
+  final goal = topViewGoalStyleById(id);
+  return language.tr('builder.topViewGoal.$id', goal.label);
 }

@@ -19,6 +19,8 @@ class TopViewRenderItem {
   final String type;
   final TopViewRenderCell cell;
   final String? obstacleStyleId;
+  final String? collectableStyleId;
+  final String? goalStyleId;
   final String? customAssetId;
   final double customAssetFrameScale;
   final double customAssetFrameOffsetX;
@@ -28,6 +30,8 @@ class TopViewRenderItem {
     required this.type,
     required this.cell,
     this.obstacleStyleId,
+    this.collectableStyleId,
+    this.goalStyleId,
     this.customAssetId,
     this.customAssetFrameScale = 1,
     this.customAssetFrameOffsetX = 0,
@@ -36,10 +40,19 @@ class TopViewRenderItem {
 }
 
 class TopViewBuilderGame extends FlameGame {
+  static const double _goalChestFrameDurationSeconds = 0.15;
+  static const List<String> _goalChestFramePaths = <String>[
+    'game_builder/goal/chest_closed.png',
+    'game_builder/goal/chest_opening.png',
+    'game_builder/goal/chest_open_gold.png',
+  ];
+
   final int columns;
   final int rows;
   final double playerSpriteTileScale;
   final double obstacleSpriteTileScale;
+  final double collectableSpriteTileScale;
+  final double goalSpriteTileScale;
   final double runTilesPerSecond;
   final double walkFrameDurationSeconds;
 
@@ -48,6 +61,8 @@ class TopViewBuilderGame extends FlameGame {
   String _playerCharacterId = defaultTopViewCharacterId;
   String _backgroundId = defaultTopViewBackgroundId;
   String _obstacleStyleId = defaultTopViewObstacleStyleId;
+  String _collectableStyleId = defaultTopViewCollectableStyleId;
+  String _goalStyleId = defaultTopViewGoalStyleId;
   double _playerHeadingDegrees = 90;
   Offset? _playerPosition;
   Offset? _targetPosition;
@@ -56,19 +71,27 @@ class TopViewBuilderGame extends FlameGame {
   final Map<String, ui.Image> _characterWalkSheets = <String, ui.Image>{};
   final Map<String, ui.Image> _backgroundImages = <String, ui.Image>{};
   final Map<String, ui.Image> _obstacleImages = <String, ui.Image>{};
+  final Map<String, ui.Image> _collectableImages = <String, ui.Image>{};
+  final Map<String, ui.Image> _goalImages = <String, ui.Image>{};
+  List<ui.Image>? _goalChestFrames;
   final Map<String, ui.Image> _customAssetImages = <String, ui.Image>{};
   final Set<String> _customAssetImagesLoading = <String>{};
+  Set<String>? _collectedCollectableCells;
   String? _customBackgroundAssetId;
   double _customBackgroundFrameScale = 1;
   double _customBackgroundFrameOffsetX = 0;
   double _customBackgroundFrameOffsetY = 0;
   double _walkAnimationElapsedSeconds = 0;
+  double _goalChestAnimationElapsedSeconds = 0;
+  bool _goalReached = false;
 
   TopViewBuilderGame({
     required this.columns,
     required this.rows,
     this.playerSpriteTileScale = 2.3,
     this.obstacleSpriteTileScale = 2.3,
+    this.collectableSpriteTileScale = 1.8,
+    this.goalSpriteTileScale = 1.8,
     this.runTilesPerSecond = 3,
     this.walkFrameDurationSeconds = 0.28,
   });
@@ -107,6 +130,29 @@ class TopViewBuilderGame extends FlameGame {
         // Keep the painted fallback if the obstacle asset is unavailable.
       }
     }
+    for (final collectable in topViewCollectableStyles) {
+      try {
+        _collectableImages[collectable.id] = await _loadUiImage(
+          collectable.assetPath,
+        );
+      } catch (_) {
+        // Keep the painted fallback if the collectable asset is unavailable.
+      }
+    }
+    for (final goal in topViewGoalStyles) {
+      try {
+        _goalImages[goal.id] = await _loadUiImage(goal.assetPath);
+      } catch (_) {
+        // Keep the painted fallback if the goal asset is unavailable.
+      }
+    }
+    for (final framePath in _goalChestFramePaths) {
+      try {
+        _goalChestFrameImages.add(await _loadUiImage(framePath));
+      } catch (_) {
+        // Keep the selected goal image/fallback if animation frames are missing.
+      }
+    }
   }
 
   Future<ui.Image> _loadUiImage(String assetPath) async {
@@ -129,6 +175,8 @@ class TopViewBuilderGame extends FlameGame {
     required String playerCharacterId,
     required String backgroundId,
     required String obstacleStyleId,
+    required String collectableStyleId,
+    required String goalStyleId,
     required double playerHeadingDegrees,
     String? customBackgroundAssetId,
     double customBackgroundFrameScale = 1,
@@ -141,6 +189,8 @@ class TopViewBuilderGame extends FlameGame {
     _playerCharacterId = topViewCharacterById(playerCharacterId).id;
     _backgroundId = topViewBackgroundById(backgroundId).id;
     _obstacleStyleId = topViewObstacleStyleById(obstacleStyleId).id;
+    _collectableStyleId = topViewCollectableStyleById(collectableStyleId).id;
+    _goalStyleId = topViewGoalStyleById(goalStyleId).id;
     _playerHeadingDegrees = playerHeadingDegrees;
     _customBackgroundAssetId = customBackgroundAssetId;
     _customBackgroundFrameScale = customBackgroundFrameScale;
@@ -175,6 +225,25 @@ class TopViewBuilderGame extends FlameGame {
     _playerCell = cell;
     _playerPosition = _playerCenterFromCell(cell);
     _playerHeadingDegrees = headingDegrees;
+    resetPlaybackEffects();
+  }
+
+  void resetPlaybackEffects() {
+    _collectedCollectableCellsSet.clear();
+    _goalReached = false;
+    _goalChestAnimationElapsedSeconds = 0;
+  }
+
+  void collectAtCell(int column, int row) {
+    _collectedCollectableCellsSet.add(_cellKey(column, row));
+  }
+
+  void openGoalChest() {
+    if (_goalReached) {
+      return;
+    }
+    _goalReached = true;
+    _goalChestAnimationElapsedSeconds = 0;
   }
 
   void face(double headingDegrees) {
@@ -195,6 +264,10 @@ class TopViewBuilderGame extends FlameGame {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_goalReached) {
+      _goalChestAnimationElapsedSeconds += dt;
+    }
+
     final target = _targetPosition;
     final current = _playerPosition;
     if (target == null || current == null) {
@@ -277,6 +350,12 @@ class TopViewBuilderGame extends FlameGame {
       if (item.type == 'player') {
         continue;
       }
+      if (item.type == 'collectable' &&
+          _collectedCollectableCellsSet.contains(
+            _cellKey(item.cell.column, item.cell.row),
+          )) {
+        continue;
+      }
 
       final center = Offset(
         (item.cell.column + 0.5) * cellWidth,
@@ -290,6 +369,10 @@ class TopViewBuilderGame extends FlameGame {
             ? obstacleSpriteTileScale
             : item.type == 'player'
             ? playerSpriteTileScale
+            : item.type == 'collectable'
+            ? collectableSpriteTileScale
+            : item.type == 'goal'
+            ? goalSpriteTileScale
             : 1.0;
         final rect = Rect.fromCenter(
           center: center,
@@ -330,8 +413,57 @@ class TopViewBuilderGame extends FlameGame {
         continue;
       }
 
+      if (item.type == 'collectable') {
+        final collectableStyleId = topViewCollectableStyleById(
+          item.collectableStyleId ?? _collectableStyleId,
+        ).id;
+        final image = _collectableImages[collectableStyleId];
+        final rect = Rect.fromCenter(
+          center: center,
+          width: shortestSide * collectableSpriteTileScale,
+          height: shortestSide * collectableSpriteTileScale,
+        );
+        if (image != null) {
+          _drawImageContain(canvas, image, rect);
+          continue;
+        }
+      }
+
+      if (item.type == 'goal') {
+        final goalStyleId = topViewGoalStyleById(
+          item.goalStyleId ?? _goalStyleId,
+        ).id;
+        final image = _goalImageForCurrentState(goalStyleId);
+        final scale = _goalReached
+            ? goalSpriteTileScale * 0.78
+            : goalSpriteTileScale;
+        final rect = Rect.fromCenter(
+          center: center,
+          width: shortestSide * scale,
+          height: shortestSide * scale,
+        );
+        if (image != null) {
+          _drawImageContain(canvas, image, rect);
+          continue;
+        }
+      }
+
       canvas.drawCircle(center, shortestSide * 0.3, paint);
     }
+  }
+
+  ui.Image? _goalImageForCurrentState(String goalStyleId) {
+    final goalChestFrames = _goalChestFrameImages;
+    if (_goalReached && goalChestFrames.isNotEmpty) {
+      final frameIndex =
+          (_goalChestAnimationElapsedSeconds / _goalChestFrameDurationSeconds)
+              .floor()
+              .clamp(0, goalChestFrames.length - 1)
+              .toInt();
+      return goalChestFrames[frameIndex];
+    }
+
+    return _goalImages[goalStyleId];
   }
 
   void _drawImageContain(Canvas canvas, ui.Image image, Rect bounds) {
@@ -428,6 +560,15 @@ class TopViewBuilderGame extends FlameGame {
       playerPosition.dx * cellWidth,
       playerPosition.dy * cellHeight,
     );
+    if (_playerIsOnGoal(playerPosition)) {
+      final haloPaint = Paint()..color = Colors.white.withValues(alpha: 0.45);
+      final ringPaint = Paint()
+        ..color = const Color(0xFF22C55E).withValues(alpha: 0.36)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = shortestSide * 0.08;
+      canvas.drawCircle(center, shortestSide * 0.48, haloPaint);
+      canvas.drawCircle(center, shortestSide * 0.55, ringPaint);
+    }
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
@@ -474,6 +615,19 @@ class TopViewBuilderGame extends FlameGame {
       );
     }
     canvas.restore();
+  }
+
+  bool _playerIsOnGoal(Offset playerPosition) {
+    final column = playerPosition.dx.floor();
+    final row = playerPosition.dy.floor();
+    for (final item in _items) {
+      if (item.type == 'goal' &&
+          item.cell.column == column &&
+          item.cell.row == row) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Rect _playerSourceRect(ui.Image image, {required bool isMoving}) {
@@ -523,4 +677,14 @@ class TopViewBuilderGame extends FlameGame {
   double _degreesToRadians(double degrees) {
     return degrees * math.pi / 180;
   }
+
+  Set<String> get _collectedCollectableCellsSet {
+    return _collectedCollectableCells ??= <String>{};
+  }
+
+  List<ui.Image> get _goalChestFrameImages {
+    return _goalChestFrames ??= <ui.Image>[];
+  }
+
+  String _cellKey(int column, int row) => '$column,$row';
 }

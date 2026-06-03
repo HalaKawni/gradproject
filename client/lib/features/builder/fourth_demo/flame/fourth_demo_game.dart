@@ -109,6 +109,7 @@ class FourthDemoGame extends FlameGame {
         sprite.copyWith(x: visualPosition.dx, y: visualPosition.dy),
       );
     }
+    _drawSpeechBubbles(canvas, project, world);
     _drawScreenWidgets(canvas, project.widgets);
     _drawSelection(canvas, project);
     if (controller.exerciseComplete) {
@@ -531,6 +532,93 @@ class FourthDemoGame extends FlameGame {
       );
       painter.paint(canvas, Offset(widget.x, widget.y));
     }
+  }
+
+  void _drawSpeechBubbles(
+    Canvas canvas,
+    FourthDemoProject project,
+    Rect world,
+  ) {
+    for (final sprite in project.sprites) {
+      if (!sprite.visible || sprite.destroyed) {
+        continue;
+      }
+      final text = controller.speechTextFor(sprite.id);
+      if (text == null || text.trim().isEmpty) {
+        continue;
+      }
+      final visualPosition = controller.visualPositionFor(sprite);
+      final rect = Rect.fromLTWH(
+        visualPosition.dx,
+        visualPosition.dy,
+        sprite.width,
+        sprite.height,
+      );
+      _drawSpeechBubble(canvas, rect, text, world);
+    }
+  }
+
+  void _drawSpeechBubble(
+    Canvas canvas,
+    Rect spriteRect,
+    String text,
+    Rect world,
+  ) {
+    const maxBubbleWidth = 180.0;
+    const horizontalPadding = 12.0;
+    const verticalPadding = 8.0;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: const TextStyle(
+          color: Color(0xFF263238),
+          fontSize: 14,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      maxLines: 3,
+      ellipsis: '...',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: maxBubbleWidth - horizontalPadding * 2);
+
+    final bubbleWidth = painter.width + horizontalPadding * 2;
+    final bubbleHeight = painter.height + verticalPadding * 2;
+    var left = spriteRect.center.dx - bubbleWidth / 2;
+    left = left.clamp(world.left + 6, world.right - bubbleWidth - 6).toDouble();
+    final top = math.max(world.top + 6, spriteRect.top - bubbleHeight - 12);
+    final bubbleRect = Rect.fromLTWH(left, top, bubbleWidth, bubbleHeight);
+
+    final bubblePaint = Paint()..color = Colors.white.withValues(alpha: 0.94);
+    final borderPaint = Paint()
+      ..color = const Color(0xFF263238).withValues(alpha: 0.20)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final rrect = RRect.fromRectAndRadius(
+      bubbleRect,
+      const Radius.circular(8),
+    );
+    canvas.drawRRect(rrect, bubblePaint);
+    canvas.drawRRect(rrect, borderPaint);
+
+    final tailCenter = spriteRect.center.dx.clamp(
+      bubbleRect.left + 14,
+      bubbleRect.right - 14,
+    );
+    final tail = Path()
+      ..moveTo(tailCenter - 7, bubbleRect.bottom - 1)
+      ..lineTo(tailCenter + 7, bubbleRect.bottom - 1)
+      ..lineTo(spriteRect.center.dx, bubbleRect.bottom + 9)
+      ..close();
+    canvas.drawPath(tail, bubblePaint);
+    canvas.drawPath(tail, borderPaint);
+
+    painter.paint(
+      canvas,
+      Offset(
+        bubbleRect.left + horizontalPadding,
+        bubbleRect.top + verticalPadding,
+      ),
+    );
   }
 
   void _drawSelection(Canvas canvas, FourthDemoProject project) {

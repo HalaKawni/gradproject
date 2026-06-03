@@ -1,4 +1,5 @@
 const UploadedAsset = require('../model/uploadedAsset.model');
+const User = require('../model/user.model');
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   'image/png',
@@ -19,11 +20,13 @@ function validateAssetType(type) {
   );
 }
 
-function toMetadata(asset) {
+function toMetadata(asset, owner) {
   return {
     _id: asset._id,
     id: asset._id,
     ownerId: asset.ownerId,
+    ownerName: owner && owner.name ? owner.name : asset.ownerName,
+    ownerRole: owner && owner.role ? owner.role : asset.ownerRole,
     name: asset.name,
     type: asset.type,
     mimeType: asset.mimeType,
@@ -67,6 +70,8 @@ async function createAsset(payload, user) {
 
   const asset = await UploadedAsset.create({
     ownerId: user._id.toString(),
+    ownerName: user.name,
+    ownerRole: user.role,
     name: sanitizeName(payload.name),
     type,
     mimeType,
@@ -75,7 +80,7 @@ async function createAsset(payload, user) {
     isPublic: payload.isPublic === true,
   });
 
-  return toMetadata(asset);
+  return toMetadata(asset, user);
 }
 
 async function listAssets(user) {
@@ -85,7 +90,29 @@ async function listAssets(user) {
     .select('-data')
     .sort({ updatedAt: -1 });
 
-  return assets.map(toMetadata);
+  return assets.map((asset) => toMetadata(asset, user));
+}
+
+async function listPublicAssets() {
+  const owners = await User.find({ role: { $ne: 'admin' } }).select(
+    '_id name role'
+  );
+  const ownerById = new Map(
+    owners.map((owner) => [owner._id.toString(), owner])
+  );
+
+  if (ownerById.size === 0) {
+    return [];
+  }
+
+  const assets = await UploadedAsset.find({
+    isPublic: true,
+    ownerId: { $in: Array.from(ownerById.keys()) },
+  })
+    .select('-data')
+    .sort({ updatedAt: -1 });
+
+  return assets.map((asset) => toMetadata(asset, ownerById.get(asset.ownerId)));
 }
 
 async function getAssetMetadata(assetId, user) {
@@ -146,7 +173,7 @@ async function updateAsset(assetId, payload, user) {
     }
   ).select('-data');
 
-  return asset ? toMetadata(asset) : null;
+  return asset ? toMetadata(asset, user) : null;
 }
 
 async function deleteAsset(assetId, user) {
@@ -155,7 +182,7 @@ async function deleteAsset(assetId, user) {
     ownerId: user._id.toString(),
   }).select('-data');
 
-  return asset ? toMetadata(asset) : null;
+  return asset ? toMetadata(asset, user) : null;
 }
 
 async function makeAssetsPublic(assetIds, user) {
@@ -212,6 +239,7 @@ function normalizeAssetIds(assetIds) {
 module.exports = {
   createAsset,
   listAssets,
+  listPublicAssets,
   getAssetMetadata,
   getAssetForData,
   updateAsset,

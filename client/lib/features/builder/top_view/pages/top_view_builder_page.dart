@@ -8,6 +8,8 @@ import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/front_view/models/custom_asset_data.dart';
 import 'package:client/features/builder/shared/solver/grid_position.dart';
+import 'package:client/features/builder/shared/widgets/game_builder_back_icon.dart';
+import 'package:client/features/builder/shared/widgets/game_builder_level_title_field.dart';
 import 'package:client/features/builder/top_view/flame/top_view_builder_game.dart';
 import 'package:client/features/builder/top_view/models/top_view_board_style.dart';
 import 'package:client/features/builder/top_view/models/top_view_character.dart';
@@ -60,6 +62,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   static const double _runTilesPerSecond = 3;
   static const double _playerSpriteTileScale = 2.3;
   static const double _obstacleSpriteTileScale = 1.8;
+  static const double _collectableSpriteTileScale = 1.8;
+  static const double _goalSpriteTileScale = 1.8;
   static const List<String> _difficultyOptions = <String>[
     'easy',
     'medium',
@@ -74,6 +78,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
   final Map<_Cell, _BoardItemType> _items = <_Cell, _BoardItemType>{};
   final Map<_Cell, String> _obstacleStylesByCell = <_Cell, String>{};
+  final Map<_Cell, String> _collectableStylesByCell = <_Cell, String>{};
+  final Map<_Cell, String> _goalStylesByCell = <_Cell, String>{};
   final Map<_Cell, String> _customAssetIdsByCell = <_Cell, String>{};
   final Map<String, Uint8List> _customAssetImageBytes = <String, Uint8List>{};
   final Map<String, Future<void>> _customAssetImageLoads =
@@ -104,6 +110,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   String _playerCharacterId = defaultTopViewCharacterId;
   String _backgroundId = defaultTopViewBackgroundId;
   String _obstacleStyleId = defaultTopViewObstacleStyleId;
+  String _collectableStyleId = defaultTopViewCollectableStyleId;
+  String _goalStyleId = defaultTopViewGoalStyleId;
   String? _customBackgroundAssetId;
   String? _loadedPossibleSolutionCode;
   int _runGeneration = 0;
@@ -126,6 +134,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           obstacleStyleId: entry.value == _BoardItemType.obstacle
               ? _obstacleStylesByCell[entry.key]
               : null,
+          collectableStyleId: entry.value == _BoardItemType.collectable
+              ? _collectableStylesByCell[entry.key]
+              : null,
+          goalStyleId: entry.value == _BoardItemType.goal
+              ? _goalStylesByCell[entry.key]
+              : null,
           customAssetId: customAssetId,
           customAssetFrameScale: customAsset?.frameScale ?? 1,
           customAssetFrameOffsetX: customAsset?.frameOffsetX ?? 0,
@@ -138,6 +152,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       playerCharacterId: _playerCharacterId,
       backgroundId: _backgroundId,
       obstacleStyleId: _obstacleStyleId,
+      collectableStyleId: _collectableStyleId,
+      goalStyleId: _goalStyleId,
       playerHeadingDegrees: _initialPlayerHeadingDegrees,
       customBackgroundAssetId: _customBackgroundAssetId,
       customBackgroundFrameScale:
@@ -174,6 +190,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       rows: _rows,
       playerSpriteTileScale: _playerSpriteTileScale,
       obstacleSpriteTileScale: _obstacleSpriteTileScale,
+      collectableSpriteTileScale: _collectableSpriteTileScale,
+      goalSpriteTileScale: _goalSpriteTileScale,
       runTilesPerSecond: _runTilesPerSecond,
     );
     _rulerOverlay = ValueNotifier<_RulerOverlayData>(const _RulerOverlayData());
@@ -327,7 +345,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           steps.add(
             _CodeExecutionStep.turn(
               lineIndex: index,
-              degrees: angle.roundToDouble(),
+              degrees: angle,
               absolute: true,
             ),
           );
@@ -360,9 +378,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       }
 
       if (command == 'step') {
-        final amount = parts.length > 1
-            ? (double.tryParse(parts[1]) ?? 1).roundToDouble()
-            : 1.0;
+        final amount = parts.length > 1 ? double.tryParse(parts[1]) ?? 1 : 1.0;
         steps.add(_CodeExecutionStep.step(lineIndex: index, amount: amount));
       }
     }
@@ -406,6 +422,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     var position = start;
     var headingDegrees = _initialPlayerHeadingDegrees;
     final path = <Offset>[start];
+    final collectableCells = _collectableCells;
+    final goalCell = _goalCell;
 
     _runGeneration = generation;
     _codeFocusNode.unfocus();
@@ -413,6 +431,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       TopViewRenderCell(column: playerCell.column, row: playerCell.row),
       headingDegrees,
     );
+    _collectVisibleAtPosition(position, collectableCells);
+    if (goalCell != null && _positionMatchesCell(position, goalCell)) {
+      _topViewGame.openGoalChest();
+    }
     setState(() {
       _isRunningCode = true;
       _activeCodeLine = null;
@@ -447,12 +469,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         continue;
       }
 
-      final direction = Offset(
-        math.cos(_degreesToRadians(headingDegrees)),
-        -math.sin(_degreesToRadians(headingDegrees)),
-      );
+      final direction = _tileStepDirection(headingDegrees);
       var hitBounds = false;
-      final targetPosition = position + direction * step.value;
+      final targetPosition = _snapToNearbyTileCenter(
+        position + direction * step.value,
+      );
 
       if (!_isPlayerPositionInBounds(targetPosition)) {
         hitBounds = true;
@@ -463,6 +484,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         }
         position = targetPosition;
         path.add(position);
+        _collectVisibleAtPosition(position, collectableCells);
+        if (goalCell != null && _positionMatchesCell(position, goalCell)) {
+          _topViewGame.openGoalChest();
+        }
         _playerPreview = _PlayerPreviewData(
           position: position,
           headingDegrees: headingDegrees,
@@ -725,6 +750,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   }) {
     final items = <_Cell, _BoardItemType>{};
     final obstacleStylesByCell = <_Cell, String>{};
+    final collectableStylesByCell = <_Cell, String>{};
+    final goalStylesByCell = <_Cell, String>{};
     final customAssetIdsByCell = <_Cell, String>{};
     final rawItems = draftData['items'];
     if (rawItems is List) {
@@ -742,6 +769,17 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           obstacleStylesByCell[cell] = topViewObstacleStyleById(
             itemMap['obstacleStyle']?.toString() ??
                 draftData['obstacleStyle']?.toString(),
+          ).id;
+        } else if (type == _BoardItemType.collectable) {
+          collectableStylesByCell[cell] = topViewCollectableStyleById(
+            itemMap['collectableStyle']?.toString() ??
+                itemMap['item']?.toString() ??
+                draftData['collectableStyle']?.toString(),
+          ).id;
+        } else if (type == _BoardItemType.goal) {
+          goalStylesByCell[cell] = topViewGoalStyleById(
+            itemMap['goalStyle']?.toString() ??
+                draftData['goalStyle']?.toString(),
           ).id;
         }
         final customAssetId = itemMap['customAssetId']?.toString();
@@ -806,6 +844,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _obstacleStyleId = topViewObstacleStyleById(
         draftData['obstacleStyle']?.toString(),
       ).id;
+      _collectableStyleId = topViewCollectableStyleById(
+        draftData['collectableStyle']?.toString(),
+      ).id;
+      _goalStyleId = topViewGoalStyleById(
+        draftData['goalStyle']?.toString(),
+      ).id;
       _titleController.text =
           data['title']?.toString() ??
           draftData['title']?.toString() ??
@@ -817,6 +861,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _obstacleStylesByCell
         ..clear()
         ..addAll(obstacleStylesByCell);
+      _collectableStylesByCell
+        ..clear()
+        ..addAll(collectableStylesByCell);
+      _goalStylesByCell
+        ..clear()
+        ..addAll(goalStylesByCell);
       _customAssetIdsByCell
         ..clear()
         ..addAll(customAssetIdsByCell);
@@ -861,6 +911,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       'background': _backgroundId,
       'customBackgroundAssetId': _customBackgroundAssetId,
       'obstacleStyle': _obstacleStyleId,
+      'collectableStyle': _collectableStyleId,
+      'goalStyle': _goalStyleId,
       'settings': {'columns': _cols, 'rows': _rows},
       'items': _items.entries
           .map(
@@ -871,6 +923,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               if (entry.value == _BoardItemType.obstacle)
                 'obstacleStyle':
                     _obstacleStylesByCell[entry.key] ?? _obstacleStyleId,
+              if (entry.value == _BoardItemType.collectable)
+                'collectableStyle':
+                    _collectableStylesByCell[entry.key] ?? _collectableStyleId,
+              if (entry.value == _BoardItemType.goal)
+                'goalStyle': _goalStylesByCell[entry.key] ?? _goalStyleId,
               if (_customAssetIdsByCell[entry.key] != null)
                 'customAssetId': _customAssetIdsByCell[entry.key],
               if (_customAssetIdsByCell[entry.key] != null &&
@@ -1156,16 +1213,15 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         continue;
       }
 
-      final direction = Offset(
-        math.cos(_degreesToRadians(headingDegrees)),
-        -math.sin(_degreesToRadians(headingDegrees)),
-      );
+      final direction = _tileStepDirection(headingDegrees);
       final stepDirection = step.value < 0 ? -1.0 : 1.0;
       var remainingTiles = step.value.abs();
 
       while (remainingTiles > 0) {
         final tileDistance = math.min(1.0, remainingTiles);
-        position += direction * (tileDistance * stepDirection);
+        position = _snapToNearbyTileCenter(
+          position + direction * (tileDistance * stepDirection),
+        );
 
         if (!_isPlayerPositionInBounds(position)) {
           return _TopViewSolutionResult(
@@ -1212,9 +1268,59 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     }
   }
 
+  void _collectVisibleAtPosition(
+    Offset position,
+    List<_Cell> collectableCells,
+  ) {
+    for (final cell in collectableCells) {
+      if (_positionMatchesCell(position, cell)) {
+        _topViewGame.collectAtCell(cell.column, cell.row);
+      }
+    }
+  }
+
   bool _positionMatchesCell(Offset position, _Cell cell) {
     return (position.dx - (cell.column + 0.5)).abs() < 0.001 &&
         (position.dy - (cell.row + 0.5)).abs() < 0.001;
+  }
+
+  Offset _tileStepDirection(double headingDegrees) {
+    final rawDirection = Offset(
+      math.cos(_degreesToRadians(headingDegrees)),
+      -math.sin(_degreesToRadians(headingDegrees)),
+    );
+    final dominantAxisDistance = math.max(
+      rawDirection.dx.abs(),
+      rawDirection.dy.abs(),
+    );
+
+    if (dominantAxisDistance == 0) {
+      return Offset.zero;
+    }
+
+    return rawDirection / dominantAxisDistance;
+  }
+
+  Offset _snapToNearbyTileCenter(Offset position) {
+    return Offset(
+      _snapAxisToNearbyTileCenter(position.dx, maxCellIndex: _cols - 1),
+      _snapAxisToNearbyTileCenter(position.dy, maxCellIndex: _rows - 1),
+    );
+  }
+
+  double _snapAxisToNearbyTileCenter(
+    double value, {
+    required int maxCellIndex,
+  }) {
+    const snapTolerance = 0.28;
+    final nearestCellIndex = (value - 0.5).round().clamp(0, maxCellIndex);
+    final nearestCenter = nearestCellIndex + 0.5;
+
+    if ((value - nearestCenter).abs() <= snapTolerance) {
+      return nearestCenter;
+    }
+
+    return value;
   }
 
   CustomAssetData? _customAssetById(String? assetId) {
@@ -1849,12 +1955,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       final movedObstacleStyle = source == null
           ? null
           : _obstacleStylesByCell[source];
+      final movedCollectableStyle = source == null
+          ? null
+          : _collectableStylesByCell[source];
+      final movedGoalStyle = source == null ? null : _goalStylesByCell[source];
       final movedCustomAssetId = source == null
           ? null
           : _customAssetIdsByCell[source];
       if (source != null) {
         _items.remove(source);
         _obstacleStylesByCell.remove(source);
+        _collectableStylesByCell.remove(source);
+        _goalStylesByCell.remove(source);
         _customAssetIdsByCell.remove(source);
       }
       if (type == _BoardItemType.player || type == _BoardItemType.goal) {
@@ -1865,6 +1977,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         _items.removeWhere((cell, item) => item == type && cell != target);
         for (final cell in removedCells) {
           _obstacleStylesByCell.remove(cell);
+          _collectableStylesByCell.remove(cell);
+          _goalStylesByCell.remove(cell);
           _customAssetIdsByCell.remove(cell);
         }
       }
@@ -1878,6 +1992,17 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         _obstacleStylesByCell[target] = movedObstacleStyle ?? _obstacleStyleId;
       } else {
         _obstacleStylesByCell.remove(target);
+      }
+      if (type == _BoardItemType.collectable) {
+        _collectableStylesByCell[target] =
+            movedCollectableStyle ?? _collectableStyleId;
+      } else {
+        _collectableStylesByCell.remove(target);
+      }
+      if (type == _BoardItemType.goal) {
+        _goalStylesByCell[target] = movedGoalStyle ?? _goalStyleId;
+      } else {
+        _goalStylesByCell.remove(target);
       }
     });
     _syncTopViewGame(resetPlayer: true);
@@ -1912,6 +2037,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         _items.removeWhere((cell, item) => item == type && cell != target);
         for (final cell in removedCells) {
           _obstacleStylesByCell.remove(cell);
+          _collectableStylesByCell.remove(cell);
+          _goalStylesByCell.remove(cell);
           _customAssetIdsByCell.remove(cell);
         }
       }
@@ -1921,6 +2048,16 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         _obstacleStylesByCell[target] = _obstacleStyleId;
       } else {
         _obstacleStylesByCell.remove(target);
+      }
+      if (type == _BoardItemType.collectable) {
+        _collectableStylesByCell[target] = _collectableStyleId;
+      } else {
+        _collectableStylesByCell.remove(target);
+      }
+      if (type == _BoardItemType.goal) {
+        _goalStylesByCell[target] = _goalStyleId;
+      } else {
+        _goalStylesByCell.remove(target);
       }
     });
     _syncTopViewGame(resetPlayer: true);
@@ -1935,6 +2072,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     setState(() {
       _items.remove(cell);
       _obstacleStylesByCell.remove(cell);
+      _collectableStylesByCell.remove(cell);
+      _goalStylesByCell.remove(cell);
       _customAssetIdsByCell.remove(cell);
     });
     _syncTopViewGame(resetPlayer: true);
@@ -2114,6 +2253,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     setState(() {
       _items.clear();
       _obstacleStylesByCell.clear();
+      _collectableStylesByCell.clear();
+      _goalStylesByCell.clear();
       _customAssetIdsByCell.clear();
       _customAssets.clear();
       _customAssetImageBytes.clear();
@@ -2151,7 +2292,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           .toSet(),
     );
 
-    final result = const TopViewSolver().findShortestPath(level: level);
+    final result = const TopViewSolver().findShortestPath(
+      level: level,
+      allowDiagonalMoves: _useAnglesInGeneratedTurns,
+    );
     if (!result.solved) {
       debugPrint('No solution found');
       return;
@@ -2236,21 +2380,13 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         appBar: AppBar(
           leading: IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back),
+            icon: const GameBuilderBackIcon(),
           ),
           title: widget.playMode
               ? Text(widget.initialTitle ?? _titleController.text)
-              : TextField(
+              : GameBuilderLevelTitleField(
                   controller: _titleController,
-                  decoration: InputDecoration(
-                    hintText: language.t('builder.newLevel'),
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                  ),
-                  style: Theme.of(context).textTheme.titleLarge,
-                  cursorColor: Colors.black,
-                  maxLines: 1,
+                  hintText: language.t('builder.newLevel'),
                 ),
           actions: widget.playMode
               ? null
@@ -2394,6 +2530,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               _buildBackgroundControl(),
               const SizedBox(height: 14),
               _buildObstacleStyleControl(),
+              const SizedBox(height: 14),
+              _buildCollectableStyleControl(),
+              const SizedBox(height: 14),
+              _buildGoalStyleControl(),
             ],
           ),
         ),
@@ -2672,6 +2812,12 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     );
                   },
                 ),
+                if (!_isRunningCode && _playerPreview != null)
+                  ..._finalGoalAndPlayerOverlays(
+                    preview: _playerPreview!,
+                    cellWidth: cellWidth,
+                    cellHeight: cellHeight,
+                  ),
                 Positioned(
                   top: _rulerHandleInset,
                   left: _rulerHandleInset,
@@ -2682,6 +2828,95 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           ),
         );
       },
+    );
+  }
+
+  List<Widget> _finalGoalAndPlayerOverlays({
+    required _PlayerPreviewData preview,
+    required double cellWidth,
+    required double cellHeight,
+  }) {
+    final goalCell = _goalCell;
+    return <Widget>[
+      if (goalCell != null && _positionMatchesCell(preview.position, goalCell))
+        _finalGoalPreviewOverlay(
+          cell: goalCell,
+          cellWidth: cellWidth,
+          cellHeight: cellHeight,
+        ),
+      _finalPlayerPreviewOverlay(
+        preview: preview,
+        cellWidth: cellWidth,
+        cellHeight: cellHeight,
+      ),
+    ];
+  }
+
+  Widget _finalGoalPreviewOverlay({
+    required _Cell cell,
+    required double cellWidth,
+    required double cellHeight,
+  }) {
+    final shortestSide = math.min(cellWidth, cellHeight);
+    final goalSize = shortestSide * _goalSpriteTileScale * 0.78;
+    final center = Offset(
+      (cell.column + 0.5) * cellWidth,
+      (cell.row + 0.5) * cellHeight,
+    );
+
+    return Positioned(
+      left: center.dx - goalSize / 2,
+      top: center.dy - goalSize / 2,
+      width: goalSize,
+      height: goalSize,
+      child: IgnorePointer(
+        child: Image.asset(
+          'game_builder/goal/chest_open_gold.png',
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            final goal = topViewGoalStyleById(
+              _goalStylesByCell[cell] ?? _goalStyleId,
+            );
+            return Image.asset(
+              goal.assetPath,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.flag_rounded,
+                  color: _BoardItemType.goal.color,
+                  size: goalSize * 0.52,
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _finalPlayerPreviewOverlay({
+    required _PlayerPreviewData preview,
+    required double cellWidth,
+    required double cellHeight,
+  }) {
+    final shortestSide = math.min(cellWidth, cellHeight);
+    final playerSize = shortestSide * _playerSpriteTileScale;
+    final center = Offset(
+      preview.position.dx * cellWidth,
+      preview.position.dy * cellHeight,
+    );
+
+    return Positioned(
+      left: center.dx - playerSize / 2,
+      top: center.dy - playerSize / 2,
+      width: playerSize,
+      height: playerSize,
+      child: IgnorePointer(
+        child: _topViewCharacterImage(
+          headingDegrees: preview.headingDegrees,
+          withShadow: true,
+        ),
+      ),
     );
   }
 
@@ -3684,6 +3919,110 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
+  Widget _buildCollectableStyleControl() {
+    final selectedCollectable = topViewCollectableStyleById(
+      _collectableStyleId,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          AppLanguage.of(context).t('builder.collectable'),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>('collectable-$_collectableStyleId'),
+          initialValue: selectedCollectable.id,
+          isExpanded: true,
+          items: [
+            for (final collectable in topViewCollectableStyles)
+              DropdownMenuItem<String>(
+                value: collectable.id,
+                child: _buildCollectableMenuItem(collectable),
+              ),
+          ],
+          onChanged: (collectableId) {
+            if (collectableId == null ||
+                collectableId == _collectableStyleId ||
+                widget.playMode) {
+              return;
+            }
+
+            _stopCodeRun();
+            setState(() {
+              _collectableStyleId = topViewCollectableStyleById(
+                collectableId,
+              ).id;
+            });
+            _syncTopViewGame(resetPlayer: true);
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoalStyleControl() {
+    final selectedGoal = topViewGoalStyleById(_goalStyleId);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          AppLanguage.of(context).t('builder.goal'),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          key: ValueKey<String>('goal-$_goalStyleId'),
+          initialValue: selectedGoal.id,
+          isExpanded: true,
+          items: [
+            for (final goal in topViewGoalStyles)
+              DropdownMenuItem<String>(
+                value: goal.id,
+                child: _buildGoalMenuItem(goal),
+              ),
+          ],
+          onChanged: (goalId) {
+            if (goalId == null || goalId == _goalStyleId || widget.playMode) {
+              return;
+            }
+
+            _stopCodeRun();
+            setState(() {
+              _goalStyleId = topViewGoalStyleById(goalId).id;
+            });
+            _syncTopViewGame(resetPlayer: true);
+          },
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCharacterMenuItem(TopViewCharacter character) {
     return Row(
       children: [
@@ -3795,6 +4134,57 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         Expanded(
           child: Text(
             localizedTopViewObstacleLabel(AppLanguage.of(context), obstacle.id),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCollectableMenuItem(TopViewCollectableStyle collectable) {
+    return Row(
+      children: [
+        Image.asset(
+          collectable.assetPath,
+          width: 28,
+          height: 28,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(width: 28, height: 28);
+          },
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            localizedTopViewCollectableLabel(
+              AppLanguage.of(context),
+              collectable.id,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGoalMenuItem(TopViewGoalStyle goal) {
+    return Row(
+      children: [
+        Image.asset(
+          goal.assetPath,
+          width: 28,
+          height: 28,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return const SizedBox(width: 28, height: 28);
+          },
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            localizedTopViewGoalLabel(AppLanguage.of(context), goal.id),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -4157,6 +4547,36 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         height: size * 1.5,
         child: Image.asset(
           obstacle.assetPath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return _fallbackBoardIcon(item, size: size);
+          },
+        ),
+      );
+    }
+
+    if (item == _BoardItemType.collectable) {
+      final collectable = topViewCollectableStyleById(_collectableStyleId);
+      return SizedBox(
+        width: size * 1.5,
+        height: size * 1.5,
+        child: Image.asset(
+          collectable.assetPath,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return _fallbackBoardIcon(item, size: size);
+          },
+        ),
+      );
+    }
+
+    if (item == _BoardItemType.goal) {
+      final goal = topViewGoalStyleById(_goalStyleId);
+      return SizedBox(
+        width: size * 1.5,
+        height: size * 1.5,
+        child: Image.asset(
+          goal.assetPath,
           fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) {
             return _fallbackBoardIcon(item, size: size);

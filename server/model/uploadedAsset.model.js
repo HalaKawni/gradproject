@@ -10,6 +10,14 @@ const uploadedAssetSchema = new Schema(
       required: true,
       index: true,
     },
+    ownerName: {
+      type: String,
+      trim: true,
+    },
+    ownerRole: {
+      type: String,
+      enum: ['parent', 'child', 'admin'],
+    },
     name: {
       type: String,
       required: true,

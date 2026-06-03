@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/localization/app_language.dart';
+import '../../shared/widgets/game_builder_back_icon.dart';
+import '../../shared/widgets/game_builder_level_title_field.dart';
 
 class TopBar extends StatelessWidget {
   final TextEditingController titleController;
@@ -42,7 +44,7 @@ class TopBar extends StatelessWidget {
         children: [
           IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back),
+            icon: const GameBuilderBackIcon(),
           ),
           const SizedBox(width: 12),
           if (playMode)
@@ -51,20 +53,10 @@ class TopBar extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             )
           else
-            SizedBox(
+            GameBuilderLevelTitleField(
               width: 320,
-              child: TextField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  hintText: language.t('builder.newLevel'),
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                ),
-                style: Theme.of(context).textTheme.titleLarge,
-                cursorColor: Colors.black,
-                maxLines: 1,
-              ),
+              controller: titleController,
+              hintText: language.t('builder.newLevel'),
             ),
           const Spacer(),
           OutlinedButton.icon(

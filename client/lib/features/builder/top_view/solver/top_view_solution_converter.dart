@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../../shared/solver/path_to_solution_converter.dart';
 import '../../shared/solver/solver_action.dart';
 
@@ -17,70 +19,93 @@ class TopViewSolutionConverter extends PathToSolutionConverter<String> {
     }
 
     final lines = <String>[];
-    var currentHeading = _TopViewHeading.fromDegrees(initialHeadingDegrees);
-    var pendingStepCount = 0;
+    var currentHeadingDegrees = _normalizeDegrees(initialHeadingDegrees);
+    var pendingStepDistance = 0.0;
 
     for (final action in actions) {
-      final requiredHeading = _headingForAction(action);
-      if (requiredHeading == null) {
+      final requiredHeadingDegrees = _headingDegreesForAction(action);
+      if (requiredHeadingDegrees == null) {
         continue;
       }
+      final stepDistance = _stepDistanceForAction(action);
 
-      if (requiredHeading != currentHeading) {
-        if (pendingStepCount > 0) {
-          lines.add('step $pendingStepCount');
-          pendingStepCount = 0;
+      if (!_sameHeading(requiredHeadingDegrees, currentHeadingDegrees)) {
+        if (pendingStepDistance > 0) {
+          lines.add('step ${_formatNumber(pendingStepDistance)}');
+          pendingStepDistance = 0;
         }
         lines.add(
           useTurnAngles
-              ? 'turn ${requiredHeading.degrees}'
-              : 'turn ${requiredHeading.commandName}',
+              ? 'turn ${_formatAngle(requiredHeadingDegrees)}'
+              : 'turn ${_TopViewHeading.fromDegrees(requiredHeadingDegrees).commandName}',
         );
-        currentHeading = requiredHeading;
+        currentHeadingDegrees = requiredHeadingDegrees;
       }
 
-      pendingStepCount += 1;
+      pendingStepDistance += stepDistance;
     }
 
-    if (pendingStepCount > 0) {
-      lines.add('step $pendingStepCount');
+    if (pendingStepDistance > 0) {
+      lines.add('step ${_formatNumber(pendingStepDistance)}');
     }
 
     return lines.join('\n');
   }
 
-  _TopViewHeading? _headingForAction(SolverAction action) {
+  double? _headingDegreesForAction(SolverAction action) {
     final dx = action.to.x - action.from.x;
     final dy = action.to.y - action.from.y;
 
-    if (dx == 1 && dy == 0) {
-      return _TopViewHeading.right;
-    }
-    if (dx == -1 && dy == 0) {
-      return _TopViewHeading.left;
-    }
-    if (dx == 0 && dy == -1) {
-      return _TopViewHeading.up;
-    }
-    if (dx == 0 && dy == 1) {
-      return _TopViewHeading.down;
+    if (dx != 0 || dy != 0) {
+      return _normalizeDegrees(math.atan2(-dy, dx) * 180 / math.pi);
     }
 
     switch (action.type) {
       case SolverActionType.moveRight:
-        return _TopViewHeading.right;
+        return _TopViewHeading.right.degrees.toDouble();
       case SolverActionType.moveUp:
-        return _TopViewHeading.up;
+        return _TopViewHeading.up.degrees.toDouble();
       case SolverActionType.moveLeft:
-        return _TopViewHeading.left;
+        return _TopViewHeading.left.degrees.toDouble();
       case SolverActionType.moveDown:
-        return _TopViewHeading.down;
+        return _TopViewHeading.down.degrees.toDouble();
       case SolverActionType.jumpUp:
       case SolverActionType.climbUpLeft:
       case SolverActionType.climbUpRight:
         return null;
     }
   }
+
+  double _stepDistanceForAction(SolverAction action) {
+    final dx = action.to.x - action.from.x;
+    final dy = action.to.y - action.from.y;
+    final distance = math.max(dx.abs(), dy.abs()).toDouble();
+    return distance == 0 ? 1 : distance;
+  }
+}
+
+bool _sameHeading(double a, double b) {
+  return (_normalizeDegrees(a) - _normalizeDegrees(b)).abs() < 0.001;
+}
+
+double _normalizeDegrees(double value) {
+  final normalized = value % 360;
+  return normalized < 0 ? normalized + 360 : normalized;
+}
+
+String _formatNumber(double value) {
+  if ((value - value.round()).abs() < 0.001) {
+    return value.round().toString();
+  }
+
+  return value
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
+}
+
+String _formatAngle(double value) {
+  return _normalizeDegrees(value).round().toString();
 }
 
 enum _TopViewHeading {

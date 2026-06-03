@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flame/game.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -15,6 +16,8 @@ import '../../scratch_builder/models/instruction_section.dart';
 import '../../scratch_builder/widgets/instruction_editor_panel.dart';
 import '../../front_view/shared/builder_collectable.dart';
 import '../../front_view/shared/builder_character.dart';
+import '../../shared/widgets/game_builder_back_icon.dart';
+import '../../shared/widgets/game_builder_level_title_field.dart';
 import '../controllers/fourth_demo_controller.dart';
 import '../flame/fourth_demo_game.dart';
 import '../language/game_code_controller.dart';
@@ -41,9 +44,14 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   final FocusNode stageFocusNode = FocusNode();
   final FocusNode codeFocusNode = FocusNode();
   final List<InstructionSection> instructionSections = <InstructionSection>[];
-  bool _syncingCodeFromController = false;
-  bool _updatingCodeFromEditor = false;
+  bool _loadingCodeIntoEditor = false;
+  bool _savingCodeFromEditor = false;
   bool _controllerRefreshScheduled = false;
+  String? _codeSpriteId;
+
+  String get _activeCodeSpriteId {
+    return _codeSpriteId ??= controller.project.selectedSpriteId;
+  }
 
   @override
   void initState() {
@@ -60,6 +68,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
           ..addListener(_handleCodeControllerChanged);
     titleController = TextEditingController(text: controller.project.title)
       ..addListener(_handleTitleChanged);
+    _codeSpriteId = controller.project.selectedSpriteId;
     instructionSections.addAll(_defaultInstructionSections());
   }
 
@@ -113,54 +122,85 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
         ),
       );
     }
-    if (!_updatingCodeFromEditor &&
-        codeController.text != controller.selectedCode) {
-      _syncingCodeFromController = true;
-      codeController.value = TextEditingValue(
-        text: controller.selectedCode,
-        selection: TextSelection.collapsed(
-          offset: controller.selectedCode.length,
-        ),
-      );
-      _syncingCodeFromController = false;
+    final selectedSpriteId = controller.project.selectedSpriteId;
+    var activeCodeSpriteId = _activeCodeSpriteId;
+    if (activeCodeSpriteId != selectedSpriteId) {
+      _saveDisplayedCode();
+      _codeSpriteId = selectedSpriteId;
+      activeCodeSpriteId = selectedSpriteId;
     }
+
+    _loadCodeForSprite(activeCodeSpriteId);
     codeController.projectContext = controller.project;
     setState(() {});
+  }
+
+  void _loadCodeForSprite(String spriteId) {
+    final nextCode =
+        controller.project.codeBySpriteId[spriteId] ??
+        FourthDemoProject.starterCode;
+
+    if (codeController.text == nextCode) {
+      return;
+    }
+
+    _loadingCodeIntoEditor = true;
+    try {
+      codeController.value = TextEditingValue(
+        text: nextCode,
+        selection: TextSelection.collapsed(offset: nextCode.length),
+      );
+    } finally {
+      _loadingCodeIntoEditor = false;
+    }
   }
 
   void _handleTitleChanged() {
     controller.setTitle(titleController.text);
   }
 
-  void _handleCodeChanged(String value) {
-    if (_syncingCodeFromController) {
-      return;
-    }
-
-    _syncCodeToProject(value);
-  }
-
   void _handleCodeControllerChanged() {
-    if (_syncingCodeFromController || _updatingCodeFromEditor) {
+    if (_loadingCodeIntoEditor || _savingCodeFromEditor) {
       return;
     }
-    _syncCodeToProject(codeController.text);
+    _syncCodeToProject(codeController.text, spriteId: _activeCodeSpriteId);
   }
 
-  void _syncCodeToProject(String value) {
-    if (value == controller.selectedCode) {
+  void _syncCodeToProject(String value, {required String spriteId}) {
+    final currentCode =
+        controller.project.codeBySpriteId[spriteId] ??
+        FourthDemoProject.starterCode;
+    if (value == currentCode) {
       return;
     }
-    _updatingCodeFromEditor = true;
+    _savingCodeFromEditor = true;
     try {
-      controller.updateSelectedCode(value, notify: false);
+      controller.updateCodeForSprite(spriteId, value, notify: false);
     } finally {
-      _updatingCodeFromEditor = false;
+      _savingCodeFromEditor = false;
     }
+  }
+
+  void _saveDisplayedCode() {
+    _syncCodeToProject(codeController.text, spriteId: _activeCodeSpriteId);
+  }
+
+  void _selectSprite(String spriteId) {
+    if (!controller.project.sprites.any((sprite) => sprite.id == spriteId)) {
+      return;
+    }
+    if (controller.project.selectedSpriteId == spriteId &&
+        _activeCodeSpriteId == spriteId) {
+      return;
+    }
+    _saveDisplayedCode();
+    _codeSpriteId = spriteId;
+    _loadCodeForSprite(spriteId);
+    controller.selectSprite(spriteId);
   }
 
   void _runCode() {
-    _syncCodeToProject(codeController.text);
+    _saveDisplayedCode();
     if (!controller.runCode()) {
       return;
     }
@@ -182,19 +222,11 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
         appBar: AppBar(
           leading: IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
-            icon: const Icon(Icons.arrow_back),
+            icon: const GameBuilderBackIcon(),
           ),
-          title: TextField(
+          title: GameBuilderLevelTitleField(
             controller: titleController,
-            decoration: InputDecoration(
-              hintText: language.t('builder.newLevel'),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-            ),
-            style: Theme.of(context).textTheme.titleLarge,
-            cursorColor: Colors.black,
-            maxLines: 1,
+            hintText: language.t('builder.newLevel'),
           ),
           actions: [
             Padding(
@@ -263,7 +295,6 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
                 controller: controller,
                 codeController: codeController,
                 codeFocusNode: codeFocusNode,
-                onCodeChanged: _handleCodeChanged,
                 onRun: _runCode,
               ),
             ),
@@ -273,6 +304,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
                 controller: controller,
                 game: game,
                 focusNode: stageFocusNode,
+                onSelectSprite: _selectSprite,
               ),
             ),
           ],
@@ -465,14 +497,12 @@ class _CodeColumn extends StatelessWidget {
   final FourthDemoController controller;
   final GameCodeController codeController;
   final FocusNode codeFocusNode;
-  final ValueChanged<String> onCodeChanged;
   final VoidCallback onRun;
 
   const _CodeColumn({
     required this.controller,
     required this.codeController,
     required this.codeFocusNode,
-    required this.onCodeChanged,
     required this.onRun,
   });
 
@@ -496,7 +526,6 @@ class _CodeColumn extends StatelessWidget {
                     controller: controller,
                     codeController: codeController,
                     codeFocusNode: codeFocusNode,
-                    onCodeChanged: onCodeChanged,
                   ),
                 ),
                 Positioned(
@@ -576,13 +605,11 @@ class _CodeEditor extends StatefulWidget {
   final FourthDemoController controller;
   final GameCodeController codeController;
   final FocusNode codeFocusNode;
-  final ValueChanged<String> onCodeChanged;
 
   const _CodeEditor({
     required this.controller,
     required this.codeController,
     required this.codeFocusNode,
-    required this.onCodeChanged,
   });
 
   @override
@@ -648,7 +675,6 @@ class _CodeEditorState extends State<_CodeEditor> {
                       height: _editorLineHeightFactor,
                       color: Color(0xFF24465A),
                     ),
-                    onChanged: widget.onCodeChanged,
                   ),
                 ),
               ),
@@ -1083,10 +1109,6 @@ class _FunctionPaletteState extends State<_FunctionPalette> {
         text: widget.codeController.text,
         selection: TextSelection.collapsed(offset: insertion.cursorOffset),
       );
-      widget.controller.updateSelectedCode(
-        widget.codeController.text,
-        notify: false,
-      );
     } finally {
       _isTyping = false;
     }
@@ -1097,11 +1119,13 @@ class _StageColumn extends StatelessWidget {
   final FourthDemoController controller;
   final FourthDemoGame game;
   final FocusNode focusNode;
+  final ValueChanged<String> onSelectSprite;
 
   const _StageColumn({
     required this.controller,
     required this.game,
     required this.focusNode,
+    required this.onSelectSprite,
   });
 
   @override
@@ -1116,9 +1140,16 @@ class _StageColumn extends StatelessWidget {
               controller: controller,
               game: game,
               focusNode: focusNode,
+              onSelectSprite: onSelectSprite,
             ),
           ),
-          Expanded(flex: 9, child: _AssetManager(controller: controller)),
+          Expanded(
+            flex: 9,
+            child: _AssetManager(
+              controller: controller,
+              onSelectSprite: onSelectSprite,
+            ),
+          ),
         ],
       ),
     );
@@ -1129,11 +1160,13 @@ class _StagePanel extends StatefulWidget {
   final FourthDemoController controller;
   final FourthDemoGame game;
   final FocusNode focusNode;
+  final ValueChanged<String> onSelectSprite;
 
   const _StagePanel({
     required this.controller,
     required this.game,
     required this.focusNode,
+    required this.onSelectSprite,
   });
 
   @override
@@ -1143,6 +1176,7 @@ class _StagePanel extends StatefulWidget {
 class _StagePanelState extends State<_StagePanel> {
   final ScrollController _horizontalController = ScrollController();
   final ScrollController _verticalController = ScrollController();
+  Offset? _hoveredWorldPosition;
 
   @override
   void dispose() {
@@ -1203,54 +1237,81 @@ class _StagePanelState extends State<_StagePanel> {
                           child: SizedBox(
                             width: worldWidth,
                             height: worldHeight,
-                            child: GestureDetector(
-                              onTapDown: (details) {
-                                widget.focusNode.requestFocus();
-                                final worldPosition = widget.game
-                                    .worldPositionFromCanvas(
-                                      details.localPosition,
-                                    );
-                                controller.handleClick(worldPosition);
-                                if (!controller.isPlaying) {
-                                  controller.beginDrag(worldPosition);
-                                  controller.endDrag();
-                                }
+                            child: MouseRegion(
+                              onHover: (event) {
+                                setState(() {
+                                  _hoveredWorldPosition = widget.game
+                                      .worldPositionFromCanvas(
+                                        event.localPosition,
+                                      );
+                                });
                               },
-                              onPanStart: (details) {
-                                widget.focusNode.requestFocus();
-                                final worldPosition = widget.game
-                                    .worldPositionFromCanvas(
-                                      details.localPosition,
-                                    );
-                                controller.beginDrag(worldPosition);
+                              onExit: (_) {
+                                setState(() => _hoveredWorldPosition = null);
                               },
-                              onPanUpdate: (details) => controller.dragTo(
-                                widget.game.worldPositionFromCanvas(
-                                  details.localPosition,
-                                ),
-                              ),
-                              onPanEnd: (details) {
-                                if (controller.draggingSpriteId != null) {
-                                  controller.endDrag();
-                                  return;
-                                }
-                                if (controller.isPlaying) {
-                                  final direction = _swipeDirection(
-                                    details.velocity.pixelsPerSecond,
-                                  );
-                                  if (direction != null) {
-                                    controller.handleSwipe(direction);
+                              child: GestureDetector(
+                                onTapDown: (details) {
+                                  widget.focusNode.requestFocus();
+                                  final worldPosition = widget.game
+                                      .worldPositionFromCanvas(
+                                        details.localPosition,
+                                      );
+                                  controller.handleClick(worldPosition);
+                                  if (!controller.isPlaying) {
+                                    final hit = controller.spriteAt(
+                                      worldPosition,
+                                    );
+                                    if (hit != null) {
+                                      widget.onSelectSprite(hit.id);
+                                    }
+                                    controller.beginDrag(worldPosition);
+                                    controller.endDrag();
                                   }
-                                }
-                              },
-                              onPanCancel: () {
-                                if (controller.draggingSpriteId != null) {
-                                  controller.endDrag();
-                                }
-                              },
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: GameWidget(game: widget.game),
+                                },
+                                onPanStart: (details) {
+                                  widget.focusNode.requestFocus();
+                                  final worldPosition = widget.game
+                                      .worldPositionFromCanvas(
+                                        details.localPosition,
+                                      );
+                                  if (!controller.isPlaying) {
+                                    final hit = controller.spriteAt(
+                                      worldPosition,
+                                    );
+                                    if (hit != null) {
+                                      widget.onSelectSprite(hit.id);
+                                    }
+                                  }
+                                  controller.beginDrag(worldPosition);
+                                },
+                                onPanUpdate: (details) => controller.dragTo(
+                                  widget.game.worldPositionFromCanvas(
+                                    details.localPosition,
+                                  ),
+                                ),
+                                onPanEnd: (details) {
+                                  if (controller.draggingSpriteId != null) {
+                                    controller.endDrag();
+                                    return;
+                                  }
+                                  if (controller.isPlaying) {
+                                    final direction = _swipeDirection(
+                                      details.velocity.pixelsPerSecond,
+                                    );
+                                    if (direction != null) {
+                                      controller.handleSwipe(direction);
+                                    }
+                                  }
+                                },
+                                onPanCancel: () {
+                                  if (controller.draggingSpriteId != null) {
+                                    controller.endDrag();
+                                  }
+                                },
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(4),
+                                  child: GameWidget(game: widget.game),
+                                ),
                               ),
                             ),
                           ),
@@ -1261,6 +1322,43 @@ class _StagePanelState extends State<_StagePanel> {
                 },
               ),
             ),
+            if (_hoveredWorldPosition != null)
+              Positioned(
+                top: 10,
+                left: 10,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      border: Border.all(color: const Color(0xFFC6D2D9)),
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x22000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        'x: ${_hoveredWorldPosition!.dx.round()}  '
+                        'y: ${_hoveredWorldPosition!.dy.round()}',
+                        style: const TextStyle(
+                          color: Color(0xFF263238),
+                          fontFeatures: [FontFeature.tabularFigures()],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               top: 10,
               right: 10,
@@ -1313,8 +1411,12 @@ class _StagePanelState extends State<_StagePanel> {
 
 class _AssetManager extends StatefulWidget {
   final FourthDemoController controller;
+  final ValueChanged<String> onSelectSprite;
 
-  const _AssetManager({required this.controller});
+  const _AssetManager({
+    required this.controller,
+    required this.onSelectSprite,
+  });
 
   @override
   State<_AssetManager> createState() => _AssetManagerState();
@@ -1405,7 +1507,7 @@ class _AssetManagerState extends State<_AssetManager> {
               _SpriteCard(
                 sprite: sprite,
                 selected: sprite.id == controller.project.selectedSpriteId,
-                onTap: () => controller.selectSprite(sprite.id),
+                onTap: () => widget.onSelectSprite(sprite.id),
                 onSettings: () => setState(() => _editingSpriteId = sprite.id),
               ),
           ],
@@ -1424,6 +1526,7 @@ class _AssetManagerState extends State<_AssetManager> {
       kind: choice.kind,
       assetId: choice.id,
     );
+    widget.onSelectSprite(sprite.id);
     setState(() => _editingSpriteId = sprite.id);
   }
 
@@ -1473,10 +1576,9 @@ class _AssetManagerState extends State<_AssetManager> {
           children: [
             _AddNewCard(onTap: () => _handleAddSound(context)),
             for (final sound in controller.project.sounds)
-              _MiniAssetCard(
-                title: sound.name,
-                icon: Icons.play_arrow,
-                onTap: () => setState(() => _editingSoundId = sound.id),
+              _SoundCard(
+                sound: sound,
+                onSettings: () => setState(() => _editingSoundId = sound.id),
               ),
           ],
         ),
@@ -1485,11 +1587,14 @@ class _AssetManagerState extends State<_AssetManager> {
   }
 
   Future<void> _handleAddSound(BuildContext context) async {
-    final name = await _showSoundChoiceDialog(context);
-    if (name == null || !context.mounted) {
+    final choice = await _showSoundChoiceDialog(context);
+    if (choice == null || !context.mounted) {
       return;
     }
-    final sound = controller.addSound(name);
+    final sound = controller.addSoundFromAsset(
+      name: choice.label,
+      assetPath: _normalizeSoundAssetPath(choice.assetPath),
+    );
     setState(() => _editingSoundId = sound.id);
   }
 
@@ -1511,12 +1616,14 @@ class _AssetManagerState extends State<_AssetManager> {
       onChanged: controller.updateSprite,
       onDelete: () {
         if (controller.deleteSprite(sprite.id)) {
+          widget.onSelectSprite(controller.project.selectedSpriteId);
           setState(() => _editingSpriteId = null);
         }
       },
       onDuplicate: () {
         final copy = controller.duplicateSprite(sprite.id);
         if (copy != null) {
+          widget.onSelectSprite(copy.id);
           setState(() => _editingSpriteId = copy.id);
         }
       },
@@ -1626,6 +1733,63 @@ class _SpriteCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SoundCard extends StatelessWidget {
+  final FourthDemoSound sound;
+  final VoidCallback onSettings;
+
+  const _SoundCard({required this.sound, required this.onSettings});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 128,
+      height: 124,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD9DEE2)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.graphic_eq, color: Color(0xFF2B78C2), size: 34),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Center(
+              child: Text(
+                sound.name,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+          SizedBox(
+            height: 34,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _SoundPlayButton(assetPath: sound.assetPath, compact: true),
+                IconButton(
+                  tooltip: AppLanguage.of(context).t('builder.settings'),
+                  onPressed: onSettings,
+                  icon: const Icon(Icons.settings, size: 18),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 34,
+                    height: 34,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1950,16 +2114,55 @@ class _SoundInlineSettings extends StatelessWidget {
       title: AppLanguage.of(context).t('builder.soundSettings'),
       onBack: onBack,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _AssetTextField(
-            label: AppLanguage.of(context).t('builder.name').toUpperCase(),
-            value: sound.name,
-            onChanged: (value) => onChanged(
-              sound.copyWith(
-                name: value.trim().isEmpty ? sound.name : value.trim(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 92,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 10,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.graphic_eq,
+                  color: Color(0xFF24465A),
+                  size: 44,
+                ),
               ),
-            ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _AssetTextField(
+                  label: AppLanguage.of(
+                    context,
+                  ).t('builder.name').toUpperCase(),
+                  value: sound.name,
+                  commitOnEditingComplete: true,
+                  onChanged: (value) => onChanged(
+                    sound.copyWith(
+                      name: value.trim().isEmpty ? sound.name : value.trim(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: 10),
+          _SettingRow(
+            label: AppLanguage.of(context).tr('builder.soundAsset', 'Asset'),
+            value: _soundFileName(sound.assetPath),
+          ),
+          const SizedBox(height: 8),
+          _SoundPlayerPanel(sound: sound),
           const SizedBox(height: 18),
           Align(
             alignment: Alignment.centerLeft,
@@ -1978,6 +2181,170 @@ class _SoundInlineSettings extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SoundPlayerPanel extends StatelessWidget {
+  final FourthDemoSound sound;
+
+  const _SoundPlayerPanel({required this.sound});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFD9DEE2)),
+      ),
+      child: Row(
+        children: [
+          _SoundPlayButton(assetPath: sound.assetPath),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _soundFileName(sound.assetPath),
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SoundPlayButton extends StatefulWidget {
+  final String assetPath;
+  final bool compact;
+
+  const _SoundPlayButton({required this.assetPath, this.compact = false});
+
+  @override
+  State<_SoundPlayButton> createState() => _SoundPlayButtonState();
+}
+
+class _SoundPlayButtonState extends State<_SoundPlayButton> {
+  late final AudioPlayer _player;
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer()
+      ..onPlayerComplete.listen((_) {
+        if (mounted) {
+          setState(() => _playing = false);
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.compact ? 30.0 : 42.0;
+    return IconButton.filled(
+      tooltip: AppLanguage.of(context).tr('builder.playSound', 'Play sound'),
+      onPressed: _toggle,
+      icon: Icon(_playing ? Icons.stop : Icons.play_arrow, size: 18),
+      style: IconButton.styleFrom(
+        backgroundColor: const Color(0xFF66B64A),
+        foregroundColor: Colors.white,
+        fixedSize: Size(size, size),
+        padding: EdgeInsets.zero,
+      ),
+    );
+  }
+
+  Future<void> _toggle() async {
+    final assetPath = _normalizeSoundAssetPath(widget.assetPath);
+    try {
+      if (_playing) {
+        await _player.stop();
+        if (mounted) {
+          setState(() => _playing = false);
+        }
+        return;
+      }
+
+      await _player.stop();
+      final audio = await _loadSoundAssetData(assetPath);
+      final bytes = Uint8List.view(
+        audio.buffer,
+        audio.offsetInBytes,
+        audio.lengthInBytes,
+      );
+      await _player.play(
+        BytesSource(bytes, mimeType: _audioMimeType(assetPath)),
+      );
+      if (mounted) {
+        setState(() => _playing = true);
+      }
+    } catch (error) {
+      debugPrint('Failed to play sound: $assetPath');
+      debugPrint('$error');
+      if (!mounted) {
+        return;
+      }
+      setState(() => _playing = false);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text('Could not load sound: ${_soundFileName(assetPath)}'),
+        ),
+      );
+    }
+  }
+}
+
+Future<ByteData> _loadSoundAssetData(String assetPath) async {
+  Object? lastError;
+  for (final candidate in _soundAssetBundleCandidates(assetPath)) {
+    try {
+      return await rootBundle.load(candidate);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError ?? FlutterError('Sound asset was not found: $assetPath');
+}
+
+List<String> _soundAssetBundleCandidates(String assetPath) {
+  final normalized = _normalizeSoundAssetPath(assetPath);
+  final withoutAssetPrefix = normalized.startsWith('assets/')
+      ? normalized.substring('assets/'.length)
+      : normalized;
+  final withAssetPrefix = withoutAssetPrefix.startsWith('assets/')
+      ? withoutAssetPrefix
+      : 'assets/$withoutAssetPrefix';
+  return <String>{normalized, withAssetPrefix, withoutAssetPrefix}.toList();
+}
+
+String _audioMimeType(String assetPath) {
+  final extension = assetPath.split('.').last.toLowerCase();
+  return switch (extension) {
+    'mp3' => 'audio/mpeg',
+    'wav' => 'audio/wav',
+    'ogg' => 'audio/ogg',
+    'm4a' => 'audio/mp4',
+    'aac' => 'audio/aac',
+    _ => 'application/octet-stream',
+  };
+}
+
+String _soundFileName(String assetPath) {
+  final normalized = _normalizeSoundAssetPath(assetPath).replaceAll('\\', '/');
+  final fileName = normalized.split('/').last;
+  final withoutExtension = fileName.replaceFirst(RegExp(r'\.[^.]+$'), '');
+  return withoutExtension
+      .split(RegExp(r'[-_]+'))
+      .where((part) => part.trim().isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 class _InlineSettingsScaffold extends StatelessWidget {
@@ -2007,7 +2374,7 @@ class _InlineSettingsScaffold extends StatelessWidget {
               IconButton(
                 tooltip: AppLanguage.of(context).t('builder.back'),
                 onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
+                icon: const GameBuilderBackIcon(),
               ),
               Expanded(
                 child: Text(
@@ -2034,11 +2401,13 @@ class _AssetTextField extends StatefulWidget {
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
+  final bool commitOnEditingComplete;
 
   const _AssetTextField({
     required this.label,
     required this.value,
     required this.onChanged,
+    this.commitOnEditingComplete = false,
   });
 
   @override
@@ -2047,11 +2416,15 @@ class _AssetTextField extends StatefulWidget {
 
 class _AssetTextFieldState extends State<_AssetTextField> {
   late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String? _lastCommittedValue;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.value);
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+    _lastCommittedValue = widget.value;
   }
 
   @override
@@ -2059,11 +2432,15 @@ class _AssetTextFieldState extends State<_AssetTextField> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value && widget.value != _controller.text) {
       _controller.text = widget.value;
+      _lastCommittedValue = widget.value;
     }
   }
 
   @override
   void dispose() {
+    _focusNode
+      ..removeListener(_handleFocusChanged)
+      ..dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -2074,10 +2451,30 @@ class _AssetTextFieldState extends State<_AssetTextField> {
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
         controller: _controller,
+        focusNode: _focusNode,
         decoration: _fieldDecoration(widget.label),
-        onChanged: widget.onChanged,
+        onChanged: widget.commitOnEditingComplete ? null : widget.onChanged,
+        onEditingComplete: () {
+          _commit();
+          _focusNode.unfocus();
+        },
       ),
     );
+  }
+
+  void _handleFocusChanged() {
+    if (widget.commitOnEditingComplete && !_focusNode.hasFocus) {
+      _commit();
+    }
+  }
+
+  void _commit() {
+    final next = _controller.text;
+    if (_lastCommittedValue == next) {
+      return;
+    }
+    _lastCommittedValue = next;
+    widget.onChanged(next);
   }
 }
 
@@ -2699,6 +3096,18 @@ class _SpriteAssetChoice {
   });
 }
 
+class _SoundAssetChoice {
+  final String id;
+  final String label;
+  final String assetPath;
+
+  const _SoundAssetChoice({
+    required this.id,
+    required this.label,
+    required this.assetPath,
+  });
+}
+
 Future<_SpriteAssetChoice?> _showSpriteChoiceDialog(
   BuildContext context,
 ) async {
@@ -2802,18 +3211,23 @@ Future<FourthDemoWidgetKind?> _showWidgetChoiceDialog(
   );
 }
 
-Future<String?> _showSoundChoiceDialog(BuildContext context) async {
-  const sounds = <String>[
-    'collectSparkle',
-    'jumpPop',
-    'buttonClick',
-    'successChime',
-    'timerTick',
-    'warningBeep',
-  ];
+Future<_SoundAssetChoice?> _showSoundChoiceDialog(BuildContext context) async {
+  final sounds = await _loadSoundAssetChoices();
+  if (!context.mounted || sounds.isEmpty) {
+    if (context.mounted) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'No sound assets found. Check pubspec.yaml and assets/game_builder/sound effects/.',
+          ),
+        ),
+      );
+    }
+    return null;
+  }
   var selected = sounds.first;
 
-  return showDialog<String>(
+  return showDialog<_SoundAssetChoice>(
     context: context,
     builder: (context) {
       return StatefulBuilder(
@@ -2830,12 +3244,12 @@ Future<String?> _showSoundChoiceDialog(BuildContext context) async {
               runSpacing: 12,
               children: [
                 for (final sound in sounds)
-                  _IconChoiceTile(
+                  _SoundChoiceTile(
                     label: AppLanguage.of(
                       context,
-                    ).tr('builder.sound.$sound', sound),
-                    icon: Icons.music_note,
-                    selected: selected == sound,
+                    ).tr('builder.sound.${sound.id}', sound.label),
+                    assetPath: sound.assetPath,
+                    selected: selected.id == sound.id,
                     onTap: () => setState(() => selected = sound),
                   ),
               ],
@@ -2845,6 +3259,65 @@ Future<String?> _showSoundChoiceDialog(BuildContext context) async {
       );
     },
   );
+}
+
+Future<List<_SoundAssetChoice>> _loadSoundAssetChoices() async {
+  final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+  final soundAssets =
+      manifest
+          .listAssets()
+          .map(_normalizeSoundAssetPath)
+          .where((asset) {
+            final normalized = asset.replaceAll('\\', '/');
+            final withoutAssetPrefix = normalized.startsWith('assets/')
+                ? normalized.substring('assets/'.length)
+                : normalized;
+            final isInSoundFolder = withoutAssetPrefix.startsWith(
+              'game_builder/sound effects/',
+            );
+            final isAudioFile = RegExp(
+              r'\.(mp3|wav|ogg|m4a|aac)$',
+              caseSensitive: false,
+            ).hasMatch(normalized);
+            return isInSoundFolder && isAudioFile;
+          })
+          .toSet()
+          .toList()
+        ..sort();
+  return [
+    for (final assetPath in soundAssets)
+      _SoundAssetChoice(
+        id: _soundChoiceId(assetPath),
+        label: _soundFileName(assetPath),
+        assetPath: assetPath,
+      ),
+  ];
+}
+
+String _soundChoiceId(String assetPath) {
+  return _soundFileName(assetPath)
+      .replaceAll(RegExp(r'[^A-Za-z0-9]+'), ' ')
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join();
+}
+
+String _normalizeSoundAssetPath(String assetPath) {
+  var path = assetPath.trim().replaceAll('\\', '/');
+  for (var i = 0; i < 3; i++) {
+    try {
+      final decoded = Uri.decodeFull(path);
+      if (decoded == path) {
+        break;
+      }
+      path = decoded;
+    } on FormatException {
+      break;
+    }
+  }
+  return path.replaceAll('%20', ' ');
 }
 
 class _ImageChoiceTile extends StatelessWidget {
@@ -2895,6 +3368,37 @@ class _IconChoiceTile extends StatelessWidget {
       selected: selected,
       onTap: onTap,
       child: Icon(icon, color: const Color(0xFF2B78C2), size: 38),
+    );
+  }
+}
+
+class _SoundChoiceTile extends StatelessWidget {
+  final String label;
+  final String assetPath;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SoundChoiceTile({
+    required this.label,
+    required this.assetPath,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _ChoiceShell(
+      label: label,
+      selected: selected,
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.graphic_eq, color: Color(0xFF2B78C2), size: 26),
+          const SizedBox(height: 4),
+          _SoundPlayButton(assetPath: assetPath, compact: true),
+        ],
+      ),
     );
   }
 }

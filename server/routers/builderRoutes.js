@@ -8,6 +8,7 @@ router.use(authMiddleware);
 
 router.post('/assets', uploadedAssetController.createAsset);
 router.get('/assets', uploadedAssetController.listAssets);
+router.get('/assets/public', uploadedAssetController.listPublicAssets);
 router.get('/assets/:id/data', uploadedAssetController.getAssetData);
 router.get('/assets/:id', uploadedAssetController.getAssetMetadata);
 router.put('/assets/:id', uploadedAssetController.updateAsset);

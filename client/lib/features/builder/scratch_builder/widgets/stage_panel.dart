@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../front_view/shared/builder_character.dart';
 import '../../front_view/shared/builder_collectable.dart';
+import '../../shared/widgets/game_builder_back_icon.dart';
 
 enum ScratchStageTool { select, move, brush, eraser }
 
@@ -1585,7 +1586,7 @@ class _InlineSettingsScaffold extends StatelessWidget {
               IconButton(
                 tooltip: AppLanguage.of(context).t('builder.back'),
                 onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
+                icon: const GameBuilderBackIcon(),
               ),
               Expanded(
                 child: Text(
