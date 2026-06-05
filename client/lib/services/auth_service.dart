@@ -39,16 +39,21 @@ class AuthService {
     required String email,
     required String password,
     required String role,
+    String? classroomCode,
   }) async {
+    final body = <String, dynamic>{
+      'name': name,
+      'email': email,
+      'password': password,
+      'role': role,
+    };
+    if (classroomCode != null && classroomCode.isNotEmpty) {
+      body['classroomCode'] = classroomCode.toUpperCase();
+    }
     final response = await http.post(
       Uri.parse(ApiConstants.register),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'name': name,
-        'email': email,
-        'password': password,
-        'role': role,
-      }),
+      body: jsonEncode(body),
     );
 
     final data = jsonDecode(response.body);

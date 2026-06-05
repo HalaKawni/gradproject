@@ -3,7 +3,7 @@ const UserService = require("../services/user.services");
 
 exports.register = async(req,res,next)=>{
     try{
-        const {name,email,password,role} = req.body;
+        const { name, email, password, role, classroomCode } = req.body;
 
         if(!name || !email || !password || !role){
             return res.status(400).json({
@@ -12,7 +12,7 @@ exports.register = async(req,res,next)=>{
             });
         }
 
-        const successRes = await UserService.registerUser(name,email,password,role);
+        const successRes = await UserService.registerUser(name, email, password, role, classroomCode);
         res.status(201).json({
             status:true,
             success:"User Registered Successfully",

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'world_map_page.dart';
+import 'classroom_page.dart';
 import 'unlock_dialog.dart';
 import 'services/game_api_service.dart';
 import 'services/api_service.dart';
@@ -52,6 +53,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final stats = await ApiService.getMyStats();
     if (mounted) setState(() => _myStats = stats);
   }
+
 
   final Set<String> _selectedLevels = {'Novice', 'Beginner', 'Intermediate', 'Advanced'};
   final Set<String> _selectedCategories = {'Main Courses', 'Mini Courses'};
@@ -169,6 +171,15 @@ class _DashboardPageState extends State<DashboardPage> {
             }),
           ),
           _SidebarItem(label: 'dashboard.discover'.tr(), isActive: false, onTap: () {}),
+          _SidebarItem(
+            label: 'My Classroom',
+            isActive: false,
+            icon: Icons.school,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ClassroomPage()),
+            ),
+          ),
           const Spacer(),
           // ── STREAK ──
           Padding(

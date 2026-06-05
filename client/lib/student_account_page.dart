@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'services/auth_service.dart';
+import 'services/api_service.dart';
 import 'dashboard_page.dart';
 class StudentAccountPage extends StatefulWidget {
-  const StudentAccountPage({super.key});
+  final String? classroomCode;
+  const StudentAccountPage({super.key, this.classroomCode});
 
   @override
   State<StudentAccountPage> createState() => _StudentAccountPageState();
@@ -77,7 +79,16 @@ Future<void> _onSignUp() async {
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
       role: 'child',
+      classroomCode: widget.classroomCode,
     );
+
+    if (!mounted) return;
+
+    // Safety net: explicitly call joinClassroom in case the registration
+    // body didn't save it (e.g. server was running old code during signup).
+    if (widget.classroomCode != null && widget.classroomCode!.isNotEmpty) {
+      await ApiService.joinClassroom(widget.classroomCode!);
+    }
 
     if (!mounted) return;
 

@@ -3,7 +3,7 @@ const UserModel = require('../model/user.model');
 const { signToken } = require("../utils/token");
 
 class UserService{
-    static async registerUser(name,email,password,role) {
+    static async registerUser(name, email, password, role, classroomCode) {
         try{
             const existingUser = await UserModel.findOne({ email });
 
@@ -11,7 +11,10 @@ class UserService{
                 throw new Error("User already exists");
             }
 
-            const createUser = new UserModel({name,email,password,role});
+            const userData = { name, email, password, role };
+            if (classroomCode) userData.classroomCode = classroomCode.toUpperCase();
+
+            const createUser = new UserModel(userData);
             const savedUser = await createUser.save();
             const token = signToken(savedUser);
 
