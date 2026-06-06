@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'data_play_page_sort.dart';
 import '../services/api_service.dart';
+import 'data_lesson_slide_texts.dart';
 
 class DataPlayPage extends StatefulWidget {
   final Map<String, dynamic> lesson;
@@ -17,7 +18,22 @@ class _DataPlayPageState extends State<DataPlayPage> {
   final GlobalKey _gameAreaKey = GlobalKey();
   final Map<String, double> _lineProgress = {};
 
-  final List<_Pair> _pairs = [
+  // ── RIVER SPRITES ──
+  final List<_RiverSprite> _riverSprites = [];
+  Timer? _riverTimer;
+  final Random _rng = Random();
+  int _riverSpawnCooldown = 0;
+
+  static const List<String> _riverSpriteAssets = [
+    'assets/images/sprites/truck.png',
+    'assets/images/sprites/star.png',
+    'assets/images/sprites/banana.png',
+    'assets/images/sprites/powerup.png',
+    'assets/images/sprites/chocolate.png',
+    'assets/images/sprites/coin.png',
+  ];
+
+  List<_Pair> _pairs = [
     _Pair(
       word: 'Data',
       definition: 'Information that can be observed, measured, described, or recorded.',
@@ -49,6 +65,8 @@ class _DataPlayPageState extends State<DataPlayPage> {
   final Map<String, GlobalKey> _wordKeys = {};
   final Map<String, GlobalKey> _defKeys = {};
 
+  bool _isLoading = false;
+
   int _playScore = 0;
   final int _playTotal = 5;
   final int _reviewScore = 0;
@@ -56,6 +74,60 @@ class _DataPlayPageState extends State<DataPlayPage> {
 
   late List<_Pair> _shuffledWords;
   late List<_Pair> _shuffledDefs;
+
+  Future<void> _loadAiPairs() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final raw = await ApiService.generateWordMatchPairs(
+        lessonNumber: lessonNumber,
+        slideTexts: DataLessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (raw.isNotEmpty) {
+        final newPairs = raw.map((p) => _Pair(
+          word: p['word']!,
+          definition: p['definition']!,
+        )).toList();
+        setState(() {
+          _pairs = newPairs;
+          _wordKeys.clear();
+          _defKeys.clear();
+          for (final p in newPairs) {
+            _wordKeys[p.word] = GlobalKey();
+            _defKeys[p.definition] = GlobalKey();
+          }
+          _shuffledWords = List.from(newPairs)..shuffle(Random());
+          _shuffledDefs  = List.from(newPairs)..shuffle(Random());
+          _matched.clear();
+          _lines.clear();
+          _lineProgress.clear();
+          _selectedWord = null;
+          _selectedDef  = null;
+          _wrongWords.clear();
+          _wrongDefs.clear();
+          _playScore = 0;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('✨ AI pairs loaded!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('AI failed. Using original pairs.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ));
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _saveScore() async {
     final lessonNumber = widget.lesson['number'] as int;
@@ -76,6 +148,50 @@ class _DataPlayPageState extends State<DataPlayPage> {
     }
     _shuffledWords = List.from(_pairs)..shuffle(Random());
     _shuffledDefs = List.from(_pairs)..shuffle(Random());
+    _startRiverAnimation();
+  }
+
+  @override
+  void dispose() {
+    _riverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRiverAnimation() {
+    _spawnRiverSprite();
+    _riverTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final s in _riverSprites) {
+          s.y += s.speed;
+          s.rotation += s.rotationSpeed;
+        }
+        _riverSprites.removeWhere((s) => s.y > 1.1);
+        if (_riverSprites.isEmpty) {
+          if (_riverSpawnCooldown > 0) {
+            _riverSpawnCooldown--;
+          } else {
+            _spawnRiverSprite();
+            _riverSpawnCooldown = 45;
+          }
+        }
+      });
+    });
+  }
+
+  void _spawnRiverSprite() {
+    const riverCenter = 0.44;
+    const riverHalfWidth = 0.04;
+    final x = riverCenter - riverHalfWidth + _rng.nextDouble() * riverHalfWidth * 2;
+    final asset = _riverSpriteAssets[_rng.nextInt(_riverSpriteAssets.length)];
+    _riverSprites.add(_RiverSprite(
+      assetPath: asset,
+      x: x,
+      y: -0.08,
+      speed: 0.003 + _rng.nextDouble() * 0.002,
+      size: 52.0 + _rng.nextDouble() * 20.0,
+      rotationSpeed: (_rng.nextBool() ? 1 : -1) * (0.008 + _rng.nextDouble() * 0.015),
+    ));
   }
 
   void _onWordTap(String word) {
@@ -172,7 +288,7 @@ class _DataPlayPageState extends State<DataPlayPage> {
     final lessonTitle = widget.lesson['title'] as String;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF7B9FD4),
+      backgroundColor: const Color.fromARGB(255,123, 127, 212),
       body: Column(
         children: [
           _buildNavbar(lessonNumber, lessonTitle),
@@ -271,6 +387,38 @@ class _DataPlayPageState extends State<DataPlayPage> {
           Text(lessonTitle,
               style: const TextStyle(fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiPairs,
+            child: Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: _isLoading
+                    ? Colors.grey.withValues(alpha: 0.4)
+                    : const Color(0xFFF5A623),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _isLoading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 18, height: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ),
+                    )
+                  : Row(children: [
+                      const Icon(Icons.auto_awesome_rounded,
+                          color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text('✨ AI',
+                          style: GoogleFonts.nunito(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800)),
+                    ]),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(
             icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
             label: 'LEARN', value: '18/18',
@@ -385,6 +533,23 @@ class _DataPlayPageState extends State<DataPlayPage> {
               ),
             ),
           ),
+          // ── RIVER FALLING SPRITES (clipped to game area) ──
+          Positioned.fill(
+            child: ClipRect(
+              child: Stack(
+                children: _riverSprites.map((sprite) => Positioned(
+                  left: sprite.x * w - sprite.size / 2,
+                  top: sprite.y * h - sprite.size / 2,
+                  child: Transform.rotate(
+                    angle: sprite.rotation,
+                    child: Image.asset(sprite.assetPath,
+                        width: sprite.size, height: sprite.size),
+                  ),
+                )).toList(),
+              ),
+            ),
+          ),
+
           // match lines
           Positioned.fill(
             child: CustomPaint(
@@ -660,4 +825,23 @@ class _MatchLine {
   final String word;
   final String def;
   _MatchLine({required this.word, required this.def});
+}
+
+class _RiverSprite {
+  final String assetPath;
+  double x;
+  double y;
+  final double speed;
+  final double size;
+  double rotation;
+  final double rotationSpeed;
+
+  _RiverSprite({
+    required this.assetPath,
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.rotationSpeed,
+  }) : rotation = 0.0;
 }

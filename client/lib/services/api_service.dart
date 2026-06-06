@@ -527,6 +527,40 @@ class ApiService {
     }
   }
 
+  // POST /api/ai/sort-concepts (numerical vs non-numerical data classification)
+  static Future<List<Map<String, dynamic>>> generateSortConcepts({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/sort-concepts';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['concepts'] != null) {
+          return List<Map<String, dynamic>>.from(
+            (data['concepts'] as List).map((c) => {
+              'text': c['text'].toString(),
+              'positive': c['positive'] as bool,
+              'sender': c['sender'].toString(),
+              'preview': c['preview'].toString(),
+            }),
+          );
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
   // POST /api/ai/swipe-concepts
   static Future<List<Map<String, dynamic>>> generateSwipeConcepts({
     required int lessonNumber,

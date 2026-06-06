@@ -728,7 +728,7 @@ if (isWrong) {
       child: Container(
         width: 100,
         height: double.infinity,
-        color: const Color(0xFF1999B0),
+        color: const Color.fromARGB(255,31,181,201),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

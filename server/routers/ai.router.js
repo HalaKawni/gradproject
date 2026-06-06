@@ -8,5 +8,6 @@ router.post('/wordmatch-pairs', authMiddleware, AiController.generateWordMatchPa
 router.post('/quiz-questions', authMiddleware, AiController.generateQuizQuestions);
 router.post('/fill-blanks',    authMiddleware, AiController.generateFillBlanks);
 router.post('/swipe-concepts', authMiddleware, AiController.generateSwipeConcepts);
+router.post('/sort-concepts',  authMiddleware, AiController.generateSortConcepts);
 
 module.exports = router;

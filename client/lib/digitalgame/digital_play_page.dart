@@ -24,6 +24,21 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
   // ── LINE PROGRESS ──
   final Map<String, double> _lineProgress = {};
 
+  // ── RIVER SPRITES ──
+  final List<_RiverSprite> _riverSprites = [];
+  Timer? _riverTimer;
+  final Random _rng = Random();
+  int _riverSpawnCooldown = 0; // ticks to wait before spawning next sprite
+
+  static const List<String> _riverSpriteAssets = [
+    'assets/images/sprites/truck.png',
+    'assets/images/sprites/star.png',
+    'assets/images/sprites/banana.png',
+    'assets/images/sprites/powerup.png',
+    'assets/images/sprites/chocolate.png',
+    'assets/images/sprites/coin.png',
+  ];
+
   // ── PAIRS ──
   static final List<_Pair> _fallbackPairs = [
     _Pair(word: 'Hardware',    definition: 'The physical parts of the computer, like the mouse, keyboard, and the monitor.'),
@@ -33,7 +48,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
   ];
 
   List<_Pair> _pairs = List.of(_fallbackPairs);
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   // ── STATE ──
   String? _selectedWord;
@@ -73,7 +88,51 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
   void initState() {
     super.initState();
     _initPairs(_pairs);
-    _loadAiPairs();
+    _startRiverAnimation();
+  }
+
+  @override
+  void dispose() {
+    _riverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRiverAnimation() {
+    _spawnRiverSprite();
+    _riverTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final s in _riverSprites) {
+          s.y += s.speed;
+          s.rotation += s.rotationSpeed;
+        }
+        _riverSprites.removeWhere((s) => s.y > 1.1);
+        if (_riverSprites.isEmpty) {
+          if (_riverSpawnCooldown > 0) {
+            _riverSpawnCooldown--;
+          } else {
+            _spawnRiverSprite();
+            _riverSpawnCooldown = 45; // ~1.5 s gap before next sprite
+          }
+        }
+      });
+    });
+  }
+
+  void _spawnRiverSprite() {
+    // Keep sprites centred on the river water
+    const riverCenter = 0.44;
+    const riverHalfWidth = 0.04;
+    final x = riverCenter - riverHalfWidth + _rng.nextDouble() * riverHalfWidth * 2;
+    final asset = _riverSpriteAssets[_rng.nextInt(_riverSpriteAssets.length)];
+    _riverSprites.add(_RiverSprite(
+      assetPath: asset,
+      x: x,
+      y: -0.08,
+      speed: 0.003 + _rng.nextDouble() * 0.002,
+      size: 52.0 + _rng.nextDouble() * 20.0,
+      rotationSpeed: (_rng.nextBool() ? 1 : -1) * (0.008 + _rng.nextDouble() * 0.015),
+    ));
   }
 
   void _initPairs(List<_Pair> pairs) {
@@ -231,8 +290,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
         actions: [
           ElevatedButton(
             onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
+              Navigator.of(context).pop(); // close dialog only
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFF5A623)),
@@ -253,7 +311,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
     final lessonTitle = widget.lesson['title'] as String;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF7B9FD4),
+      backgroundColor: const Color.fromARGB(255,123, 127, 212),
       body: Column(
         children: [
           // ── CODEMONKEY NAVBAR ──
@@ -568,6 +626,26 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
               ),
             ),
 
+          // ── RIVER FALLING SPRITES (clipped to game area) ──
+          Positioned.fill(
+            child: ClipRect(
+              child: Stack(
+                children: _riverSprites.map((sprite) => Positioned(
+                  left: sprite.x * w - sprite.size / 2,
+                  top: sprite.y * h - sprite.size / 2,
+                  child: Transform.rotate(
+                    angle: sprite.rotation,
+                    child: Image.asset(
+                      sprite.assetPath,
+                      width: sprite.size,
+                      height: sprite.size,
+                    ),
+                  ),
+                )).toList(),
+              ),
+            ),
+          ),
+
           // ── MATCH LINES ──
           Positioned.fill(
             child: CustomPaint(
@@ -827,7 +905,7 @@ class _DigitalPlayPageState extends State<DigitalPlayPage> {
       child: Container(
         width: 100,
         height: double.infinity,
-        color: const Color(0xFF7B7FD4),
+        color: const Color.fromARGB(255,123, 127, 212),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -984,4 +1062,23 @@ class _MatchLine {
   final String word;
   final String def;
   _MatchLine({required this.word, required this.def});
+}
+
+class _RiverSprite {
+  final String assetPath;
+  double x;
+  double y;
+  final double speed;
+  final double size;
+  double rotation;
+  final double rotationSpeed;
+
+  _RiverSprite({
+    required this.assetPath,
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.rotationSpeed,
+  }) : rotation = 0.0;
 }
