@@ -4,7 +4,37 @@ import '../models/fourth_demo_project.dart';
 class GameAutocompleteEngine {
   const GameAutocompleteEngine();
 
-  static const gameCommands = <String>['game.setBackground'];
+  static const gameCommands = <String>[
+    'game.setBackground',
+    'game.setWidth',
+    'game.setHeight',
+    'game.setSize',
+    'game.setGravity',
+    'game.setPhysics',
+    'game.setCameraTarget',
+    'game.getWidth()',
+    'game.getHeight()',
+    'game.getGravity()',
+    'game.getBackground()',
+    'game.getPhysics()',
+  ];
+  static const directionsMembers = <String>['left', 'right', 'up', 'down'];
+  static const directionValues = <String>[
+    '"left"',
+    '"right"',
+    '"up"',
+    '"down"',
+  ];
+  static const soundMembers = <String>[
+    'play',
+    'stop',
+    'pause',
+    'resume',
+    'setVolume',
+    'setLoop',
+    'isPlaying',
+    'getVolume',
+  ];
   static const spriteCommandMembers = <String>[
     'step',
     'jump',
@@ -24,6 +54,55 @@ class GameAutocompleteEngine {
     'startAnimation',
     'stopAnimation',
   ];
+  static const _commonWidgetMembers = <String>[
+    'show',
+    'hide',
+    'setText',
+    'setX',
+    'setY',
+    'setOpacity',
+    'isVisible',
+  ];
+  static const _counterWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'setValue',
+    'add',
+    'subtract',
+    'reset',
+    'getValue',
+  ];
+  static const _textWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'append',
+    'clear',
+    'getText',
+  ];
+  static const _timerWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'start',
+    'stop',
+    'reset',
+    'setDuration',
+    'setValue',
+    'getValue',
+  ];
+  static const _clockWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'start',
+    'stop',
+    'reset',
+    'getValue',
+  ];
+  static const _buttonWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'enable',
+    'disable',
+  ];
+  static const _dialogWidgetMembers = <String>[
+    ..._commonWidgetMembers,
+    'setTitle',
+    'setButtonText',
+  ];
 
   List<String> defaultSuggestions() {
     return <String>{
@@ -41,6 +120,10 @@ class GameAutocompleteEngine {
     FourthDemoProject? project,
   }) {
     final prefix = _prefixAt(text, offset);
+    final contextual = _contextualValueSuggestions(text, offset, prefix);
+    if (contextual.isNotEmpty) {
+      return contextual;
+    }
     if (prefix.isEmpty) {
       return const <String>[];
     }
@@ -61,13 +144,34 @@ class GameAutocompleteEngine {
       return gameCommands.where((item) => item.startsWith(prefix)).toList();
     }
 
+    if (prefix == 'directions.' || prefix.startsWith('directions.')) {
+      final memberPrefix = prefix.substring('directions.'.length);
+      return directionsMembers
+          .where((item) => item.startsWith(memberPrefix))
+          .map((item) => 'directions.$item')
+          .toList();
+    }
+
     final receiverPrefix = RegExp(
       r'^([A-Za-z_]\w*)\.(\w*)$',
     ).firstMatch(prefix);
     if (receiverPrefix != null) {
       final receiver = receiverPrefix.group(1)!;
-      if (_isKnownReceiver(receiver, text, offset, project)) {
-        final memberPrefix = receiverPrefix.group(2)!;
+      final memberPrefix = receiverPrefix.group(2)!;
+      final widgetMembers = _widgetMembersFor(receiver, project);
+      if (widgetMembers != null) {
+        return widgetMembers
+            .where((item) => item.startsWith(memberPrefix))
+            .map((item) => '$receiver.$item')
+            .toList();
+      }
+      if (_isKnownSoundReceiver(receiver, project)) {
+        return soundMembers
+            .where((item) => item.startsWith(memberPrefix))
+            .map((item) => '$receiver.$item')
+            .toList();
+      }
+      if (_isKnownSpriteReceiver(receiver, text, offset, project)) {
         return spriteCommandMembers
             .where((item) => item.startsWith(memberPrefix))
             .map((item) => '$receiver.$item')
@@ -79,6 +183,15 @@ class GameAutocompleteEngine {
       ...defaultSuggestions(),
       if (project != null) ...project.sprites.map((sprite) => sprite.name),
       if (project != null) ...project.sprites.map((sprite) => sprite.id),
+      if (project != null) ...project.widgets.map((widget) => widget.name),
+      if (project != null) ...project.widgets.map((widget) => widget.id),
+      if (project != null) ...project.sounds.map((sound) => sound.name),
+      if (project != null) ...project.sounds.map((sound) => sound.id),
+      ..._functionNames(text).map((name) => '$name()'),
+      'game',
+      'key',
+      'direction',
+      'directions',
       ..._loopVariablesBefore(text, offset),
       'sprite in sprites',
     }.where((item) => item.startsWith(prefix)).take(10).toList();
@@ -86,7 +199,7 @@ class GameAutocompleteEngine {
     return suggestions;
   }
 
-  bool _isKnownReceiver(
+  bool _isKnownSpriteReceiver(
     String receiver,
     String text,
     int offset,
@@ -101,6 +214,65 @@ class GameAutocompleteEngine {
     return project.sprites.any(
       (sprite) => sprite.id == receiver || sprite.name == receiver,
     );
+  }
+
+  List<String>? _widgetMembersFor(String receiver, FourthDemoProject? project) {
+    if (project == null) {
+      return null;
+    }
+    final widget = project.widgets
+        .where((item) => item.id == receiver || item.name == receiver)
+        .firstOrNull;
+    if (widget == null) {
+      return null;
+    }
+    return switch (widget.type) {
+      FourthDemoWidgetKind.counter => _counterWidgetMembers,
+      FourthDemoWidgetKind.text => _textWidgetMembers,
+      FourthDemoWidgetKind.timer => _timerWidgetMembers,
+      FourthDemoWidgetKind.clock => _clockWidgetMembers,
+      FourthDemoWidgetKind.button => _buttonWidgetMembers,
+      FourthDemoWidgetKind.dialog => _dialogWidgetMembers,
+    };
+  }
+
+  bool _isKnownSoundReceiver(String receiver, FourthDemoProject? project) {
+    if (project == null) {
+      return false;
+    }
+    return project.sounds.any(
+      (sound) => sound.id == receiver || sound.name == receiver,
+    );
+  }
+
+  List<String> _contextualValueSuggestions(
+    String text,
+    int offset,
+    String prefix,
+  ) {
+    final before = text.substring(0, offset.clamp(0, text.length).toInt());
+    if (RegExp(r'key\s*==\s*[\w.]*$').hasMatch(before)) {
+      return GameLanguageSpec.keyboardConstants
+          .where((item) => item.startsWith(prefix))
+          .toList();
+    }
+    if (RegExp(r'direction\s*==\s*"?\w*$').hasMatch(before)) {
+      return directionValues
+          .where(
+            (item) =>
+                item.startsWith(prefix) ||
+                item.replaceAll('"', '').startsWith(prefix),
+          )
+          .toList();
+    }
+    return const <String>[];
+  }
+
+  Set<String> _functionNames(String text) {
+    return RegExp(
+      r'^([A-Za-z_]\w*)\s*=\s*\(\s*\)\s*=>\s*$',
+      multiLine: true,
+    ).allMatches(text).map((match) => match.group(1)!).toSet();
   }
 
   Set<String> _loopVariablesBefore(String text, int offset) {

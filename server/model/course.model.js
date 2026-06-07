@@ -23,6 +23,22 @@ const courseSchema = new mongoose.Schema({
         // required: true,
         trim: true
     },
+    courseImageBase64: {
+        type: String,
+        default: null
+    },
+    coverFrameScale: {
+        type: Number,
+        default: 1
+    },
+    coverFrameOffsetX: {
+        type: Number,
+        default: 0
+    },
+    coverFrameOffsetY: {
+        type: Number,
+        default: 0
+    },
     isPublic: {
         type: Boolean,
         default: false

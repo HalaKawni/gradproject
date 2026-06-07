@@ -29,6 +29,22 @@ const BuilderProjectSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    coverImageBase64: {
+      type: String,
+      default: null,
+    },
+    coverFrameScale: {
+      type: Number,
+      default: 1,
+    },
+    coverFrameOffsetX: {
+      type: Number,
+      default: 0,
+    },
+    coverFrameOffsetY: {
+      type: Number,
+      default: 0,
+    },
     status: {
       type: String,
       enum: ['draft', 'published'],
@@ -36,7 +52,7 @@ const BuilderProjectSchema = new mongoose.Schema(
     },
     builderType: {
       type: String,
-      enum: ['frontView', 'topView', 'scratch'],
+      enum: ['frontView', 'topView', 'scratch', 'fourthDemo'],
       default: 'frontView',
     },
     draftData: {

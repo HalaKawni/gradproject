@@ -2,10 +2,19 @@ const CourseService = require('../services/course.services');
 
 exports.createCourse = async (req, res) => {
   try {
-    const { title, description, lessons, courseImageBase64 } = req.body;
+    const {
+      title,
+      description,
+      lessons,
+      courseImageBase64,
+    } = req.body;
     if (!title) return res.status(400).json({ status: false, error: 'Title is required' });
     const course = await CourseService.createCourse(
-      req.user._id, title, description || '', lessons || [], courseImageBase64 || null
+      req.user._id,
+      title,
+      description || '',
+      lessons || [],
+      courseImageBase64 || null
     );
     res.status(201).json({ status: true, course });
   } catch (err) {
@@ -24,7 +33,13 @@ exports.getUserCourses = async (req, res) => {
 
 exports.updateCourse = async (req, res) => {
   try {
-    const { courseImageBase64, isPublished, title, description, lessons } = req.body;
+    const {
+      courseImageBase64,
+      isPublished,
+      title,
+      description,
+      lessons,
+    } = req.body;
     const updates = {};
     if (courseImageBase64 !== undefined) updates.courseImageBase64 = courseImageBase64;
     if (isPublished !== undefined) updates.isPublished = isPublished;

@@ -58,6 +58,22 @@ exports.updateLevel = async (id, data) => {
     update.description = data.description;
   }
 
+  if (data.coverImageBase64 !== undefined) {
+    update.coverImageBase64 = data.coverImageBase64;
+  }
+
+  if (data.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(data.coverFrameScale);
+  }
+
+  if (data.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(data.coverFrameOffsetX);
+  }
+
+  if (data.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(data.coverFrameOffsetY);
+  }
+
   if (data.builderType !== undefined) {
     update.builderType = data.builderType;
   }
@@ -72,6 +88,13 @@ exports.updateLevel = async (id, data) => {
 
   if (data.levelJson !== undefined || data.draftData !== undefined) {
     update.draftData = data.levelJson ?? data.draftData;
+  }
+
+  if (data.codeBySpriteId !== undefined && update.draftData) {
+    update.draftData = {
+      ...update.draftData,
+      codeBySpriteId: data.codeBySpriteId,
+    };
   }
 
   if (data.courseId !== undefined) {

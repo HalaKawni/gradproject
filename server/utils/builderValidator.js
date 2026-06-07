@@ -17,14 +17,16 @@ function validateBuilderProject(payload) {
   }
 
   const builderType = payload.builderType || 'frontView';
-  if (!['frontView', 'topView', 'scratch'].includes(builderType)) {
-    errors.push('Project builderType must be frontView, topView, or scratch.');
+  if (!['frontView', 'topView', 'scratch', 'fourthDemo'].includes(builderType)) {
+    errors.push('Project builderType must be frontView, topView, scratch, or fourthDemo.');
   }
 
   if (builderType === 'topView') {
     validateTopViewProject(payload, errors);
   } else if (builderType === 'scratch') {
     validateScratchProject(payload, errors);
+  } else if (builderType === 'fourthDemo') {
+    validateFourthDemoProject(payload, errors);
   } else {
     validateFrontViewProject(payload, errors);
   }
@@ -125,6 +127,32 @@ function validateScratchProject(payload, errors) {
 
   if (payload.workspaceBlocks.length === 0) {
     errors.push('Published scratch levels must include at least one block.');
+  }
+}
+
+function validateFourthDemoProject(payload, errors) {
+  if (!payload.settings || typeof payload.settings !== 'object') {
+    errors.push('Fourth demo settings are required.');
+  }
+
+  if (!Array.isArray(payload.sprites)) {
+    errors.push('Fourth demo sprites must be an array.');
+  }
+
+  if (!payload.tilemap || typeof payload.tilemap !== 'object') {
+    errors.push('Fourth demo tilemap is required.');
+  }
+
+  if (!payload.codeBySpriteId || typeof payload.codeBySpriteId !== 'object') {
+    errors.push('Fourth demo codeBySpriteId is required.');
+  }
+
+  if (payload.status !== 'published' || errors.length > 0) {
+    return;
+  }
+
+  if (payload.sprites.length === 0) {
+    errors.push('Published fourth demo levels must include at least one sprite.');
   }
 }
 

@@ -35,6 +35,13 @@ class BuilderGame extends FlameGame {
     board = BuilderBoard(controller: controller);
     add(board);
   }
+
+  Offset? get visualPlayerCenter {
+    if (!isLoaded) {
+      return null;
+    }
+    return board.visualPlayerCenter;
+  }
 }
 
 class BuilderBoard extends PositionComponent
@@ -91,6 +98,24 @@ class BuilderBoard extends PositionComponent
   int get columns => controller.project.settings.columns;
   double get boardWidth => columns * tileSize;
   double get boardHeight => rows * tileSize;
+
+  Offset? get visualPlayerCenter {
+    final playbackState = controller.playbackState;
+    if (playbackState != null) {
+      return _animatedPlayerRect(
+        playbackState,
+        updateActiveSegment: false,
+      ).center;
+    }
+    final playerStart = _playerStartEntity;
+    if (playerStart == null) {
+      return null;
+    }
+    return Offset(
+      (playerStart.x + 0.5) * tileSize,
+      (playerStart.y + 0.5) * tileSize,
+    );
+  }
 
   @override
   Future<void> onLoad() async {
@@ -987,9 +1012,18 @@ class BuilderBoard extends PositionComponent
   }
 
   Rect _buildAnimatedPlayerRect(BuilderPlaybackState playbackState) {
+    return _animatedPlayerRect(playbackState, updateActiveSegment: true);
+  }
+
+  Rect _animatedPlayerRect(
+    BuilderPlaybackState playbackState, {
+    required bool updateActiveSegment,
+  }) {
     final segments = controller.playbackVisualSegments;
     if (segments.isEmpty) {
-      _activeVisualSegment = null;
+      if (updateActiveSegment) {
+        _activeVisualSegment = null;
+      }
       return Rect.fromLTWH(
         playbackState.toPlayerX * tileSize,
         playbackState.toPlayerY * tileSize,
@@ -1014,7 +1048,11 @@ class BuilderBoard extends PositionComponent
         ? 1.0
         : (elapsedMs - segmentStartMs) / _moveAnimationDurationMs;
     final progress = rawProgress.clamp(0.0, 1.0).toDouble();
-    _activeVisualSegment = isAtEnd && !playbackState.isPlaying ? null : segment;
+    if (updateActiveSegment) {
+      _activeVisualSegment = isAtEnd && !playbackState.isPlaying
+          ? null
+          : segment;
+    }
 
     final left =
         ((segment.toPlayerX - segment.fromPlayerX) * progress +

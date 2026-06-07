@@ -86,6 +86,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
         ? AppRoutes.topViewBuilder
         : game.isScratch
         ? AppRoutes.scratchBuilder
+        : game.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builderPlay;
     final routeData = game.isTopView
         ? TopViewBuilderRouteData(
@@ -97,6 +99,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
           )
         : game.isScratch
         ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+          )
+        : game.isFourthDemo
+        ? FourthDemoBuilderRouteData(
             session: widget.session,
             initialProjectId: game.id,
             allowPublishedAccess: true,
@@ -304,10 +314,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
       sliver: SliverGrid.builder(
         itemCount: publishedGames.length,
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 260,
+          maxCrossAxisExtent: 240,
           mainAxisSpacing: 16,
           crossAxisSpacing: 16,
-          childAspectRatio: 0.86,
+          childAspectRatio: 0.96,
         ),
         itemBuilder: (context, index) {
           final game = publishedGames[index];
@@ -339,15 +349,8 @@ class _DiscoverSidebar extends StatelessWidget {
         children: [
           const SizedBox(height: 16),
           _DiscoverSidebarItem(label: 'COURSES', onTap: onCoursesTap),
-          _DiscoverSidebarItem(
-            label: 'MY CREATIONS',
-            onTap: onMyCreationsTap,
-          ),
-          _DiscoverSidebarItem(
-            label: 'DISCOVER',
-            isActive: true,
-            onTap: () {},
-          ),
+          _DiscoverSidebarItem(label: 'MY CREATIONS', onTap: onMyCreationsTap),
+          _DiscoverSidebarItem(label: 'DISCOVER', isActive: true, onTap: () {}),
         ],
       ),
     );
@@ -636,7 +639,11 @@ class _BannerTexturePainter extends CustomPainter {
       ..strokeWidth = 1;
 
     for (var x = -size.height; x < size.width; x += 18) {
-      canvas.drawLine(Offset(x, 0), Offset(x + size.height, size.height), paint);
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x + size.height, size.height),
+        paint,
+      );
     }
   }
 

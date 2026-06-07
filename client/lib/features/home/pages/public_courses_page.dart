@@ -1,8 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
+import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
 
 class PublicCoursesPage extends StatefulWidget {
@@ -18,6 +22,7 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
   bool _isLoading = true;
   String? _errorMessage;
   List<_PublicCourse> _courses = const [];
+  String? _openingCourseId;
 
   @override
   void initState() {
@@ -66,12 +71,170 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
   }
 
   Future<void> _openCourse(_PublicCourse course) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            _CourseLevelsPage(session: widget.session, course: course),
-      ),
+    if (_openingCourseId != null) {
+      return;
+    }
+    setState(() {
+      _openingCourseId = course.id;
+    });
+
+    try {
+      final levels = await _loadCourseLevels(course);
+      if (!mounted) {
+        return;
+      }
+      if (levels.isEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                _CourseLevelsPage(session: widget.session, course: course),
+          ),
+        );
+        return;
+      }
+
+      final progress = await _loadCourseProgress(course);
+      if (!mounted) {
+        return;
+      }
+      final nextLevel = _nextLevelForProgress(levels, progress);
+      await _openLevel(nextLevel, course: course);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open course: $error')));
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              _CourseLevelsPage(session: widget.session, course: course),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingCourseId = null;
+        });
+      }
+    }
+  }
+
+  Future<List<SavedBuilderProject>> _loadCourseLevels(
+    _PublicCourse course,
+  ) async {
+    final result = await ApiService.getPublicCourseLevels(
+      authToken: widget.session.token,
+      courseId: _courseLookupId(course),
     );
+    if (result['success'] != true) {
+      throw result['message']?.toString() ?? 'Failed to load course levels';
+    }
+    return _parseList(result['data'])
+        .map(SavedBuilderProject.fromJson)
+        .where((level) => level.id.isNotEmpty)
+        .toList()
+      ..sort(_compareLevels);
+  }
+
+  Future<_CourseProgress> _loadCourseProgress(_PublicCourse course) async {
+    final result = await ApiService.getPublicCourseProgress(
+      authToken: widget.session.token,
+      courseId: _courseLookupId(course),
+    );
+    if (result['success'] != true) {
+      return const _CourseProgress();
+    }
+    final data = result['data'];
+    return _CourseProgress.fromJson(
+      data is Map ? Map<String, dynamic>.from(data) : const {},
+    );
+  }
+
+  SavedBuilderProject _nextLevelForProgress(
+    List<SavedBuilderProject> levels,
+    _CourseProgress progress,
+  ) {
+    final lastOrder = progress.lastCompletedOrderInCourse;
+    if (lastOrder <= 0 && progress.completedLevelIds.isEmpty) {
+      return levels.first;
+    }
+    if (lastOrder <= 0) {
+      return levels.firstWhere(
+        (level) => !progress.completedLevelIds.contains(level.id),
+        orElse: () => levels.last,
+      );
+    }
+
+    return levels.firstWhere(
+      (level) => level.orderInCourse > lastOrder,
+      orElse: () => levels.last,
+    );
+  }
+
+  Future<void> _openLevel(
+    SavedBuilderProject level, {
+    required _PublicCourse course,
+  }) async {
+    final routeName = level.isTopView
+        ? AppRoutes.topViewBuilder
+        : level.isScratch
+        ? AppRoutes.scratchBuilder
+        : level.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
+        : AppRoutes.builderPlay;
+    final routeData = level.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId(course),
+            courseProgressLevelId: level.id,
+          )
+        : level.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId(course),
+            courseProgressLevelId: level.id,
+          )
+        : level.isFourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId(course),
+            courseProgressLevelId: level.id,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: level.id,
+            initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId(course),
+            courseProgressLevelId: level.id,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+  }
+
+  int _compareLevels(SavedBuilderProject a, SavedBuilderProject b) {
+    final orderComparison = a.orderInCourse.compareTo(b.orderInCourse);
+    if (orderComparison != 0) {
+      return orderComparison;
+    }
+    return a.title.compareTo(b.title);
+  }
+
+  String _courseLookupId(_PublicCourse course) {
+    return course.courseId.isNotEmpty ? course.courseId : course.id;
   }
 
   @override
@@ -117,10 +280,22 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
               separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final course = _courses[index];
+                final isOpening = _openingCourseId == course.id;
                 return Card(
                   child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.menu_book_outlined),
+                    leading: SizedBox(
+                      width: 64,
+                      height: 40,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: FramedImagePreview(
+                          bytes: _safeDecodeBase64(course.imageBase64),
+                          scale: course.coverFrameScale,
+                          offsetX: course.coverFrameOffsetX,
+                          offsetY: course.coverFrameOffsetY,
+                          placeholderIcon: Icons.menu_book_outlined,
+                        ),
+                      ),
                     ),
                     title: Text(course.title),
                     subtitle: Text(
@@ -130,8 +305,14 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _openCourse(course),
+                    trailing: isOpening
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.play_arrow_rounded),
+                    onTap: isOpening ? null : () => _openCourse(course),
                   ),
                 );
               },
@@ -140,6 +321,17 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
         ),
       ),
     );
+  }
+
+  Uint8List? _safeDecodeBase64(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(value);
+    } catch (_) {
+      return null;
+    }
   }
 }
 
@@ -225,6 +417,8 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
         ? AppRoutes.topViewBuilder
         : level.isScratch
         ? AppRoutes.scratchBuilder
+        : level.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builderPlay;
     final routeData = level.isTopView
         ? TopViewBuilderRouteData(
@@ -233,6 +427,8 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId,
+            courseProgressLevelId: level.id,
           )
         : level.isScratch
         ? ScratchBuilderRouteData(
@@ -241,14 +437,34 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId,
+            courseProgressLevelId: level.id,
+          )
+        : level.isFourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId,
+            courseProgressLevelId: level.id,
           )
         : BuilderPlayRouteData(
             session: widget.session,
             projectId: level.id,
             initialTitle: level.title,
+            courseProgressCourseId: _courseLookupId,
+            courseProgressLevelId: level.id,
           );
 
     await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+  }
+
+  String get _courseLookupId {
+    return widget.course.courseId.isNotEmpty
+        ? widget.course.courseId
+        : widget.course.id;
   }
 
   @override
@@ -330,12 +546,20 @@ class _PublicCourse {
     required this.courseId,
     required this.title,
     required this.description,
+    this.imageBase64,
+    this.coverFrameScale = 1,
+    this.coverFrameOffsetX = 0,
+    this.coverFrameOffsetY = 0,
   });
 
   final String id;
   final String courseId;
   final String title;
   final String description;
+  final String? imageBase64;
+  final double coverFrameScale;
+  final double coverFrameOffsetX;
+  final double coverFrameOffsetY;
 
   factory _PublicCourse.fromJson(Map<String, dynamic> json) {
     return _PublicCourse(
@@ -346,6 +570,51 @@ class _PublicCourse {
           json['title']?.toString() ??
           'Untitled Course',
       description: json['description']?.toString() ?? '',
+      imageBase64: json['courseImageBase64']?.toString(),
+      coverFrameScale: _readDouble(json['coverFrameScale'], fallback: 1),
+      coverFrameOffsetX: _readDouble(json['coverFrameOffsetX']),
+      coverFrameOffsetY: _readDouble(json['coverFrameOffsetY']),
     );
+  }
+
+  static double _readDouble(Object? value, {double fallback = 0}) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+}
+
+class _CourseProgress {
+  const _CourseProgress({
+    this.completedLevelIds = const <String>{},
+    this.lastCompletedOrderInCourse = 0,
+  });
+
+  final Set<String> completedLevelIds;
+  final int lastCompletedOrderInCourse;
+
+  factory _CourseProgress.fromJson(Map<String, dynamic> json) {
+    final completedLevels = json['completedLevels'] is List
+        ? json['completedLevels'] as List
+        : const [];
+    return _CourseProgress(
+      completedLevelIds: completedLevels
+          .whereType<Map>()
+          .map((item) => item['levelId']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet(),
+      lastCompletedOrderInCourse: _readInt(json['lastCompletedOrderInCourse']),
+    );
+  }
+
+  static int _readInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 }

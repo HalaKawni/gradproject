@@ -127,7 +127,10 @@ class GameRuntime {
     if (value.value is num) {
       return GameBoolResult.value((value.value! as num) != 0);
     }
-    return _conditionError('Condition "$condition" is not true or false.', context);
+    return _conditionError(
+      'Condition "$condition" is not true or false.',
+      context,
+    );
   }
 
   Object resolveValue(String raw, GameRuntimeContext context) {
@@ -174,6 +177,19 @@ class GameRuntime {
         context.directions.contains(directionMatch.group(1)!),
       );
     }
+    final gameGetter = RegExp(
+      r'^game\.(getWidth|getHeight|getGravity|getBackground|getPhysics)\(\)$',
+    ).firstMatch(value);
+    if (gameGetter != null) {
+      return GameValueResult.value(switch (gameGetter.group(1)!) {
+        'getWidth' => context.project.settings.worldWidth,
+        'getHeight' => context.project.settings.worldHeight,
+        'getGravity' => context.project.settings.gravity,
+        'getBackground' => context.project.settings.background,
+        'getPhysics' => context.project.settings.physicsMode.name,
+        _ => '',
+      });
+    }
     final getter = RegExp(
       r'^(@|[A-Za-z_]\w*)\.(getX|getY|getRotation|getScale)\(\)$',
     ).firstMatch(value);
@@ -185,6 +201,26 @@ class GameRuntime {
     ).firstMatch(value);
     if (currentGetter != null) {
       return _spriteGetter('@', currentGetter.group(1)!, context);
+    }
+    final widgetGetter = RegExp(
+      r'^([A-Za-z_]\w*)\.(getValue|getText|isVisible)\(\)$',
+    ).firstMatch(value);
+    if (widgetGetter != null) {
+      return _widgetGetter(
+        widgetGetter.group(1)!,
+        widgetGetter.group(2)!,
+        context,
+      );
+    }
+    final soundGetter = RegExp(
+      r'^([A-Za-z_]\w*)\.(isPlaying|getVolume)\(\)$',
+    ).firstMatch(value);
+    if (soundGetter != null) {
+      return _soundGetter(
+        soundGetter.group(1)!,
+        soundGetter.group(2)!,
+        context,
+      );
     }
     final distanceMatch = RegExp(
       r'^@getDistanceFrom\s+([A-Za-z_]\w*)$',
@@ -227,15 +263,46 @@ class GameRuntime {
     if (sprite == null) {
       return _valueError('Sprite "$receiver" was not found.', context);
     }
-    return GameValueResult.value(
-      switch (getter) {
-        'getX' => sprite.x,
-        'getY' => sprite.y,
-        'getRotation' => sprite.rotation,
-        'getScale' => sprite.scale,
-        _ => 0,
-      },
-    );
+    return GameValueResult.value(switch (getter) {
+      'getX' => sprite.x,
+      'getY' => sprite.y,
+      'getRotation' => sprite.rotation,
+      'getScale' => sprite.scale,
+      _ => 0,
+    });
+  }
+
+  GameValueResult _widgetGetter(
+    String receiver,
+    String getter,
+    GameRuntimeContext context,
+  ) {
+    final widget = _widgetNamed(context.project, receiver);
+    if (widget == null) {
+      return _valueError('Widget "$receiver" was not found.', context);
+    }
+    return GameValueResult.value(switch (getter) {
+      'getValue' => widget.value,
+      'getText' => widget.text,
+      'isVisible' => widget.visible,
+      _ => '',
+    });
+  }
+
+  GameValueResult _soundGetter(
+    String receiver,
+    String getter,
+    GameRuntimeContext context,
+  ) {
+    final sound = _soundNamed(context.project, receiver);
+    if (sound == null) {
+      return _valueError('Sound "$receiver" was not found.', context);
+    }
+    return GameValueResult.value(switch (getter) {
+      'isPlaying' => sound.isPlaying,
+      'getVolume' => sound.volume,
+      _ => '',
+    });
   }
 
   ({bool value, GameDiagnostic? diagnostic}) _compare(
@@ -287,9 +354,7 @@ class GameRuntime {
         depth -= 1;
       }
       final token = ' $operator ';
-      if (!inQuote &&
-          depth == 0 &&
-          value.substring(i).startsWith(token)) {
+      if (!inQuote && depth == 0 && value.substring(i).startsWith(token)) {
         parts.add(buffer.toString().trim());
         buffer.clear();
         i += token.length - 1;
@@ -416,6 +481,28 @@ class GameRuntime {
         .firstOrNull;
   }
 
+  FourthDemoScreenWidget? _widgetNamed(FourthDemoProject project, String name) {
+    final normalized = name.trim().toLowerCase();
+    return project.widgets
+        .where(
+          (widget) =>
+              widget.name.trim().toLowerCase() == normalized ||
+              widget.id.trim().toLowerCase() == normalized,
+        )
+        .firstOrNull;
+  }
+
+  FourthDemoSound? _soundNamed(FourthDemoProject project, String name) {
+    final normalized = name.trim().toLowerCase();
+    return project.sounds
+        .where(
+          (sound) =>
+              sound.name.trim().toLowerCase() == normalized ||
+              sound.id.trim().toLowerCase() == normalized,
+        )
+        .firstOrNull;
+  }
+
   GameBoolResult _conditionError(String message, GameRuntimeContext context) {
     return GameBoolResult.failure(_runtimeDiagnostic(message, context));
   }
@@ -424,7 +511,10 @@ class GameRuntime {
     return GameValueResult.failure(_runtimeDiagnostic(message, context));
   }
 
-  GameDiagnostic _runtimeDiagnostic(String message, GameRuntimeContext context) {
+  GameDiagnostic _runtimeDiagnostic(
+    String message,
+    GameRuntimeContext context,
+  ) {
     final span = context.sourceSpan;
     if (span == null) {
       return GameDiagnostic(

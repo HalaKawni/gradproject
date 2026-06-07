@@ -21,8 +21,8 @@ class ApiService {
     await prefs.remove('token');
   }
 
-  static Future<Map<String, String>> _authHeaders() async {
-    final token = await getToken();
+  static Future<Map<String, String>> _authHeaders({String? authToken}) async {
+    final token = authToken ?? await getToken();
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -76,7 +76,8 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['status'] == true) return Map<String, dynamic>.from(data['stats']);
+        if (data['status'] == true)
+          return Map<String, dynamic>.from(data['stats']);
       }
       return null;
     } catch (e) {
@@ -126,12 +127,12 @@ class ApiService {
   }
 
   static Map<String, dynamic> _emptyProgress() => {
-        'completedLevels': [],
-        'levelResults': [],
-        'highestLevelReached': 0,
-        'totalScore': 0,
-        'totalStars': 0,
-      };
+    'completedLevels': [],
+    'levelResults': [],
+    'highestLevelReached': 0,
+    'totalScore': 0,
+    'totalStars': 0,
+  };
 
   // POST /api/game/:gameId/level
   // Backend REQUIRES: { level: int, stars: int, score: int }
@@ -229,11 +230,12 @@ class ApiService {
     required String description,
     required List<Map<String, dynamic>> lessons,
     String? coverImageBase64,
+    String? authToken,
   }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/course'),
-        headers: await _authHeaders(),
+        headers: await _authHeaders(authToken: authToken),
         body: jsonEncode({
           'title': title,
           'description': description,
@@ -243,7 +245,8 @@ class ApiService {
       );
       if (response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        if (data['status'] == true) return data['course'] as Map<String, dynamic>;
+        if (data['status'] == true)
+          return data['course'] as Map<String, dynamic>;
       }
       return null;
     } catch (e) {
@@ -252,11 +255,13 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getCourses() async {
+  static Future<List<Map<String, dynamic>>> getCourses({
+    String? authToken,
+  }) async {
     try {
       final response = await http.get(
         Uri.parse('$baseUrl/course'),
-        headers: await _authHeaders(),
+        headers: await _authHeaders(authToken: authToken),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -271,11 +276,15 @@ class ApiService {
     }
   }
 
-  static Future<bool> updateCourse(String id, Map<String, dynamic> updates) async {
+  static Future<bool> updateCourse(
+    String id,
+    Map<String, dynamic> updates, {
+    String? authToken,
+  }) async {
     try {
       final response = await http.patch(
         Uri.parse('$baseUrl/course/$id'),
-        headers: await _authHeaders(),
+        headers: await _authHeaders(authToken: authToken),
         body: jsonEncode(updates),
       );
       return response.statusCode == 200;
@@ -284,11 +293,11 @@ class ApiService {
     }
   }
 
-  static Future<bool> deleteCourse(String id) async {
+  static Future<bool> deleteCourse(String id, {String? authToken}) async {
     try {
       final response = await http.delete(
         Uri.parse('$baseUrl/course/$id'),
-        headers: await _authHeaders(),
+        headers: await _authHeaders(authToken: authToken),
       );
       return response.statusCode == 200;
     } catch (e) {
@@ -334,7 +343,8 @@ class ApiService {
         body: jsonEncode({'code': code}),
       );
       final data = jsonDecode(response.body);
-      if (response.statusCode == 200 && data['status'] == true) return data['child'];
+      if (response.statusCode == 200 && data['status'] == true)
+        return data['child'];
       throw Exception(data['error'] ?? 'Failed to link child');
     } catch (e) {
       rethrow;
@@ -361,7 +371,8 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        if (data['status'] == true) return Map<String, dynamic>.from(data['stats']);
+        if (data['status'] == true)
+          return Map<String, dynamic>.from(data['stats']);
       }
       return null;
     } catch (e) {
@@ -430,7 +441,10 @@ class ApiService {
       final response = await http.post(
         Uri.parse(url),
         headers: await _authHeaders(),
-        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+        body: jsonEncode({
+          'lessonNumber': lessonNumber,
+          'slideTexts': slideTexts,
+        }),
       );
       print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
       if (response.statusCode == 200) {
@@ -457,17 +471,22 @@ class ApiService {
       final response = await http.post(
         Uri.parse(url),
         headers: await _authHeaders(),
-        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+        body: jsonEncode({
+          'lessonNumber': lessonNumber,
+          'slideTexts': slideTexts,
+        }),
       );
       print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == true && data['pairs'] != null) {
           return List<Map<String, String>>.from(
-            (data['pairs'] as List).map((p) => {
-              'word': p['word'].toString(),
-              'definition': p['definition'].toString(),
-            }),
+            (data['pairs'] as List).map(
+              (p) => {
+                'word': p['word'].toString(),
+                'definition': p['definition'].toString(),
+              },
+            ),
           );
         }
       }
@@ -487,7 +506,10 @@ class ApiService {
       final response = await http.post(
         Uri.parse('$baseUrl/ai/fill-blanks'),
         headers: await _authHeaders(),
-        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+        body: jsonEncode({
+          'lessonNumber': lessonNumber,
+          'slideTexts': slideTexts,
+        }),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -511,7 +533,10 @@ class ApiService {
       final response = await http.post(
         Uri.parse(url),
         headers: await _authHeaders(),
-        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+        body: jsonEncode({
+          'lessonNumber': lessonNumber,
+          'slideTexts': slideTexts,
+        }),
       );
       print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
       if (response.statusCode == 200) {
@@ -538,19 +563,24 @@ class ApiService {
       final response = await http.post(
         Uri.parse(url),
         headers: await _authHeaders(),
-        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+        body: jsonEncode({
+          'lessonNumber': lessonNumber,
+          'slideTexts': slideTexts,
+        }),
       );
       print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == true && data['concepts'] != null) {
           return List<Map<String, dynamic>>.from(
-            (data['concepts'] as List).map((c) => {
-              'text': c['text'].toString(),
-              'positive': c['positive'] as bool,
-              'sender': c['sender'].toString(),
-              'preview': c['preview'].toString(),
-            }),
+            (data['concepts'] as List).map(
+              (c) => {
+                'text': c['text'].toString(),
+                'positive': c['positive'] as bool,
+                'sender': c['sender'].toString(),
+                'preview': c['preview'].toString(),
+              },
+            ),
           );
         }
       }

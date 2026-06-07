@@ -57,6 +57,7 @@ class _BuilderPageState extends State<BuilderPage> {
   static const double _rootLogicLaneHeight = 54;
   static const double _logicDropSnapPadding = 30;
   static const double _logicGhostProbeYOffset = -18;
+  static const double _cameraFollowLerp = 0.32;
   static const String _defaultBackgroundId = 'forest';
   static const String _defaultBackgroundLabel = 'Forest background';
   static const String _defaultBackgroundAssetPath =
@@ -70,9 +71,11 @@ class _BuilderPageState extends State<BuilderPage> {
   late BuilderController controller;
   late BuilderGame game;
   late TextEditingController titleController;
+  late TextEditingController instructionController;
   late final ScrollController horizontalScrollController;
   late final ScrollController verticalScrollController;
   late final VoidCallback controllerListener;
+  Timer? cameraFollowTimer;
   Timer? titleSaveDebounce;
   String? lastAutoSavedTitle;
   final Map<_LogicDropTarget, Rect> _logicDropTargetRects =
@@ -85,6 +88,7 @@ class _BuilderPageState extends State<BuilderPage> {
   bool isLogicDragActive = false;
   _LogicDragData? activeLogicDragData;
   _LogicDropTarget? proximityLogicDropTarget;
+  Size _actualViewportSize = Size.zero;
 
   @override
   void initState() {
@@ -97,6 +101,7 @@ class _BuilderPageState extends State<BuilderPage> {
       status: widget.initialStatus,
     );
     titleController = TextEditingController(text: project.title);
+    instructionController = TextEditingController(text: project.description);
     horizontalScrollController = ScrollController();
     verticalScrollController = ScrollController();
     controller = BuilderController(
@@ -109,6 +114,11 @@ class _BuilderPageState extends State<BuilderPage> {
     previousColumnCount = controller.project.settings.columns;
     controllerListener = _handleControllerChanged;
     controller.addListener(controllerListener);
+    cameraFollowTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (controller.playbackState != null) {
+        _syncCameraToCharacter(defer: false, smooth: true);
+      }
+    });
 
     if (widget.initialProjectId != null) {
       controller.loadProject(widget.initialProjectId!);
@@ -117,8 +127,10 @@ class _BuilderPageState extends State<BuilderPage> {
 
   @override
   void dispose() {
+    cameraFollowTimer?.cancel();
     titleSaveDebounce?.cancel();
     titleController.dispose();
+    instructionController.dispose();
     horizontalScrollController.dispose();
     verticalScrollController.dispose();
     controller.removeListener(controllerListener);
@@ -128,14 +140,134 @@ class _BuilderPageState extends State<BuilderPage> {
 
   void _handleControllerChanged() {
     _syncTitleField();
+    _syncInstructionField();
     _syncHorizontalExpansion();
     _syncSelectedSolutionCommandSelection();
+    _syncCameraToCharacter(smooth: controller.playbackState != null);
 
     if (!mounted) {
       return;
     }
 
     setState(() {});
+  }
+
+  void _syncCameraToCharacter({bool defer = true, bool smooth = false}) {
+    if (!mounted) {
+      return;
+    }
+    final target = _characterCameraTarget();
+    if (target == null) {
+      return;
+    }
+    void syncNow() {
+      if (!mounted ||
+          !horizontalScrollController.hasClients ||
+          !verticalScrollController.hasClients) {
+        return;
+      }
+      final settings = controller.project.settings;
+      final tileSize = settings.tileSize;
+      final fallbackViewportWidth = math.min(
+        settings.viewportWidth,
+        settings.columns * tileSize,
+      );
+      final fallbackViewportHeight = math.min(
+        settings.viewportHeight,
+        settings.rows * tileSize,
+      );
+      final viewportWidth = _actualViewportSize.width > 0
+          ? _actualViewportSize.width
+          : fallbackViewportWidth;
+      final viewportHeight = _actualViewportSize.height > 0
+          ? _actualViewportSize.height
+          : fallbackViewportHeight;
+      final nextX = _cameraScrollAfterMidpoint(
+        targetCenter: target.dx,
+        viewportExtent: viewportWidth,
+        minScrollExtent: horizontalScrollController.position.minScrollExtent,
+        maxScrollExtent: horizontalScrollController.position.maxScrollExtent,
+      );
+      final nextY = _cameraScrollAfterMidpoint(
+        targetCenter: target.dy,
+        viewportExtent: viewportHeight,
+        minScrollExtent: verticalScrollController.position.minScrollExtent,
+        maxScrollExtent: verticalScrollController.position.maxScrollExtent,
+      );
+      _moveCameraAxis(
+        controller: horizontalScrollController,
+        target: nextX,
+        smooth: smooth,
+      );
+      _moveCameraAxis(
+        controller: verticalScrollController,
+        target: nextY,
+        smooth: smooth,
+      );
+    }
+
+    if (defer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => syncNow());
+    } else {
+      syncNow();
+    }
+  }
+
+  void _moveCameraAxis({
+    required ScrollController controller,
+    required double target,
+    required bool smooth,
+  }) {
+    final current = controller.offset;
+    final next = smooth
+        ? current + (target - current) * _cameraFollowLerp
+        : target;
+    final clamped = next
+        .clamp(
+          controller.position.minScrollExtent,
+          controller.position.maxScrollExtent,
+        )
+        .toDouble();
+    if ((clamped - current).abs() < 0.35) {
+      if ((target - current).abs() >= 0.35) {
+        controller.jumpTo(target);
+      }
+      return;
+    }
+    controller.jumpTo(clamped);
+  }
+
+  double _cameraScrollAfterMidpoint({
+    required double targetCenter,
+    required double viewportExtent,
+    required double minScrollExtent,
+    required double maxScrollExtent,
+  }) {
+    return (targetCenter - viewportExtent / 2)
+        .clamp(minScrollExtent, maxScrollExtent)
+        .toDouble();
+  }
+
+  Offset? _characterCameraTarget() {
+    final visualCenter = game.visualPlayerCenter;
+    if (visualCenter != null) {
+      return visualCenter;
+    }
+    final playbackState = controller.playbackState;
+    if (playbackState != null) {
+      final tileSize = controller.project.settings.tileSize;
+      return Offset(
+        (playbackState.playerX + 0.5) * tileSize,
+        (playbackState.playerY + 0.5) * tileSize,
+      );
+    }
+    for (final entity in controller.project.entities) {
+      if (entity.type == 'playerStart') {
+        final tileSize = controller.project.settings.tileSize;
+        return Offset((entity.x + 0.5) * tileSize, (entity.y + 0.5) * tileSize);
+      }
+    }
+    return null;
   }
 
   void _handleBoardGridDragStateChanged(bool isDragging) {
@@ -308,6 +440,20 @@ class _BuilderPageState extends State<BuilderPage> {
       text: controller.project.title,
       selection: TextSelection.collapsed(
         offset: controller.project.title.length,
+      ),
+      composing: TextRange.empty,
+    );
+  }
+
+  void _syncInstructionField() {
+    if (instructionController.text == controller.project.description) {
+      return;
+    }
+
+    instructionController.value = instructionController.value.copyWith(
+      text: controller.project.description,
+      selection: TextSelection.collapsed(
+        offset: controller.project.description.length,
       ),
       composing: TextRange.empty,
     );
@@ -853,6 +999,8 @@ class _BuilderPageState extends State<BuilderPage> {
               const SizedBox(height: 12),
               _buildCollectableControl(),
               const SizedBox(height: 12),
+              _buildScoreControl(),
+              const SizedBox(height: 12),
               _buildBackgroundControl(),
             ],
           ),
@@ -871,6 +1019,11 @@ class _BuilderPageState extends State<BuilderPage> {
         _buildPanelSection(
           title: AppLanguage.of(context).t('builder.levelActions'),
           child: _buildLevelActions(),
+        ),
+        const SizedBox(height: 14),
+        _buildPanelSection(
+          title: AppLanguage.of(context).t('builder.instructions'),
+          child: _buildInstructionEditor(),
         ),
         const SizedBox(height: 14),
         _buildPanelSection(
@@ -909,6 +1062,7 @@ class _BuilderPageState extends State<BuilderPage> {
           project.settings.viewportHeight,
           constraints.maxHeight,
         );
+        _rememberActualViewportSize(Size(viewportWidth, viewportHeight));
         final protectedGroundHeight =
             LevelSettings.requiredGroundRowsForTileSize(
               project.settings.tileSize,
@@ -990,6 +1144,48 @@ class _BuilderPageState extends State<BuilderPage> {
         );
       },
     );
+  }
+
+  Widget _buildInstructionEditor() {
+    return TextField(
+      controller: instructionController,
+      minLines: 5,
+      maxLines: 8,
+      textInputAction: TextInputAction.newline,
+      onChanged: controller.setDescription,
+      decoration: InputDecoration(
+        hintText: 'Tell the player what to do in this level.',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.blueGrey.shade100),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.green.shade300, width: 2),
+        ),
+        contentPadding: const EdgeInsets.all(14),
+      ),
+      style: TextStyle(
+        color: Colors.blueGrey.shade900,
+        height: 1.45,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  void _rememberActualViewportSize(Size size) {
+    if (_actualViewportSize == size) {
+      return;
+    }
+    _actualViewportSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncCameraToCharacter(smooth: controller.playbackState != null);
+      }
+    });
   }
 
   Widget _buildTrashBin() {
@@ -2490,6 +2686,177 @@ class _BuilderPageState extends State<BuilderPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildScoreControl() {
+    final scoreEntities =
+        controller.project.entities
+            .where(
+              (entity) => entity.type == 'collectable' || entity.type == 'goal',
+            )
+            .toList()
+          ..sort((a, b) {
+            final rowCompare = a.y.compareTo(b.y);
+            if (rowCompare != 0) {
+              return rowCompare;
+            }
+            return a.x.compareTo(b.x);
+          });
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Scores',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.blueGrey.shade700,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (scoreEntities.isEmpty)
+          Text(
+            'Add collectables or a goal to set points.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.blueGrey.shade600,
+              height: 1.25,
+            ),
+          )
+        else
+          Column(
+            children: [
+              for (final entity in scoreEntities) ...[
+                _buildEntityScoreField(entity),
+                if (entity != scoreEntities.last) const SizedBox(height: 8),
+              ],
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEntityScoreField(EntityData entity) {
+    return Row(
+      children: [
+        _buildEntityScorePreview(entity),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '(${entity.x}, ${entity.y})',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.blueGrey.shade800,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 74,
+          child: TextFormField(
+            key: ValueKey<String>('front-score-${entity.id}'),
+            initialValue: controller.scoreForEntity(entity).toString(),
+            enabled: !controller.isPlaybackRunning,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 9,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onChanged: (value) {
+              final score = int.tryParse(value.trim());
+              if (score == null) {
+                return;
+              }
+              controller.setEntityScore(entity.id, score);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEntityScorePreview(EntityData entity) {
+    final customAsset = controller.customAssetById(
+      entity.config['customAssetId']?.toString(),
+    );
+    Widget child;
+    if (customAsset != null) {
+      final bytes = controller.assetImageBytes(customAsset);
+      if (bytes == null) {
+        unawaited(controller.ensureAssetImageLoaded(customAsset));
+      }
+      child = bytes == null
+          ? Icon(
+              Icons.image_not_supported_outlined,
+              size: 18,
+              color: Colors.blueGrey.shade400,
+            )
+          : _CustomAssetFrameImage(
+              bytes: bytes,
+              scale: customAsset.frameScale,
+              offsetX: customAsset.frameOffsetX,
+              offsetY: customAsset.frameOffsetY,
+            );
+    } else if (entity.type == 'collectable') {
+      final collectable = builderCollectableById(
+        entity.config['item']?.toString(),
+      );
+      child = Image.asset(
+        collectable.flutterAssetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.image_not_supported_outlined,
+            size: 18,
+            color: Colors.blueGrey.shade400,
+          );
+        },
+      );
+    } else {
+      child = Image.asset(
+        'game_builder/goal/chest_closed.png',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.image_not_supported_outlined,
+            size: 18,
+            color: Colors.blueGrey.shade400,
+          );
+        },
+      );
+    }
+
+    return _buildScorePreviewShell(child: child);
+  }
+
+  Widget _buildScorePreviewShell({required Widget child}) {
+    return Container(
+      width: 38,
+      height: 38,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueGrey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(8), child: child),
     );
   }
 

@@ -19,6 +19,7 @@ class FourthDemoGame extends FlameGame {
   static const double _defaultPlayerSpriteFacingLeftOffsetXScale = 0.20;
   static const double _defaultPlayerSpriteFacingRightOffsetXScale = -0.1;
   static const double _defaultPlayerSpriteOffsetYScale = 0.17;
+  static const double _cameraFollowSpeed = 10;
 
   final FourthDemoController controller;
   final Map<String, ui.Image> _assetImages = <String, ui.Image>{};
@@ -28,6 +29,8 @@ class FourthDemoGame extends FlameGame {
   final Map<String, _SpriteAnimationState> _spriteAnimations =
       <String, _SpriteAnimationState>{};
   double _animationElapsedMs = 0;
+  Offset _cameraOffset = Offset.zero;
+  bool _cameraInitialized = false;
 
   FourthDemoGame({required this.controller});
 
@@ -57,6 +60,7 @@ class FourthDemoGame extends FlameGame {
     _animationElapsedMs += dt * Duration.millisecondsPerSecond;
     _advanceSpriteAnimations(dt);
     controller.handleUpdate(dt);
+    _updateCamera(dt);
   }
 
   Offset worldPositionFromCanvas(Offset canvasPosition) {
@@ -86,7 +90,99 @@ class FourthDemoGame extends FlameGame {
   }
 
   Offset get _worldOffset {
-    return Offset.zero;
+    if (!_cameraInitialized) {
+      return _desiredWorldOffset;
+    }
+    return _cameraOffset;
+  }
+
+  Offset get _desiredWorldOffset {
+    final project = controller.project;
+    final viewportWidth = size.x;
+    final viewportHeight = size.y;
+    final worldWidth = project.settings.worldWidth;
+    final worldHeight = project.settings.worldHeight;
+    if (viewportWidth <= 0 || viewportHeight <= 0) {
+      return Offset.zero;
+    }
+
+    final target = _cameraTargetSprite(project);
+    if (target == null) {
+      return Offset(
+        worldWidth < viewportWidth ? (viewportWidth - worldWidth) / 2 : 0,
+        worldHeight < viewportHeight ? (viewportHeight - worldHeight) / 2 : 0,
+      );
+    }
+
+    final visualPosition = controller.visualPositionFor(target);
+    final targetCenter = Offset(
+      visualPosition.dx + target.width / 2,
+      visualPosition.dy + target.height / 2,
+    );
+    return Offset(
+      _cameraFollowOffsetAfterMidpoint(
+        targetCenter: targetCenter.dx,
+        viewportExtent: viewportWidth,
+        worldExtent: worldWidth,
+      ),
+      _cameraFollowOffsetAfterMidpoint(
+        targetCenter: targetCenter.dy,
+        viewportExtent: viewportHeight,
+        worldExtent: worldHeight,
+      ),
+    );
+  }
+
+  double _cameraFollowOffsetAfterMidpoint({
+    required double targetCenter,
+    required double viewportExtent,
+    required double worldExtent,
+  }) {
+    if (worldExtent <= viewportExtent) {
+      return (viewportExtent - worldExtent) / 2;
+    }
+    final rawOffset = viewportExtent / 2 - targetCenter;
+    return rawOffset.clamp(viewportExtent - worldExtent, 0).toDouble();
+  }
+
+  void _updateCamera(double dt) {
+    final desired = _desiredWorldOffset;
+    if (!_cameraInitialized || !controller.isPlaying) {
+      _cameraOffset = desired;
+      _cameraInitialized = true;
+      return;
+    }
+    final t = (1 - math.exp(-dt * _cameraFollowSpeed))
+        .clamp(0.0, 1.0)
+        .toDouble();
+    final next = Offset.lerp(_cameraOffset, desired, t) ?? desired;
+    if ((next - desired).distance < 0.2) {
+      _cameraOffset = desired;
+      return;
+    }
+    _cameraOffset = next;
+  }
+
+  FourthDemoSprite? _cameraTargetSprite(FourthDemoProject project) {
+    final targetId = project.settings.cameraTargetId.trim();
+    if (targetId.isNotEmpty) {
+      final normalized = targetId.toLowerCase();
+      final target = project.sprites
+          .where(
+            (sprite) =>
+                sprite.id.toLowerCase() == normalized ||
+                sprite.name.toLowerCase() == normalized,
+          )
+          .firstOrNull;
+      if (target != null) {
+        return target;
+      }
+    }
+    return project.selectedSprite ??
+        project.sprites
+            .where((sprite) => sprite.kind == FourthDemoSpriteKind.player)
+            .firstOrNull ??
+        project.sprites.firstOrNull;
   }
 
   void _drawStage(Canvas canvas, FourthDemoProject project) {
@@ -501,37 +597,209 @@ class FourthDemoGame extends FlameGame {
 
   void _drawScreenWidgets(Canvas canvas, List<FourthDemoScreenWidget> widgets) {
     for (final widget in widgets) {
-      if (!widget.visible) {
+      if (!widget.visible || widget.type == FourthDemoWidgetKind.dialog) {
         continue;
       }
-      final text = widget.type == FourthDemoWidgetKind.counter
-          ? '${widget.text}: ${widget.value.toInt()}'
-          : widget.text;
-      final painter = TextPainter(
+      _drawScreenWidget(canvas, widget);
+    }
+    for (final widget in widgets) {
+      if (widget.visible && widget.type == FourthDemoWidgetKind.dialog) {
+        _drawDialogWidget(canvas, widget);
+      }
+    }
+  }
+
+  void _drawScreenWidget(Canvas canvas, FourthDemoScreenWidget widget) {
+    final alpha = widget.opacity.clamp(0.0, 1.0);
+    final text = switch (widget.type) {
+      FourthDemoWidgetKind.counter =>
+        '${_widgetText(widget, fallback: widget.name)}: ${widget.value.toInt()}',
+      FourthDemoWidgetKind.timer => _widgetLabelValue(
+        widget,
+        _formatSeconds(widget.value),
+      ),
+      FourthDemoWidgetKind.clock => _widgetLabelValue(
+        widget,
+        _formatSeconds(widget.value),
+      ),
+      FourthDemoWidgetKind.button => _widgetText(widget, fallback: widget.name),
+      _ => _widgetText(widget, fallback: widget.name),
+    };
+    final textColor = Color(
+      widget.textColorValue,
+    ).withValues(alpha: widget.enabled ? alpha : alpha * 0.45);
+    final painter =
+        TextPainter(
+          text: TextSpan(
+            text: text,
+            style: TextStyle(
+              color: textColor,
+              fontSize: widget.type == FourthDemoWidgetKind.button ? 15 : 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          maxLines: widget.type == FourthDemoWidgetKind.text ? 3 : 1,
+          ellipsis: '...',
+          textAlign: _textAlign(widget.textAlign),
+          textDirection: TextDirection.ltr,
+        )..layout(
+          minWidth: widget.type == FourthDemoWidgetKind.text ? 190 : 0,
+          maxWidth: widget.type == FourthDemoWidgetKind.text ? 190 : 160,
+        );
+
+    final rect = widget.type == FourthDemoWidgetKind.button
+        ? Rect.fromLTWH(
+            widget.x,
+            widget.y,
+            math.max(116, painter.width + 28),
+            38,
+          )
+        : Rect.fromLTWH(
+            widget.x - 8,
+            widget.y - 5,
+            math.max(64, painter.width + 16),
+            painter.height + 10,
+          );
+    final backgroundColor = switch (widget.type) {
+      FourthDemoWidgetKind.button =>
+        widget.enabled ? const Color(0xFF66B64A) : const Color(0xFF94A3B8),
+      FourthDemoWidgetKind.timer => const Color(0xFFFFF3D4),
+      FourthDemoWidgetKind.clock => const Color(0xFFE9F4FF),
+      FourthDemoWidgetKind.counter => const Color(0xFFEAF8EA),
+      _ => Colors.white,
+    };
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(8)),
+      Paint()..color = backgroundColor.withValues(alpha: alpha * 0.9),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(8)),
+      Paint()
+        ..color = const Color(0xFF263238).withValues(alpha: alpha * 0.15)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    final textOffset = widget.type == FourthDemoWidgetKind.button
+        ? Offset(
+            rect.left + (rect.width - painter.width) / 2,
+            rect.top + (rect.height - painter.height) / 2,
+          )
+        : Offset(widget.x, widget.y);
+    painter.paint(canvas, textOffset);
+  }
+
+  void _drawDialogWidget(Canvas canvas, FourthDemoScreenWidget widget) {
+    final alpha = widget.opacity.clamp(0.0, 1.0);
+    final rect = Rect.fromLTWH(widget.x, widget.y, 260, 118);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+      Paint()..color = Colors.white.withValues(alpha: alpha * 0.96),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(12)),
+      Paint()
+        ..color = const Color(0xFF263238).withValues(alpha: alpha * 0.18)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    final title = widget.title.trim();
+    if (title.isNotEmpty) {
+      final titlePainter = TextPainter(
         text: TextSpan(
-          text: text,
+          text: title,
           style: TextStyle(
-            color: Color(
-              widget.textColorValue,
-            ).withValues(alpha: widget.opacity),
+            color: const Color(0xFF263238).withValues(alpha: alpha),
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w900,
           ),
         ),
+        maxLines: 1,
+        ellipsis: '...',
         textDirection: TextDirection.ltr,
-      )..layout();
-      final bg = Rect.fromLTWH(
-        widget.x - 8,
-        widget.y - 5,
-        painter.width + 16,
-        painter.height + 10,
-      );
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(bg, const Radius.circular(8)),
-        Paint()..color = Colors.white.withValues(alpha: 0.82),
-      );
-      painter.paint(canvas, Offset(widget.x, widget.y));
+      )..layout(maxWidth: rect.width - 28);
+      titlePainter.paint(canvas, Offset(rect.left + 14, rect.top + 12));
     }
+
+    final buttonRect = Rect.fromCenter(
+      center: Offset(rect.center.dx, rect.bottom - 22),
+      width: 64,
+      height: 24,
+    );
+    final bodyPainter = TextPainter(
+      text: TextSpan(
+        text: widget.text,
+        style: TextStyle(
+          color: Color(widget.textColorValue).withValues(alpha: alpha),
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      maxLines: 3,
+      ellipsis: '...',
+      textAlign: _textAlign(widget.textAlign),
+      textDirection: TextDirection.ltr,
+    )..layout(minWidth: rect.width - 28, maxWidth: rect.width - 28);
+    final bodyTop = title.isEmpty ? rect.top + 14 : rect.top + 36;
+    final bodyBottom = buttonRect.top - 10;
+    final bodyY =
+        bodyTop + math.max(0.0, bodyBottom - bodyTop - bodyPainter.height) / 2;
+    bodyPainter.paint(canvas, Offset(rect.left + 14, bodyY));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(buttonRect, const Radius.circular(7)),
+      Paint()..color = const Color(0xFF66B64A).withValues(alpha: alpha),
+    );
+    final buttonPainter = TextPainter(
+      text: TextSpan(
+        text: widget.buttonText,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: alpha),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      maxLines: 1,
+      ellipsis: '...',
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: buttonRect.width - 8);
+    buttonPainter.paint(
+      canvas,
+      Offset(
+        buttonRect.left + (buttonRect.width - buttonPainter.width) / 2,
+        buttonRect.top + (buttonRect.height - buttonPainter.height) / 2,
+      ),
+    );
+  }
+
+  String _widgetText(
+    FourthDemoScreenWidget widget, {
+    required String fallback,
+  }) {
+    final text = widget.text.trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _widgetLabelValue(FourthDemoScreenWidget widget, String value) {
+    final label = widget.text.trim();
+    return label.isEmpty ? value : '$label: $value';
+  }
+
+  String _formatSeconds(double value) {
+    final total = math.max(0, value).floor();
+    final minutes = total ~/ 60;
+    final seconds = total % 60;
+    if (minutes <= 0) {
+      return seconds.toString();
+    }
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  TextAlign _textAlign(FourthDemoWidgetTextAlign value) {
+    return switch (value) {
+      FourthDemoWidgetTextAlign.left => TextAlign.left,
+      FourthDemoWidgetTextAlign.center => TextAlign.center,
+      FourthDemoWidgetTextAlign.right => TextAlign.right,
+    };
   }
 
   void _drawSpeechBubbles(
@@ -593,10 +861,7 @@ class FourthDemoGame extends FlameGame {
       ..color = const Color(0xFF263238).withValues(alpha: 0.20)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    final rrect = RRect.fromRectAndRadius(
-      bubbleRect,
-      const Radius.circular(8),
-    );
+    final rrect = RRect.fromRectAndRadius(bubbleRect, const Radius.circular(8));
     canvas.drawRRect(rrect, bubblePaint);
     canvas.drawRRect(rrect, borderPaint);
 

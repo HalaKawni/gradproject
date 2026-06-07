@@ -9,6 +9,10 @@ class AdminLevel {
   final String courseId;
   final int orderInCourse;
   final String? previewImageUrl;
+  final String? coverImageBase64;
+  final double coverFrameScale;
+  final double coverFrameOffsetX;
+  final double coverFrameOffsetY;
 
   const AdminLevel({
     required this.id,
@@ -21,6 +25,10 @@ class AdminLevel {
     this.courseId = '',
     this.orderInCourse = 0,
     this.previewImageUrl,
+    this.coverImageBase64,
+    this.coverFrameScale = 1,
+    this.coverFrameOffsetX = 0,
+    this.coverFrameOffsetY = 0,
   });
 
   factory AdminLevel.fromJson(Map<String, dynamic> json) {
@@ -53,6 +61,10 @@ class AdminLevel {
       previewImageUrl:
           json['previewImageUrl']?.toString() ??
           draftDataMap['previewImageUrl']?.toString(),
+      coverImageBase64: _readNullableString(json['coverImageBase64']),
+      coverFrameScale: _readDouble(json['coverFrameScale'], fallback: 1),
+      coverFrameOffsetX: _readDouble(json['coverFrameOffsetX']),
+      coverFrameOffsetY: _readDouble(json['coverFrameOffsetY']),
     );
   }
 }
@@ -102,4 +114,20 @@ int _readInt(Object? value) {
   }
 
   return int.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+double _readDouble(Object? value, {double fallback = 0}) {
+  if (value is num) {
+    return value.toDouble();
+  }
+
+  return double.tryParse(value?.toString() ?? '') ?? fallback;
+}
+
+String? _readNullableString(Object? value) {
+  final text = value?.toString();
+  if (text == null || text.isEmpty) {
+    return null;
+  }
+  return text;
 }

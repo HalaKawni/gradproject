@@ -156,6 +156,10 @@ async function createProject(projectData, user) {
     ownerRole: owner.role,
     title: projectData.title || 'New Level',
     description: projectData.description || '',
+    coverImageBase64: projectData.coverImageBase64 ?? null,
+    coverFrameScale: Number(projectData.coverFrameScale ?? 1),
+    coverFrameOffsetX: Number(projectData.coverFrameOffsetX ?? 0),
+    coverFrameOffsetY: Number(projectData.coverFrameOffsetY ?? 0),
     status: projectData.status || 'draft',
     builderType: draftData.builderType,
     courseId: projectData.courseId,
@@ -193,6 +197,18 @@ async function updateProject(projectId, projectData, user) {
       ownerRole: owner.role,
       title: projectData.title || 'Untitled',
       description: projectData.description || '',
+      ...(projectData.coverImageBase64 !== undefined
+        ? { coverImageBase64: projectData.coverImageBase64 }
+        : {}),
+      ...(projectData.coverFrameScale !== undefined
+        ? { coverFrameScale: Number(projectData.coverFrameScale) }
+        : {}),
+      ...(projectData.coverFrameOffsetX !== undefined
+        ? { coverFrameOffsetX: Number(projectData.coverFrameOffsetX) }
+        : {}),
+      ...(projectData.coverFrameOffsetY !== undefined
+        ? { coverFrameOffsetY: Number(projectData.coverFrameOffsetY) }
+        : {}),
       status: projectData.status || 'draft',
       builderType: draftData.builderType,
       courseId: projectData.courseId,
@@ -210,6 +226,74 @@ async function updateProject(projectId, projectData, user) {
   if (project && projectData.status === 'published') {
     await uploadedAssetService.makeAssetsPublic(
       collectDraftAssetIds(draftData),
+      user
+    );
+  }
+
+  return project;
+}
+
+async function updateProjectSettings(projectId, settingsData, user) {
+  const update = {};
+
+  if (settingsData.title !== undefined) {
+    update.title = settingsData.title || 'Untitled';
+  }
+
+  if (settingsData.description !== undefined) {
+    update.description = settingsData.description || '';
+  }
+
+  if (settingsData.status !== undefined) {
+    update.status = settingsData.status;
+    if (settingsData.status === 'published') {
+      update.publishedAt = new Date();
+    }
+  }
+
+  if (settingsData.difficulty !== undefined) {
+    update.difficulty = settingsData.difficulty || 'medium';
+  }
+
+  if (settingsData.courseId !== undefined) {
+    update.courseId = settingsData.courseId;
+  }
+
+  if (settingsData.orderInCourse !== undefined) {
+    update.orderInCourse = settingsData.orderInCourse;
+  }
+
+  if (settingsData.coverImageBase64 !== undefined) {
+    update.coverImageBase64 = settingsData.coverImageBase64;
+  }
+
+  if (settingsData.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(settingsData.coverFrameScale);
+  }
+
+  if (settingsData.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(settingsData.coverFrameOffsetX);
+  }
+
+  if (settingsData.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(settingsData.coverFrameOffsetY);
+  }
+
+  const project = await BuilderProject.findOneAndUpdate(
+    {
+      _id: projectId,
+      ownerId: user._id.toString(),
+    },
+    update,
+    {
+      returnDocument: 'after',
+      runValidators: true,
+    }
+  );
+
+  if (project && project.status === 'published') {
+    await uploadedAssetService.makeAssetsPublic(
+      collectDraftAssetIds(project.draftData || {}),
       user
     );
   }
@@ -248,7 +332,7 @@ async function getPublishedProjects() {
     ownerRole: { $ne: 'admin' },
   })
     .select(
-      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails updatedAt ownerName ownerRole'
+      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails coverImageBase64 coverFrameScale coverFrameOffsetX coverFrameOffsetY updatedAt ownerId ownerName ownerRole'
     )
     .sort({ updatedAt: -1 });
 }
@@ -270,6 +354,7 @@ async function deleteProject(projectId, user) {
 module.exports = {
   createProject,
   updateProject,
+  updateProjectSettings,
   getProjectById,
   getAllProjects,
   getPublishedProjects,

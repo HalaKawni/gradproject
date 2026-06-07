@@ -53,6 +53,30 @@ const userSchema = new Schema({
     photoUrl: {
         type: String
     },
+    profileAvatarType: {
+        type: String,
+        enum: ['asset', 'upload'],
+        default: 'asset'
+    },
+    profileAvatarAssetPath: {
+        type: String,
+        default: 'assets/images/sprites/avatar00.png'
+    },
+    profilePhotoBase64: {
+        type: String
+    },
+    profilePhotoFrameScale: {
+        type: Number,
+        default: 1
+    },
+    profilePhotoFrameOffsetX: {
+        type: Number,
+        default: 0
+    },
+    profilePhotoFrameOffsetY: {
+        type: Number,
+        default: 0
+    },
     role: {
         type: String,
         enum: ['parent', 'child', 'admin'],

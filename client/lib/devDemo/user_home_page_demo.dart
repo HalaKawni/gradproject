@@ -1,246 +1,246 @@
-import 'package:client/app/navigation/app_route_data.dart';
-import 'package:client/app/navigation/app_routes.dart';
-import 'package:client/core/models/auth_session.dart';
-import 'package:flutter/material.dart';
+// import 'package:flutter/material.dart';
+// import 'package:web/web.dart' as web;
 
-enum _GameCreatorOption { scratch, frontView, topView }
+// import 'package:client/app/navigation/app_route_data.dart';
+// import 'package:client/app/navigation/app_routes.dart';
+// import 'package:client/core/models/auth_session.dart';
 
-class UserHomePage extends StatelessWidget {
-  final AuthSession session;
+// enum _GameCreatorOption { scratch, frontView, topView }
 
-  const UserHomePage({super.key, required this.session});
+// class UserHomePage extends StatelessWidget {
+//   final AuthSession session;
 
-  void _logout(BuildContext context) {
-    Navigator.of(
-      context,
-    ).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
-  }
+//   const UserHomePage({super.key, required this.session});
 
-  void _openFrontViewBuilder(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.builder,
-      arguments: BuilderRouteData(session: session),
-    );
-  }
+//   void _logout(BuildContext context) {
+//     web.window.location.href = 'http://localhost:8080/';
+//   }
 
-  void _openTopViewBuilder(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.topViewBuilder,
-      arguments: TopViewBuilderRouteData(session: session),
-    );
-  }
+//   void _openFrontViewBuilder(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.builder,
+//       arguments: BuilderRouteData(session: session),
+//     );
+//   }
 
-  void _openScratchBuilder(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.scratchBuilder,
-      arguments: ScratchBuilderRouteData(session: session),
-    );
-  }
+//   void _openTopViewBuilder(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.topViewBuilder,
+//       arguments: TopViewBuilderRouteData(session: session),
+//     );
+//   }
 
-  void _openDiscover(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.discover,
-      arguments: DiscoverRouteData(session: session),
-    );
-  }
+//   void _openScratchBuilder(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.scratchBuilder,
+//       arguments: ScratchBuilderRouteData(session: session),
+//     );
+//   }
 
-  void _openCourses(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.publicCourses,
-      arguments: PublicCoursesRouteData(session: session),
-    );
-  }
+//   void _openDiscover(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.discover,
+//       arguments: DiscoverRouteData(session: session),
+//     );
+//   }
 
-  Future<void> _showCreateGameDialog(BuildContext context) async {
-    final selection = await showDialog<_GameCreatorOption>(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Create New Game'),
-          content: const Text('Choose the type of game creator to open.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(_GameCreatorOption.scratch);
-              },
-              child: const Text('Scratch Builder'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(_GameCreatorOption.frontView);
-              },
-              child: const Text('Front View'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(_GameCreatorOption.topView);
-              },
-              child: const Text('Top View'),
-            ),
-          ],
-        );
-      },
-    );
+//   void _openCourses(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.publicCourses,
+//       arguments: PublicCoursesRouteData(session: session),
+//     );
+//   }
 
-    if (!context.mounted || selection == null) {
-      return;
-    }
+//   Future<void> _showCreateGameDialog(BuildContext context) async {
+//     final selection = await showDialog<_GameCreatorOption>(
+//       context: context,
+//       builder: (dialogContext) {
+//         return AlertDialog(
+//           title: const Text('Create New Game'),
+//           content: const Text('Choose the type of game creator to open.'),
+//           actions: [
+//             TextButton(
+//               onPressed: () {
+//                 Navigator.of(dialogContext).pop(_GameCreatorOption.scratch);
+//               },
+//               child: const Text('Scratch Builder'),
+//             ),
+//             TextButton(
+//               onPressed: () {
+//                 Navigator.of(dialogContext).pop(_GameCreatorOption.frontView);
+//               },
+//               child: const Text('Front View'),
+//             ),
+//             TextButton(
+//               onPressed: () {
+//                 Navigator.of(dialogContext).pop(_GameCreatorOption.topView);
+//               },
+//               child: const Text('Top View'),
+//             ),
+//           ],
+//         );
+//       },
+//     );
 
-    switch (selection) {
-      case _GameCreatorOption.scratch:
-        _openScratchBuilder(context);
-      case _GameCreatorOption.frontView:
-        _openFrontViewBuilder(context);
-      case _GameCreatorOption.topView:
-        _openTopViewBuilder(context);
-    }
-  }
+//     if (!context.mounted || selection == null) {
+//       return;
+//     }
 
-  void _openMyGames(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.myGames,
-      arguments: MyGamesRouteData(session: session),
-    );
-  }
+//     switch (selection) {
+//       case _GameCreatorOption.scratch:
+//         _openScratchBuilder(context);
+//       case _GameCreatorOption.frontView:
+//         _openFrontViewBuilder(context);
+//       case _GameCreatorOption.topView:
+//         _openTopViewBuilder(context);
+//     }
+//   }
 
-  void _openMyPublishedGames(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.myPublishedGames,
-      arguments: MyPublishedGamesRouteData(session: session),
-    );
-  }
+//   void _openMyGames(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.myGames,
+//       arguments: MyGamesRouteData(session: session),
+//     );
+//   }
 
-  void _openProfile(BuildContext context) {
-    Navigator.of(context).pushNamed(
-      AppRoutes.profile,
-      arguments: ProfileRouteData(session: session),
-    );
-  }
+//   void _openMyPublishedGames(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.myPublishedGames,
+//       arguments: MyPublishedGamesRouteData(session: session),
+//     );
+//   }
 
-  @override
-  Widget build(BuildContext context) {
-    final user = session.user;
+//   void _openProfile(BuildContext context) {
+//     Navigator.of(context).pushNamed(
+//       AppRoutes.profile,
+//       arguments: ProfileRouteData(session: session),
+//     );
+//   }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(user.name),
-        actions: [
-          TextButton(
-            onPressed: () => _showCreateGameDialog(context),
-            child: const Text(
-              'Create New Game',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _openMyGames(context),
-            child: const Text(
-              'My Games',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _logout(context),
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
-            ),
-          ),
+//   @override
+//   Widget build(BuildContext context) {
+//     final user = session.user;
 
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.menu_open, color: Colors.black),
-            onSelected: (value) {
-              if (value == 'account') {
-                _openProfile(context);
-              } else if (value == 'home') {
-                return;
-              } else if (value == 'signOut') {
-                _logout(context);
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'home', child: Text('Home')),
-              PopupMenuItem(value: 'account', child: Text('My Account')),
-              PopupMenuItem(value: 'signOut', child: Text('Sign Out')),
-            ],
-          ),
-        ],
-        backgroundColor: const Color.fromARGB(255, 69, 47, 40),
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Welcome, ${user.name}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Role: ${user.role}',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Email: ${user.email}',
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _openMyPublishedGames(context),
-                        icon: const Icon(Icons.public_outlined),
-                        label: const Text('My Published Games'),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: () => _openCourses(context),
-                        icon: const Icon(Icons.menu_book_outlined),
-                        label: const Text('Courses'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(child: Text('Menu')),
-            ListTile(
-              title: const Text('Courses'),
-              onTap: () {
-                Navigator.of(context).pop();
-                _openCourses(context);
-              },
-            ),
-            ListTile(
-              title: const Text('My Games'),
-              onTap: () => _openMyGames(context),
-            ),
-            ListTile(
-              title: const Text('Discover'),
-              onTap: () => _openDiscover(context),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text(user.name),
+//         actions: [
+//           TextButton(
+//             onPressed: () => _showCreateGameDialog(context),
+//             child: const Text(
+//               'Create New Game',
+//               style: TextStyle(color: Colors.black),
+//             ),
+//           ),
+//           TextButton(
+//             onPressed: () => _openMyGames(context),
+//             child: const Text(
+//               'My Games',
+//               style: TextStyle(color: Colors.black),
+//             ),
+//           ),
+//           TextButton(
+//             onPressed: () => _logout(context),
+//             child: const Text(
+//               'Logout',
+//               style: TextStyle(color: Color.fromARGB(255, 0, 0, 0)),
+//             ),
+//           ),
+
+//           PopupMenuButton<String>(
+//             icon: const Icon(Icons.menu_open, color: Colors.black),
+//             onSelected: (value) {
+//               if (value == 'account') {
+//                 _openProfile(context);
+//               } else if (value == 'home') {
+//                 return;
+//               } else if (value == 'signOut') {
+//                 _logout(context);
+//               }
+//             },
+//             itemBuilder: (context) => const [
+//               PopupMenuItem(value: 'home', child: Text('Home')),
+//               PopupMenuItem(value: 'account', child: Text('My Account')),
+//               PopupMenuItem(value: 'signOut', child: Text('Sign Out')),
+//             ],
+//           ),
+//         ],
+//         backgroundColor: const Color.fromARGB(255, 69, 47, 40),
+//       ),
+//       body: Center(
+//         child: SingleChildScrollView(
+//           padding: const EdgeInsets.all(24),
+//           child: ConstrainedBox(
+//             constraints: const BoxConstraints(maxWidth: 420),
+//             child: Card(
+//               child: Padding(
+//                 padding: const EdgeInsets.all(24),
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   mainAxisSize: MainAxisSize.min,
+//                   children: [
+//                     Text(
+//                       'Welcome, ${user.name}',
+//                       style: Theme.of(context).textTheme.headlineSmall,
+//                     ),
+//                     const SizedBox(height: 16),
+//                     Text(
+//                       'Role: ${user.role}',
+//                       style: Theme.of(context).textTheme.titleMedium,
+//                     ),
+//                     const SizedBox(height: 8),
+//                     Text(
+//                       'Email: ${user.email}',
+//                       style: Theme.of(context).textTheme.bodyLarge,
+//                     ),
+//                     const SizedBox(height: 20),
+//                     SizedBox(
+//                       width: double.infinity,
+//                       child: OutlinedButton.icon(
+//                         onPressed: () => _openMyPublishedGames(context),
+//                         icon: const Icon(Icons.public_outlined),
+//                         label: const Text('My Published Games'),
+//                       ),
+//                     ),
+//                     const SizedBox(height: 10),
+//                     SizedBox(
+//                       width: double.infinity,
+//                       child: FilledButton.icon(
+//                         onPressed: () => _openCourses(context),
+//                         icon: const Icon(Icons.menu_book_outlined),
+//                         label: const Text('Courses'),
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ),
+//       ),
+//       drawer: Drawer(
+//         child: ListView(
+//           padding: EdgeInsets.zero,
+//           children: [
+//             const DrawerHeader(child: Text('Menu')),
+//             ListTile(
+//               title: const Text('Courses'),
+//               onTap: () {
+//                 Navigator.of(context).pop();
+//                 _openCourses(context);
+//               },
+//             ),
+//             ListTile(
+//               title: const Text('My Games'),
+//               onTap: () => _openMyGames(context),
+//             ),
+//             ListTile(
+//               title: const Text('Discover'),
+//               onTap: () => _openDiscover(context),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }

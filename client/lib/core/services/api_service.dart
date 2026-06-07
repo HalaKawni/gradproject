@@ -86,6 +86,46 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> resendVerificationEmail({
+    required String email,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/resend-verification');
+
+      final response = await http.post(
+        url,
+        headers: _headers,
+        body: jsonEncode({'email': email}),
+      );
+
+      final data = _decodeResponseBody(response);
+
+      if (_isSuccessful(response.statusCode)) {
+        return {
+          'success': true,
+          'data': data,
+          'message': _extractSuccessMessage(
+            data,
+            'Verification email sent successfully',
+          ),
+        };
+      }
+
+      return {
+        'success': false,
+        'message': _extractErrorMessage(
+          data,
+          'Failed to send verification email',
+        ),
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Failed to send verification email: $e',
+      };
+    }
+  }
+
   static Future<Map<String, dynamic>> register({
     required String email,
     required String password,
@@ -146,6 +186,20 @@ class ApiService {
       body: {'currentPassword': currentPassword, 'newPassword': newPassword},
       defaultSuccessMessage: 'Password changed successfully',
       defaultErrorMessage: 'Failed to change password',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateProfileAvatar({
+    required String authToken,
+    required Map<String, dynamic> avatarJson,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/profile/avatar',
+      authToken: authToken,
+      body: avatarJson,
+      defaultSuccessMessage: 'Profile photo updated successfully',
+      defaultErrorMessage: 'Failed to update profile photo',
     );
   }
 
@@ -226,6 +280,25 @@ class ApiService {
     } catch (e) {
       return {'success': false, 'message': 'Update project error: $e'};
     }
+  }
+
+  /// Updates only builder project metadata/settings.
+  ///
+  /// Endpoint:
+  /// PATCH /api/builder/projects/:id/settings
+  static Future<Map<String, dynamic>> updateBuilderProjectSettings({
+    required String authToken,
+    required String projectId,
+    required Map<String, dynamic> settingsJson,
+  }) {
+    return _sendRequest(
+      method: 'PATCH',
+      path: '/api/builder/projects/$projectId/settings',
+      authToken: authToken,
+      body: settingsJson,
+      defaultSuccessMessage: 'Project settings updated successfully',
+      defaultErrorMessage: 'Failed to update project settings',
+    );
   }
 
   /// Fetches a single builder project by MongoDB id.
@@ -531,6 +604,47 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getPublicCourseProgress({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/courses/$courseId/progress',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch course progress',
+    );
+  }
+
+  static Future<Map<String, dynamic>> completePublicCourseLevel({
+    required String authToken,
+    required String courseId,
+    required String levelId,
+    int? score,
+    int? totalScore,
+    int? stars,
+  }) {
+    final body = <String, dynamic>{};
+    if (score != null) {
+      body['score'] = score;
+    }
+    if (totalScore != null) {
+      body['totalScore'] = totalScore;
+    }
+    if (stars != null) {
+      body['stars'] = stars;
+    }
+
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/$courseId/levels/$levelId/complete',
+      authToken: authToken,
+      body: body,
+      defaultSuccessMessage: 'Course progress saved successfully',
+      defaultErrorMessage: 'Failed to save course progress',
+    );
+  }
+
   // =========================
   // ADMIN
   // =========================
@@ -768,6 +882,12 @@ class ApiService {
         );
       } else if (method == 'PUT') {
         response = await http.put(
+          url,
+          headers: headers,
+          body: jsonEncode(body ?? {}),
+        );
+      } else if (method == 'PATCH') {
+        response = await http.patch(
           url,
           headers: headers,
           body: jsonEncode(body ?? {}),

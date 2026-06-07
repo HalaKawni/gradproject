@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flame/game.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
@@ -10,14 +13,18 @@ import 'package:flutter_highlight/themes/atom-one-light.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
 import 'package:highlight/languages/coffeescript.dart';
 
 import '../../scratch_builder/models/instruction_section.dart';
 import '../../scratch_builder/widgets/instruction_editor_panel.dart';
 import '../../front_view/shared/builder_collectable.dart';
 import '../../front_view/shared/builder_character.dart';
+import '../../shared/widgets/course_level_nav_banner.dart';
 import '../../shared/widgets/game_builder_back_icon.dart';
 import '../../shared/widgets/game_builder_level_title_field.dart';
+import '../../shared/widgets/kids_top_bar_style.dart';
 import '../controllers/fourth_demo_controller.dart';
 import '../flame/fourth_demo_game.dart';
 import '../language/game_code_controller.dart';
@@ -29,8 +36,33 @@ import '../models/fourth_demo_project.dart';
 
 class FourthDemoBuilderPage extends StatefulWidget {
   final AuthSession session;
+  final String? initialProjectId;
+  final bool allowPublishedAccess;
+  final bool playMode;
+  final String? initialTitle;
+  final bool useAdminLevelApi;
+  final String? initialCourseId;
+  final int? initialOrderInCourse;
+  final String initialDifficulty;
+  final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 
-  const FourthDemoBuilderPage({super.key, required this.session});
+  const FourthDemoBuilderPage({
+    super.key,
+    required this.session,
+    this.initialProjectId,
+    this.allowPublishedAccess = false,
+    this.playMode = false,
+    this.initialTitle,
+    this.useAdminLevelApi = false,
+    this.initialCourseId,
+    this.initialOrderInCourse,
+    this.initialDifficulty = 'medium',
+    this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
+  });
 
   @override
   State<FourthDemoBuilderPage> createState() => _FourthDemoBuilderPageState();
@@ -47,7 +79,16 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   bool _loadingCodeIntoEditor = false;
   bool _savingCodeFromEditor = false;
   bool _controllerRefreshScheduled = false;
+  bool _isSavingProject = false;
+  bool _isLoadingProject = false;
+  String? _savedProjectId;
+  late String? _courseId;
+  late int? _orderInCourse;
+  late String _difficulty;
+  late String _status;
   String? _codeSpriteId;
+  bool _hasSavedCourseProgress = false;
+  Map<String, String> _creatorSolutionBySpriteId = <String, String>{};
 
   String get _activeCodeSpriteId {
     return _codeSpriteId ??= controller.project.selectedSpriteId;
@@ -56,7 +97,18 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   @override
   void initState() {
     super.initState();
-    controller = FourthDemoController()..addListener(_handleControllerChanged);
+    _savedProjectId = widget.initialProjectId;
+    _courseId = widget.initialCourseId;
+    _orderInCourse = widget.initialOrderInCourse;
+    _difficulty = widget.initialDifficulty;
+    _status = widget.initialStatus;
+    controller = FourthDemoController();
+    if (widget.initialTitle != null && widget.initialTitle!.trim().isNotEmpty) {
+      controller.project = controller.project.copyWith(
+        title: widget.initialTitle!.trim(),
+      );
+    }
+    controller.addListener(_handleControllerChanged);
     game = FourthDemoGame(controller: controller);
     codeController =
         GameCodeController(
@@ -70,6 +122,13 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       ..addListener(_handleTitleChanged);
     _codeSpriteId = controller.project.selectedSpriteId;
     instructionSections.addAll(_defaultInstructionSections());
+    _captureCreatorSolutions();
+    if (widget.playMode) {
+      _preparePlayerModeProject();
+    }
+    if (widget.initialProjectId != null) {
+      _loadProject(widget.initialProjectId!);
+    }
   }
 
   @override
@@ -132,7 +191,35 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
 
     _loadCodeForSprite(activeCodeSpriteId);
     codeController.projectContext = controller.project;
+    if (widget.playMode && controller.exerciseComplete) {
+      unawaited(_saveCourseProgress());
+    }
     setState(() {});
+  }
+
+  Future<void> _saveCourseProgress() async {
+    if (_hasSavedCourseProgress) {
+      return;
+    }
+    final courseId = widget.courseProgressCourseId;
+    final levelId = widget.courseProgressLevelId ?? _savedProjectId;
+    if (courseId == null ||
+        courseId.isEmpty ||
+        levelId == null ||
+        levelId.isEmpty) {
+      return;
+    }
+    _hasSavedCourseProgress = true;
+    final result = await ApiService.completePublicCourseLevel(
+      authToken: widget.session.token,
+      courseId: courseId,
+      levelId: levelId,
+    );
+    if (result['success'] != true) {
+      _hasSavedCourseProgress = false;
+    } else if (mounted) {
+      setState(() {});
+    }
   }
 
   void _loadCodeForSprite(String spriteId) {
@@ -212,6 +299,112 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     });
   }
 
+  void _captureCreatorSolutions() {
+    _creatorSolutionBySpriteId = Map<String, String>.from(
+      controller.project.codeBySpriteId,
+    );
+  }
+
+  String get _playerSpriteId {
+    return controller.project.sprites
+            .where((sprite) => sprite.kind == FourthDemoSpriteKind.player)
+            .firstOrNull
+            ?.id ??
+        controller.project.selectedSpriteId;
+  }
+
+  void _preparePlayerModeProject() {
+    final playerSpriteId = _playerSpriteId;
+    final creatorCode =
+        _creatorSolutionBySpriteId[playerSpriteId] ??
+        controller.project.codeBySpriteId[playerSpriteId] ??
+        '';
+    final editableCodeBySpriteId = Map<String, String>.from(
+      controller.project.codeBySpriteId,
+    );
+    editableCodeBySpriteId[playerSpriteId] = _buildPlayerStarterCode(
+      creatorCode,
+    );
+    controller.project = controller.project.copyWith(
+      selectedSpriteId: playerSpriteId,
+      codeBySpriteId: editableCodeBySpriteId,
+    );
+    _codeSpriteId = playerSpriteId;
+    codeController.projectContext = controller.project;
+    _loadCodeForSprite(playerSpriteId);
+  }
+
+  String get _visibleSolutionCode {
+    final currentSpriteId = _activeCodeSpriteId;
+    final currentCode =
+        _creatorSolutionBySpriteId[currentSpriteId]?.trim() ?? '';
+    if (currentCode.isNotEmpty) {
+      return _creatorSolutionBySpriteId[currentSpriteId]!;
+    }
+    final playerCode = _creatorSolutionBySpriteId[_playerSpriteId]?.trim() ?? '';
+    if (playerCode.isNotEmpty) {
+      return _creatorSolutionBySpriteId[_playerSpriteId]!;
+    }
+    return FourthDemoProject.starterCode;
+  }
+
+  void _showSolutionDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => _SolutionCodeDialog(
+        title: 'Solution',
+        code: _visibleSolutionCode,
+      ),
+    );
+  }
+
+  String _buildPlayerStarterCode(String creatorCode) {
+    final remainingCode = _removePlayerOnKeyHandlers(creatorCode).trim();
+    if (remainingCode.isEmpty) {
+      return FourthDemoProject.starterCode;
+    }
+    return '${FourthDemoProject.starterCode}\n\n$remainingCode';
+  }
+
+  String _removePlayerOnKeyHandlers(String code) {
+    final lines = const LineSplitter().convert(code);
+    if (lines.isEmpty) {
+      return code;
+    }
+
+    final buffer = <String>[];
+    var index = 0;
+    while (index < lines.length) {
+      final line = lines[index];
+      if (_isPlayerOnKeyHeader(line)) {
+        index += 1;
+        while (index < lines.length) {
+          final nextLine = lines[index];
+          if (nextLine.trim().isEmpty || _isIndentedInstructionLine(nextLine)) {
+            index += 1;
+            continue;
+          }
+          break;
+        }
+        continue;
+      }
+      buffer.add(line);
+      index += 1;
+    }
+
+    return buffer.join('\n').trim();
+  }
+
+  bool _isPlayerOnKeyHeader(String line) {
+    return RegExp(r'^@onKey\s*=\s*\(\s*key\s*\)\s*=>\s*$').hasMatch(
+      line.trim(),
+    );
+  }
+
+  bool _isIndentedInstructionLine(String line) {
+    return line.startsWith(' ') || line.startsWith('\t');
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
@@ -220,149 +413,431 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       child: Scaffold(
         backgroundColor: const Color(0xFFE8F4EC),
         appBar: AppBar(
+          toolbarHeight: KidsTopBarStyle.toolbarHeight,
+          backgroundColor: KidsTopBarStyle.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          bottom: KidsTopBarStyle.appBarBottom(),
           leading: IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const GameBuilderBackIcon(),
           ),
-          title: GameBuilderLevelTitleField(
-            controller: titleController,
-            hintText: language.t('builder.newLevel'),
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: TextButton(
-                onPressed: controller.saveLocal,
-                child: Text(
-                  language.t('builder.save'),
-                  style: const TextStyle(color: Colors.black),
+          title: widget.playMode
+              ? Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        titleController.text,
+                        style: KidsTopBarStyle.titleTextStyle,
+                      ),
+                    ),
+                    CourseLevelNavBanner(
+                      session: widget.session,
+                      courseId: widget.courseProgressCourseId,
+                      currentLevelId:
+                          widget.courseProgressLevelId ?? _savedProjectId,
+                      currentLevelSolved: _hasSavedCourseProgress,
+                      topBarMode: true,
+                    ),
+                  ],
+                )
+              : GameBuilderLevelTitleField(
+                  controller: titleController,
+                  hintText: language.t('builder.newLevel'),
                 ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: TextButton(
-                onPressed: controller.isPlaying ? null : controller.loadLocal,
-                child: Text(
-                  language.t('builder.load'),
-                  style: TextStyle(
-                    color: controller.isPlaying ? Colors.black38 : Colors.black,
+          actions: widget.playMode
+              ? <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: OutlinedButton.icon(
+                      onPressed: _showSolutionDialog,
+                      icon: const Icon(Icons.lightbulb_outline_rounded),
+                      label: const Text('Show Solution'),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: TextButton(
-                onPressed: controller.isPlaying ? null : _showImportDialog,
-                child: Text(
-                  language.t('builder.import'),
-                  style: TextStyle(
-                    color: controller.isPlaying ? Colors.black38 : Colors.black,
+                ]
+              : [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: TextButton(
+                      onPressed:
+                          _isSavingProject ||
+                              _isLoadingProject ||
+                              controller.isPlaying
+                          ? null
+                          : () => _saveProject(publish: false),
+                      style: KidsTopBarStyle.playfulText(KidsTopBarStyle.blue),
+                      child: Text(language.t('builder.save')),
+                    ),
                   ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: FilledButton(
-                onPressed: _showExportDialog,
-                child: Text(language.t('builder.publish')),
-              ),
-            ),
-          ],
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: FilledButton(
+                      onPressed:
+                          _isSavingProject ||
+                              _isLoadingProject ||
+                              controller.isPlaying
+                          ? null
+                          : () => _saveProject(publish: true),
+                      style: KidsTopBarStyle.playfulFilled(
+                        KidsTopBarStyle.green,
+                      ),
+                      child: _isSavingProject
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : Text(language.t('builder.publish')),
+                    ),
+                  ),
+                ],
         ),
-        body: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 34,
-              child: InstructionEditorPanel(
-                sections: instructionSections,
-                onAddSection: _addInstructionSection,
-                onRemoveSection: _removeInstructionSection,
-                onReorderSections: _reorderInstructionSections,
-                onTitleChanged: _updateInstructionTitle,
-                onContentChanged: _updateInstructionContent,
-                onAddItem: _addInstructionItem,
-                onItemChanged: _updateInstructionItem,
-                onRemoveItem: _removeInstructionItem,
+        body: _isLoadingProject
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 34,
+                          child: widget.playMode
+                              ? _InstructionPreviewPanel(
+                                  sections: instructionSections,
+                                )
+                              : InstructionEditorPanel(
+                                  sections: instructionSections,
+                                  onAddSection: _addInstructionSection,
+                                  onRemoveSection: _removeInstructionSection,
+                                  onReorderSections:
+                                      _reorderInstructionSections,
+                                  onTitleChanged: _updateInstructionTitle,
+                                  onContentChanged: _updateInstructionContent,
+                                  onAddItem: _addInstructionItem,
+                                  onItemChanged: _updateInstructionItem,
+                                  onRemoveItem: _removeInstructionItem,
+                                ),
+                        ),
+                        Expanded(
+                          flex: 46,
+                          child: _CodeColumn(
+                            controller: controller,
+                            codeController: codeController,
+                            codeFocusNode: codeFocusNode,
+                            onRun: _runCode,
+                            readOnly: false,
+                          ),
+                        ),
+                        Expanded(
+                          flex: 44,
+                          child: _StageColumn(
+                            controller: controller,
+                            game: game,
+                            focusNode: stageFocusNode,
+                            onSelectSprite: _selectSprite,
+                            readOnly: false,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ),
-            Expanded(
-              flex: 46,
-              child: _CodeColumn(
-                controller: controller,
-                codeController: codeController,
-                codeFocusNode: codeFocusNode,
-                onRun: _runCode,
-              ),
-            ),
-            Expanded(
-              flex: 44,
-              child: _StageColumn(
-                controller: controller,
-                game: game,
-                focusNode: stageFocusNode,
-                onSelectSprite: _selectSprite,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
-  Future<void> _showExportDialog() async {
-    final exportController = TextEditingController(
-      text: controller.exportJson(),
-    );
-    await showDialog<void>(
-      context: context,
-      builder: (context) => _CourseDialog(
-        title: AppLanguage.of(context).t('builder.exportProjectJson'),
-        action: TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(AppLanguage.of(context).t('builder.done')),
-        ),
-        child: TextField(
-          controller: exportController,
-          maxLines: 18,
-          readOnly: true,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          decoration: _fieldDecoration(
-            AppLanguage.of(context).t('builder.projectJson'),
-          ),
-        ),
-      ),
-    );
-    exportController.dispose();
+  Future<void> _saveProject({required bool publish}) async {
+    if (_isSavingProject) {
+      return;
+    }
+
+    _saveDisplayedCode();
+    final validation = controller.project.validate();
+    if (validation.isNotEmpty) {
+      _showSnackBar(
+        validation.join('\n'),
+        backgroundColor: Colors.red.shade600,
+      );
+      return;
+    }
+
+    final status = publish ? 'published' : 'draft';
+    setState(() {
+      _isSavingProject = true;
+    });
+
+    try {
+      final projectJson = _buildProjectJson(status: status);
+      final response = _savedProjectId == null
+          ? await ApiService.createBuilderProject(
+              authToken: widget.session.token,
+              projectJson: projectJson,
+            )
+          : widget.useAdminLevelApi
+          ? await ApiService.updateAdminLevel(
+              authToken: widget.session.token,
+              levelId: _savedProjectId!,
+              levelJson: {
+                'title': projectJson['title'],
+                'description': projectJson['description'],
+                'status': projectJson['status'],
+                'builderType': projectJson['builderType'],
+                'difficulty': projectJson['difficulty'],
+                'courseId': projectJson['courseId'],
+                'orderInCourse': projectJson['orderInCourse'],
+                'codeBySpriteId': projectJson['codeBySpriteId'],
+                'draftData': projectJson,
+              },
+            )
+          : await ApiService.updateBuilderProject(
+              authToken: widget.session.token,
+              projectId: _savedProjectId!,
+              projectJson: projectJson,
+            );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response['success'] == true) {
+        final data = response['data'];
+        if (data is Map && data['_id'] != null) {
+          _savedProjectId = data['_id'].toString();
+        }
+        _status = status;
+        _showSnackBar(
+          publish
+              ? language.t('builder.projectPublished')
+              : language.t('builder.draftSaved'),
+          backgroundColor: Colors.green.shade600,
+        );
+      } else {
+        final errors = response['errors'];
+        _showSnackBar(
+          errors is List && errors.isNotEmpty
+              ? errors.join('\n')
+              : response['message']?.toString() ??
+                    language.t('builder.saveFailedGeneric'),
+          backgroundColor: Colors.red.shade600,
+        );
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(
+        language.t('builder.saveFailed', params: {'error': e.toString()}),
+        backgroundColor: Colors.red.shade600,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingProject = false;
+        });
+      }
+    }
   }
 
-  Future<void> _showImportDialog() async {
-    final importController = TextEditingController();
-    await showDialog<void>(
-      context: context,
-      builder: (context) => _CourseDialog(
-        title: AppLanguage.of(context).t('builder.importProjectJson'),
-        action: FilledButton(
-          onPressed: () {
-            controller.importJson(importController.text);
-            Navigator.of(context).pop();
-          },
-          child: Text(AppLanguage.of(context).t('builder.import')),
-        ),
-        child: TextField(
-          controller: importController,
-          maxLines: 18,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          decoration: _fieldDecoration(
-            AppLanguage.of(context).t('builder.pasteJsonHere'),
-          ),
-        ),
+  Future<void> _loadProject(String projectId) async {
+    setState(() {
+      _isLoadingProject = true;
+    });
+
+    try {
+      final response = widget.allowPublishedAccess
+          ? await ApiService.getPublishedBuilderProjectById(
+              authToken: widget.session.token,
+              projectId: projectId,
+            )
+          : widget.useAdminLevelApi
+          ? await ApiService.getAdminLevelById(
+              authToken: widget.session.token,
+              levelId: projectId,
+            )
+          : await ApiService.getBuilderProjectById(
+              authToken: widget.session.token,
+              projectId: projectId,
+            );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (response['success'] != true) {
+        _showSnackBar(
+          response['message']?.toString() ??
+              language.t('builder.loadTopViewFailedGeneric'),
+          backgroundColor: Colors.red.shade600,
+        );
+        return;
+      }
+
+      final rawData = response['data'];
+      final data = rawData is Map
+          ? Map<String, dynamic>.from(rawData)
+          : const <String, dynamic>{};
+      final rawDraftData = data['draftData'];
+      final draftData = rawDraftData is Map
+          ? Map<String, dynamic>.from(rawDraftData)
+          : data;
+
+      controller.importJson(const JsonEncoder().convert(draftData));
+      final title =
+          data['title']?.toString() ??
+          draftData['title']?.toString() ??
+          widget.initialTitle;
+      if (title != null && title.trim().isNotEmpty) {
+        controller.setTitle(title);
+      }
+
+      _captureCreatorSolutions();
+      if (widget.playMode) {
+        _preparePlayerModeProject();
+      }
+
+      setState(() {
+        _savedProjectId = data['_id']?.toString() ?? projectId;
+        _courseId =
+            data['courseId']?.toString() ??
+            draftData['courseId']?.toString() ??
+            _courseId;
+        _orderInCourse =
+            _readInt(data['orderInCourse']) ??
+            _readInt(draftData['orderInCourse']) ??
+            _orderInCourse;
+        _difficulty =
+            data['difficulty']?.toString() ??
+            draftData['difficulty']?.toString() ??
+            _difficulty;
+        _status =
+            data['status']?.toString() ??
+            draftData['status']?.toString() ??
+            _status;
+        instructionSections
+          ..clear()
+          ..addAll(_readInstructionSections(draftData['instructionSections']));
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      _showSnackBar(
+        language.t('builder.loadFailed', params: {'error': e.toString()}),
+        backgroundColor: Colors.red.shade600,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingProject = false;
+        });
+      }
+    }
+  }
+
+  Map<String, dynamic> _buildProjectJson({required String status}) {
+    return <String, dynamic>{
+      ...controller.project.toJson(),
+      'builderType': 'fourthDemo',
+      'title': titleController.text.trim().isEmpty
+          ? AppLanguage.instance.t('builder.newLevel')
+          : titleController.text.trim(),
+      'description': '',
+      'status': status,
+      'codeBySpriteId': Map<String, String>.from(
+        controller.project.codeBySpriteId,
       ),
-    );
-    importController.dispose();
+      'courseId': _courseId,
+      'orderInCourse': _orderInCourse,
+      'difficulty': _difficulty,
+      'instructionSections': instructionSections
+          .map(_instructionSectionToJson)
+          .toList(),
+    };
+  }
+
+  Map<String, dynamic> _instructionSectionToJson(InstructionSection section) {
+    return <String, dynamic>{
+      'id': section.id,
+      'type': section.type.name,
+      'title': section.title,
+      'content': section.content,
+      'items': section.items,
+      'collapsed': section.collapsed,
+    };
+  }
+
+  List<InstructionSection> _readInstructionSections(Object? rawValue) {
+    if (rawValue is! List) {
+      return _defaultInstructionSections();
+    }
+
+    final sections = <InstructionSection>[];
+    for (final rawSection in rawValue) {
+      if (rawSection is! Map) {
+        continue;
+      }
+      final section = Map<String, dynamic>.from(rawSection);
+      final type = _readInstructionSectionType(section['type']);
+      sections.add(
+        InstructionSection(
+          id: section['id']?.toString() ?? 'section-${sections.length + 1}',
+          type: type,
+          title: _normalizedInstructionSectionTitle(
+            type: type,
+            rawTitle: section['title']?.toString(),
+          ),
+          content: section['content']?.toString() ?? '',
+          items: section['items'] is List
+              ? (section['items'] as List)
+                    .map((item) => item.toString())
+                    .toList()
+              : const <String>[],
+          collapsed: section['collapsed'] == true,
+        ),
+      );
+    }
+
+    return sections.isEmpty ? _defaultInstructionSections() : sections;
+  }
+
+  InstructionSectionType _readInstructionSectionType(Object? value) {
+    final name = value?.toString();
+    for (final type in InstructionSectionType.values) {
+      if (type.name == name) {
+        return type;
+      }
+    }
+    return InstructionSectionType.custom;
+  }
+
+  int? _readInt(Object? value) {
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  AppLanguage get language => AppLanguage.instance;
+
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
   }
 
   List<InstructionSection> _defaultInstructionSections() {
@@ -371,22 +846,38 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       InstructionSection(
         id: 'overview',
         type: InstructionSectionType.overview,
-        title: language.t('builder.welcomeGameBuilder'),
-        content: language.t('builder.fourthOverviewContent'),
+        title: language.t('builder.overview'),
+        content: '',
       ),
       InstructionSection(
         id: 'code-example',
         type: InstructionSectionType.codeExample,
         title: language.t('builder.codeExample'),
-        content: '@step 1',
+        content: '',
       ),
       InstructionSection(
         id: 'instructions',
         type: InstructionSectionType.instructions,
         title: language.t('builder.instructions'),
-        content: language.t('builder.fourthInstructionsContent'),
+        content: '',
       ),
     ];
+  }
+
+  String _normalizedInstructionSectionTitle({
+    required InstructionSectionType type,
+    required String? rawTitle,
+  }) {
+    final title = rawTitle?.trim() ?? '';
+    if (type == InstructionSectionType.overview &&
+        (title.isEmpty ||
+            title.toLowerCase() ==
+                AppLanguage.instance.t('builder.welcomeGameBuilder')
+                    .trim()
+                    .toLowerCase())) {
+      return AppLanguage.instance.t('builder.overview');
+    }
+    return title.isEmpty ? instructionSectionLabel(type) : title;
   }
 
   void _addInstructionSection(InstructionSectionType type) {
@@ -493,17 +984,428 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   }
 }
 
+class _InstructionPreviewPanel extends StatelessWidget {
+  final List<InstructionSection> sections;
+
+  const _InstructionPreviewPanel({required this.sections});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 12,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: sections.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(height: 14),
+                itemBuilder: (context, index) {
+                  final section = sections[index];
+                  final hasContent =
+                      section.content.trim().isNotEmpty ||
+                      section.items.any((item) => item.trim().isNotEmpty);
+                  if (!hasContent) {
+                    return const SizedBox.shrink();
+                  }
+                  return Container(
+                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xfff8fafc),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xffd9e1ea)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _previewSectionTitle(context, section),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 22,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _InstructionContentPreview(section: section),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InstructionContentPreview extends StatelessWidget {
+  final InstructionSection section;
+
+  const _InstructionContentPreview({required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = section.items
+        .where((item) => item.trim().isNotEmpty)
+        .toList(growable: false);
+    final richContent = section.content.trim();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (richContent.isNotEmpty)
+          _RichInstructionPreview(content: richContent),
+        if (items.isNotEmpty) ...[
+          if (richContent.isNotEmpty) const SizedBox(height: 12),
+          for (final item in items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 5, right: 8),
+                    child: Icon(
+                      Icons.circle,
+                      size: 8,
+                      color: Color(0xFF475569),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        color: Color(0xFF334155),
+                        height: 1.55,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+String _previewSectionTitle(
+  BuildContext context,
+  InstructionSection section,
+) {
+  final title = section.title.trim();
+  if (section.type == InstructionSectionType.overview) {
+    final welcomeTitle = AppLanguage.of(context)
+        .t('builder.welcomeGameBuilder')
+        .trim()
+        .toLowerCase();
+    if (title.isEmpty || title.toLowerCase() == welcomeTitle) {
+      return AppLanguage.of(context).t('builder.overview');
+    }
+  }
+  if (title.isEmpty) {
+    return localizedInstructionSectionLabel(AppLanguage.of(context), section.type);
+  }
+  return title;
+}
+
+class _RichInstructionPreview extends StatefulWidget {
+  final String content;
+
+  const _RichInstructionPreview({required this.content});
+
+  @override
+  State<_RichInstructionPreview> createState() => _RichInstructionPreviewState();
+}
+
+class _RichInstructionPreviewState extends State<_RichInstructionPreview> {
+  late QuillController _controller;
+  late FocusNode _focusNode;
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = QuillController(
+      document: _documentFromValue(widget.content),
+      selection: const TextSelection.collapsed(offset: 0),
+    );
+    _focusNode = FocusNode(skipTraversal: true);
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RichInstructionPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.content == widget.content) {
+      return;
+    }
+    _controller.document = _documentFromValue(widget.content);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: QuillEditor.basic(
+        controller: _controller,
+        focusNode: _focusNode,
+        scrollController: _scrollController,
+        config: QuillEditorConfig(
+          autoFocus: false,
+          scrollable: false,
+          expands: false,
+          padding: EdgeInsets.zero,
+          showCursor: false,
+          embedBuilders: FlutterQuillEmbeds.defaultEditorBuilders(),
+          customStyles: DefaultStyles(
+            paragraph: DefaultTextBlockStyle(
+              const TextStyle(
+                color: Color(0xFF334155),
+                height: 1.6,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              const HorizontalSpacing(0, 0),
+              const VerticalSpacing(0, 10),
+              const VerticalSpacing(0, 0),
+              null,
+            ),
+            h1: DefaultTextBlockStyle(
+              const TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                height: 1.2,
+              ),
+              const HorizontalSpacing(0, 0),
+              const VerticalSpacing(8, 10),
+              const VerticalSpacing(0, 0),
+              null,
+            ),
+            h2: DefaultTextBlockStyle(
+              const TextStyle(
+                color: Color(0xFF0F172A),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+              const HorizontalSpacing(0, 0),
+              const VerticalSpacing(6, 8),
+              const VerticalSpacing(0, 0),
+              null,
+            ),
+            h3: DefaultTextBlockStyle(
+              const TextStyle(
+                color: Color(0xFF1E293B),
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                height: 1.3,
+              ),
+              const HorizontalSpacing(0, 0),
+              const VerticalSpacing(4, 6),
+              const VerticalSpacing(0, 0),
+              null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Document _documentFromValue(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return Document();
+  }
+
+  try {
+    final decoded = jsonDecode(trimmed);
+    if (decoded is List) {
+      return Document.fromJson(decoded);
+    }
+  } catch (_) {
+    // Older projects stored raw instruction text.
+  }
+
+  final document = Document();
+  document.insert(0, value);
+  return document;
+}
+
+class _SolutionCodeDialog extends StatelessWidget {
+  final String title;
+  final String code;
+
+  const _SolutionCodeDialog({required this.title, required this.code});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFFF8FBFD),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF24465A),
+        ),
+      ),
+      content: SizedBox(
+        width: 760,
+        height: 460,
+        child: _ReadOnlyCodeViewer(code: code),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadOnlyCodeViewer extends StatefulWidget {
+  final String code;
+
+  const _ReadOnlyCodeViewer({required this.code});
+
+  @override
+  State<_ReadOnlyCodeViewer> createState() => _ReadOnlyCodeViewerState();
+}
+
+class _ReadOnlyCodeViewerState extends State<_ReadOnlyCodeViewer> {
+  static const double _gutterWidth = 46;
+  static const double _editorFontSize = 16;
+  static const double _editorLineHeightFactor = 1.45;
+  static const double _editorLineHeight =
+      _editorFontSize * _editorLineHeightFactor;
+  static const double _editorVerticalPadding = 16;
+
+  late final GameCodeController _controller;
+  late final FocusNode _focusNode;
+  double _verticalScrollOffset = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = GameCodeController(
+      text: widget.code,
+      language: coffeescript,
+      modifiers: const [TabModifier()],
+    );
+    _focusNode = FocusNode(skipTraversal: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF6FA),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFC6D2D9), width: 2),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _LineNumberGutter(
+            controller: _controller,
+            scrollOffset: _verticalScrollOffset,
+            width: _gutterWidth,
+            lineHeight: _editorLineHeight,
+            topPadding: _editorVerticalPadding,
+          ),
+          Expanded(
+            child: CodeTheme(
+              data: CodeThemeData(styles: atomOneLightTheme),
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.metrics.axis != Axis.vertical) {
+                    return false;
+                  }
+                  final nextOffset = notification.metrics.pixels;
+                  if ((nextOffset - _verticalScrollOffset).abs() > 0.5) {
+                    setState(() => _verticalScrollOffset = nextOffset);
+                  }
+                  return false;
+                },
+                child: CodeField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  expands: true,
+                  minLines: null,
+                  maxLines: null,
+                  readOnly: true,
+                  wrap: false,
+                  background: const Color(0xFFEEF6FA),
+                  cursorColor: const Color(0xFF24465A),
+                  gutterStyle: GutterStyle.none,
+                  padding: const EdgeInsets.all(14),
+                  textStyle: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: _editorFontSize,
+                    height: _editorLineHeightFactor,
+                    color: Color(0xFF24465A),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CodeColumn extends StatelessWidget {
   final FourthDemoController controller;
   final GameCodeController codeController;
   final FocusNode codeFocusNode;
   final VoidCallback onRun;
+  final bool readOnly;
 
   const _CodeColumn({
     required this.controller,
     required this.codeController,
     required this.codeFocusNode,
     required this.onRun,
+    this.readOnly = false,
   });
 
   @override
@@ -517,7 +1419,7 @@ class _CodeColumn extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _CodeHeader(controller: controller, onRun: onRun),
+          _CodeHeader(controller: controller, onRun: onRun, readOnly: readOnly),
           Expanded(
             child: Stack(
               children: [
@@ -526,6 +1428,7 @@ class _CodeColumn extends StatelessWidget {
                     controller: controller,
                     codeController: codeController,
                     codeFocusNode: codeFocusNode,
+                    readOnly: readOnly,
                   ),
                 ),
                 Positioned(
@@ -544,6 +1447,7 @@ class _CodeColumn extends StatelessWidget {
           _FunctionPalette(
             controller: controller,
             codeController: codeController,
+            readOnly: readOnly,
           ),
         ],
       ),
@@ -554,8 +1458,13 @@ class _CodeColumn extends StatelessWidget {
 class _CodeHeader extends StatelessWidget {
   final FourthDemoController controller;
   final VoidCallback onRun;
+  final bool readOnly;
 
-  const _CodeHeader({required this.controller, required this.onRun});
+  const _CodeHeader({
+    required this.controller,
+    required this.onRun,
+    this.readOnly = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -580,7 +1489,11 @@ class _CodeHeader extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
-            onPressed: controller.isPlaying ? controller.stop : onRun,
+            onPressed: readOnly
+                ? null
+                : controller.isPlaying
+                ? controller.stop
+                : onRun,
             icon: Icon(controller.isPlaying ? Icons.stop : Icons.play_arrow),
             label: Text(
               controller.isPlaying
@@ -605,11 +1518,13 @@ class _CodeEditor extends StatefulWidget {
   final FourthDemoController controller;
   final GameCodeController codeController;
   final FocusNode codeFocusNode;
+  final bool readOnly;
 
   const _CodeEditor({
     required this.controller,
     required this.codeController,
     required this.codeFocusNode,
+    this.readOnly = false,
   });
 
   @override
@@ -663,7 +1578,7 @@ class _CodeEditorState extends State<_CodeEditor> {
                     expands: true,
                     minLines: null,
                     maxLines: null,
-                    readOnly: widget.controller.isPlaying,
+                    readOnly: widget.controller.isPlaying || widget.readOnly,
                     wrap: false,
                     background: const Color(0xFFEEF6FA),
                     cursorColor: const Color(0xFF24465A),
@@ -969,10 +1884,12 @@ class _DiagnosticTile extends StatelessWidget {
 class _FunctionPalette extends StatefulWidget {
   final FourthDemoController controller;
   final GameCodeController codeController;
+  final bool readOnly;
 
   const _FunctionPalette({
     required this.controller,
     required this.codeController,
+    this.readOnly = false,
   });
 
   @override
@@ -1018,7 +1935,7 @@ class _FunctionPaletteState extends State<_FunctionPalette> {
                   for (final command in items)
                     _CommandPill(
                       label: _commandLabel(context, command),
-                      enabled: !widget.controller.isPlaying,
+                      enabled: !widget.controller.isPlaying && !widget.readOnly,
                       onTap: () => _typeSnippet(command),
                     ),
                 ],
@@ -1120,12 +2037,14 @@ class _StageColumn extends StatelessWidget {
   final FourthDemoGame game;
   final FocusNode focusNode;
   final ValueChanged<String> onSelectSprite;
+  final bool readOnly;
 
   const _StageColumn({
     required this.controller,
     required this.game,
     required this.focusNode,
     required this.onSelectSprite,
+    this.readOnly = false,
   });
 
   @override
@@ -1136,18 +2055,24 @@ class _StageColumn extends StatelessWidget {
         children: [
           Expanded(
             flex: 11,
-            child: _StagePanel(
-              controller: controller,
-              game: game,
-              focusNode: focusNode,
-              onSelectSprite: onSelectSprite,
+            child: IgnorePointer(
+              ignoring: readOnly,
+              child: _StagePanel(
+                controller: controller,
+                game: game,
+                focusNode: focusNode,
+                onSelectSprite: onSelectSprite,
+              ),
             ),
           ),
           Expanded(
             flex: 9,
-            child: _AssetManager(
-              controller: controller,
-              onSelectSprite: onSelectSprite,
+            child: IgnorePointer(
+              ignoring: readOnly,
+              child: _AssetManager(
+                controller: controller,
+                onSelectSprite: onSelectSprite,
+              ),
             ),
           ),
         ],
@@ -1174,21 +2099,11 @@ class _StagePanel extends StatefulWidget {
 }
 
 class _StagePanelState extends State<_StagePanel> {
-  final ScrollController _horizontalController = ScrollController();
-  final ScrollController _verticalController = ScrollController();
   Offset? _hoveredWorldPosition;
-
-  @override
-  void dispose() {
-    _horizontalController.dispose();
-    _verticalController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
-    final settings = controller.project.settings;
     return KeyboardListener(
       focusNode: widget.focusNode,
       autofocus: true,
@@ -1211,110 +2126,75 @@ class _StagePanelState extends State<_StagePanel> {
             Positioned.fill(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final worldWidth = math.max(
-                    settings.worldWidth,
-                    constraints.maxWidth,
-                  );
-                  final worldHeight = math.max(
-                    settings.worldHeight,
-                    constraints.maxHeight,
-                  );
-                  return Scrollbar(
-                    controller: _verticalController,
-                    thumbVisibility:
-                        settings.worldHeight > constraints.maxHeight,
-                    child: SingleChildScrollView(
-                      controller: _verticalController,
-                      child: Scrollbar(
-                        controller: _horizontalController,
-                        thumbVisibility:
-                            settings.worldWidth > constraints.maxWidth,
-                        notificationPredicate: (notification) =>
-                            notification.depth == 1,
-                        child: SingleChildScrollView(
-                          controller: _horizontalController,
-                          scrollDirection: Axis.horizontal,
-                          child: SizedBox(
-                            width: worldWidth,
-                            height: worldHeight,
-                            child: MouseRegion(
-                              onHover: (event) {
-                                setState(() {
-                                  _hoveredWorldPosition = widget.game
-                                      .worldPositionFromCanvas(
-                                        event.localPosition,
-                                      );
-                                });
-                              },
-                              onExit: (_) {
-                                setState(() => _hoveredWorldPosition = null);
-                              },
-                              child: GestureDetector(
-                                onTapDown: (details) {
-                                  widget.focusNode.requestFocus();
-                                  final worldPosition = widget.game
-                                      .worldPositionFromCanvas(
-                                        details.localPosition,
-                                      );
-                                  controller.handleClick(worldPosition);
-                                  if (!controller.isPlaying) {
-                                    final hit = controller.spriteAt(
-                                      worldPosition,
-                                    );
-                                    if (hit != null) {
-                                      widget.onSelectSprite(hit.id);
-                                    }
-                                    controller.beginDrag(worldPosition);
-                                    controller.endDrag();
-                                  }
-                                },
-                                onPanStart: (details) {
-                                  widget.focusNode.requestFocus();
-                                  final worldPosition = widget.game
-                                      .worldPositionFromCanvas(
-                                        details.localPosition,
-                                      );
-                                  if (!controller.isPlaying) {
-                                    final hit = controller.spriteAt(
-                                      worldPosition,
-                                    );
-                                    if (hit != null) {
-                                      widget.onSelectSprite(hit.id);
-                                    }
-                                  }
-                                  controller.beginDrag(worldPosition);
-                                },
-                                onPanUpdate: (details) => controller.dragTo(
-                                  widget.game.worldPositionFromCanvas(
-                                    details.localPosition,
-                                  ),
-                                ),
-                                onPanEnd: (details) {
-                                  if (controller.draggingSpriteId != null) {
-                                    controller.endDrag();
-                                    return;
-                                  }
-                                  if (controller.isPlaying) {
-                                    final direction = _swipeDirection(
-                                      details.velocity.pixelsPerSecond,
-                                    );
-                                    if (direction != null) {
-                                      controller.handleSwipe(direction);
-                                    }
-                                  }
-                                },
-                                onPanCancel: () {
-                                  if (controller.draggingSpriteId != null) {
-                                    controller.endDrag();
-                                  }
-                                },
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: GameWidget(game: widget.game),
-                                ),
-                              ),
-                            ),
+                  return SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    child: MouseRegion(
+                      onHover: (event) {
+                        setState(() {
+                          _hoveredWorldPosition = widget.game
+                              .worldPositionFromCanvas(event.localPosition);
+                        });
+                      },
+                      onExit: (_) {
+                        setState(() => _hoveredWorldPosition = null);
+                      },
+                      child: GestureDetector(
+                        onTapDown: (details) {
+                          widget.focusNode.requestFocus();
+                          final worldPosition = widget.game
+                              .worldPositionFromCanvas(details.localPosition);
+                          controller.handleClick(worldPosition);
+                          if (!controller.isPlaying) {
+                            final hit = controller.spriteAt(worldPosition);
+                            if (hit != null) {
+                              widget.onSelectSprite(hit.id);
+                            }
+                            controller.beginDrag(worldPosition);
+                            controller.endDrag();
+                          }
+                        },
+                        onPanStart: (details) {
+                          widget.focusNode.requestFocus();
+                          final worldPosition = widget.game
+                              .worldPositionFromCanvas(details.localPosition);
+                          if (!controller.isPlaying) {
+                            final hit = controller.spriteAt(worldPosition);
+                            if (hit != null) {
+                              widget.onSelectSprite(hit.id);
+                            }
+                          }
+                          controller.beginDrag(worldPosition);
+                        },
+                        onPanUpdate: (details) => controller.dragTo(
+                          widget.game.worldPositionFromCanvas(
+                            details.localPosition,
                           ),
+                        ),
+                        onPanEnd: (details) {
+                          if (controller.draggingSpriteId != null ||
+                              controller.draggingWidgetId != null) {
+                            controller.endDrag();
+                            return;
+                          }
+                          if (controller.isPlaying) {
+                            final direction = _swipeDirection(
+                              details.velocity.pixelsPerSecond,
+                            );
+                            if (direction != null) {
+                              controller.handleSwipe(direction);
+                            }
+                          }
+                        },
+                        onPanCancel: () {
+                          if (controller.draggingSpriteId != null ||
+                              controller.draggingWidgetId != null) {
+                            controller.endDrag();
+                          }
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: GameWidget(game: widget.game),
                         ),
                       ),
                     ),
@@ -1413,10 +2293,7 @@ class _AssetManager extends StatefulWidget {
   final FourthDemoController controller;
   final ValueChanged<String> onSelectSprite;
 
-  const _AssetManager({
-    required this.controller,
-    required this.onSelectSprite,
-  });
+  const _AssetManager({required this.controller, required this.onSelectSprite});
 
   @override
   State<_AssetManager> createState() => _AssetManagerState();
@@ -2026,14 +2903,24 @@ class _WidgetInlineSettings extends StatelessWidget {
                       onChanged: (value) =>
                           onChanged(widget.copyWith(text: value)),
                     ),
+                    const SizedBox(height: 16),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: _WidgetTextAlignSelector(
+                        value: widget.textAlign,
+                        onChanged: (value) =>
+                            onChanged(widget.copyWith(textAlign: value)),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 18),
           Wrap(
             spacing: 12,
-            runSpacing: 10,
+            runSpacing: 18,
             children: [
               _NumberStepperField(
                 label: 'X',
@@ -2091,6 +2978,38 @@ class _WidgetInlineSettings extends StatelessWidget {
           _SettingsActions(onDelete: onDelete, onDuplicate: onDuplicate),
         ],
       ),
+    );
+  }
+}
+
+class _WidgetTextAlignSelector extends StatelessWidget {
+  final FourthDemoWidgetTextAlign value;
+  final ValueChanged<FourthDemoWidgetTextAlign> onChanged;
+
+  const _WidgetTextAlignSelector({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<FourthDemoWidgetTextAlign>(
+      segments: const [
+        ButtonSegment(
+          value: FourthDemoWidgetTextAlign.left,
+          icon: Icon(Icons.format_align_left),
+        ),
+        ButtonSegment(
+          value: FourthDemoWidgetTextAlign.center,
+          icon: Icon(Icons.format_align_center),
+        ),
+        ButtonSegment(
+          value: FourthDemoWidgetTextAlign.right,
+          icon: Icon(Icons.format_align_right),
+        ),
+      ],
+      selected: {value},
+      onSelectionChanged: (selection) => onChanged(selection.first),
     );
   }
 }
@@ -2795,10 +3714,7 @@ class _GameTab extends StatelessWidget {
             label: AppLanguage.of(context).t('builder.physicsMode'),
             value: settings.physicsMode.name,
           ),
-          _SettingRow(
-            label: AppLanguage.of(context).t('builder.cameraTarget'),
-            value: settings.cameraTargetId,
-          ),
+          _CameraTargetSetting(controller: controller, settings: settings),
           _SettingRow(
             label: AppLanguage.of(context).t('builder.tilemap'),
             value: 'ground, platform, obstacle',
@@ -3052,6 +3968,66 @@ class _SettingRow extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CameraTargetSetting extends StatelessWidget {
+  final FourthDemoController controller;
+  final FourthDemoGameSettings settings;
+
+  const _CameraTargetSetting({
+    required this.controller,
+    required this.settings,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final sprites = controller.project.sprites;
+    final currentValue =
+        sprites.any((sprite) => sprite.id == settings.cameraTargetId)
+        ? settings.cameraTargetId
+        : (sprites.isEmpty ? '' : sprites.first.id);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: DropdownButtonFormField<String>(
+        initialValue: currentValue.isEmpty ? null : currentValue,
+        decoration: _fieldDecoration(
+          AppLanguage.of(context).t('builder.cameraTarget'),
+        ),
+        items: [
+          for (final sprite in sprites)
+            DropdownMenuItem<String>(
+              value: sprite.id,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SpriteAvatar(sprite: sprite, size: 26),
+                  const SizedBox(width: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 220),
+                    child: Text(
+                      sprite.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+        onChanged: controller.isPlaying
+            ? null
+            : (value) {
+                if (value == null || value.isEmpty) {
+                  return;
+                }
+                controller.updateSettings(
+                  settings.copyWith(cameraTargetId: value),
+                );
+              },
       ),
     );
   }

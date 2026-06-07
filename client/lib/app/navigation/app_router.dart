@@ -14,7 +14,6 @@ import 'package:client/features/builder/top_view/pages/top_view_builder_page.dar
 import 'package:client/features/home/pages/discover.dart';
 import 'package:client/features/home/pages/dashboard_page.dart';
 import 'package:client/features/home/pages/public_courses_page.dart';
-import 'package:client/devDemo/user_home_page_demo.dart';
 import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 
@@ -46,7 +45,10 @@ class AppRouter {
         if (data is HomeRouteData) {
           return _pageRoute(
             settings: settings,
-            builder: (_) => UserHomePage(session: data.session),
+            builder: (_) => DashboardPage(
+              session: data.session,
+              username: data.session.user.name,
+            ),
           );
         }
         return _errorRoute(
@@ -97,6 +99,8 @@ class AppRouter {
               session: data.session,
               projectId: data.projectId,
               initialTitle: data.initialTitle,
+              courseProgressCourseId: data.courseProgressCourseId,
+              courseProgressLevelId: data.courseProgressLevelId,
             ),
           );
         }
@@ -109,7 +113,20 @@ class AppRouter {
         if (data is FourthDemoBuilderRouteData) {
           return _pageRoute(
             settings: settings,
-            builder: (_) => FourthDemoBuilderPage(session: data.session),
+            builder: (_) => FourthDemoBuilderPage(
+              session: data.session,
+              initialProjectId: data.initialProjectId,
+              allowPublishedAccess: data.allowPublishedAccess,
+              playMode: data.playMode,
+              initialTitle: data.initialTitle,
+              useAdminLevelApi: data.useAdminLevelApi,
+              initialCourseId: data.initialCourseId,
+              initialOrderInCourse: data.initialOrderInCourse,
+              initialDifficulty: data.initialDifficulty,
+              initialStatus: data.initialStatus,
+              courseProgressCourseId: data.courseProgressCourseId,
+              courseProgressLevelId: data.courseProgressLevelId,
+            ),
           );
         }
         return _errorRoute(
@@ -132,6 +149,8 @@ class AppRouter {
               initialOrderInCourse: data.initialOrderInCourse,
               initialDifficulty: data.initialDifficulty,
               initialStatus: data.initialStatus,
+              courseProgressCourseId: data.courseProgressCourseId,
+              courseProgressLevelId: data.courseProgressLevelId,
             ),
           );
         }
@@ -155,6 +174,8 @@ class AppRouter {
               initialOrderInCourse: data.initialOrderInCourse,
               initialDifficulty: data.initialDifficulty,
               initialStatus: data.initialStatus,
+              courseProgressCourseId: data.courseProgressCourseId,
+              courseProgressLevelId: data.courseProgressLevelId,
             ),
           );
         }

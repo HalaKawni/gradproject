@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -39,10 +41,12 @@ class FourthDemoController extends ChangeNotifier {
   String? codeError;
   List<GameDiagnostic> diagnostics = const <GameDiagnostic>[];
   String? draggingSpriteId;
+  String? draggingWidgetId;
   final GameParser _parser = const GameParser();
   final GameRuntime _runtime = const GameRuntime();
   final Map<String, _SpriteMotion> _motions = <String, _SpriteMotion>{};
   final Map<String, _PhysicsBody> _physicsBodies = <String, _PhysicsBody>{};
+  Map<String, AudioPlayer>? _soundPlayers;
   Map<String, _SpriteSpeech>? _speechBubbles;
   final Set<LogicalKeyboardKey> _pressedKeys = <LogicalKeyboardKey>{};
   String? _continuousHorizontalSpriteId;
@@ -52,6 +56,20 @@ class FourthDemoController extends ChangeNotifier {
   int _instructionCount = 0;
 
   FourthDemoSprite? get selectedSprite => project.selectedSprite;
+
+  Map<String, AudioPlayer> get _activeSoundPlayers {
+    return _soundPlayers ??= <String, AudioPlayer>{};
+  }
+
+  @override
+  void dispose() {
+    _stopAllSounds();
+    for (final player in _activeSoundPlayers.values) {
+      unawaited(player.dispose());
+    }
+    _activeSoundPlayers.clear();
+    super.dispose();
+  }
 
   bool isSpriteWalking(FourthDemoSprite sprite) {
     if (_isAirborne(sprite)) {
@@ -256,12 +274,14 @@ class FourthDemoController extends ChangeNotifier {
   }
 
   void _clearRuntimeState() {
+    _stopAllSounds();
     _motions.clear();
     _physicsBodies.clear();
     _activeSpeechBubbles.clear();
     _pressedKeys.clear();
     _loopSpriteVariables.clear();
     draggingSpriteId = null;
+    draggingWidgetId = null;
     _stopContinuousHorizontalMovement();
   }
 
@@ -289,6 +309,11 @@ class FourthDemoController extends ChangeNotifier {
 
   void handleClick(Offset worldPosition) {
     if (!isPlaying) {
+      return;
+    }
+    final widget = _widgetAt(worldPosition);
+    if (widget != null) {
+      _handleWidgetClick(widget, worldPosition);
       return;
     }
     final hit = _spriteAt(worldPosition);
@@ -339,6 +364,7 @@ class FourthDemoController extends ChangeNotifier {
     _advancePhysics(dt);
     _advanceContinuousHorizontalMovement(dt);
     _advanceSpeechBubbles(dt);
+    _advanceWidgets(dt);
     _runCollisionHandlers();
     _runWorldBoundsHandlers();
     _runHandlers('onUpdate');
@@ -350,14 +376,35 @@ class FourthDemoController extends ChangeNotifier {
         stageTool != FourthDemoStageTool.select) {
       return;
     }
+    if (!isPlaying) {
+      final widget = _widgetAt(worldPosition);
+      if (widget != null) {
+        draggingWidgetId = widget.id;
+        draggingSpriteId = null;
+        return;
+      }
+    }
     final hit = _spriteAt(worldPosition);
     draggingSpriteId = hit?.id;
+    draggingWidgetId = null;
     if (hit != null && !isPlaying) {
       selectSprite(hit.id);
     }
   }
 
   void dragTo(Offset worldPosition) {
+    final widgetId = draggingWidgetId;
+    if (widgetId != null) {
+      final widgets = project.widgets.map((widget) {
+        if (widget.id != widgetId) {
+          return widget;
+        }
+        return _moveWidgetTo(widget, worldPosition);
+      }).toList();
+      project = project.copyWith(widgets: widgets);
+      return;
+    }
+
     final id = draggingSpriteId;
     if (id == null) {
       return;
@@ -383,6 +430,7 @@ class FourthDemoController extends ChangeNotifier {
       _runHandlers('onDragEnd', eventSpriteId: id);
     }
     draggingSpriteId = null;
+    draggingWidgetId = null;
     notifyListeners();
   }
 
@@ -415,8 +463,16 @@ class FourthDemoController extends ChangeNotifier {
     if (_continuousHorizontalSpriteId == id) {
       _stopContinuousHorizontalMovement();
     }
+    var settings = project.settings;
+    if (settings.cameraTargetId == id ||
+        !sprites.any((sprite) => sprite.id == settings.cameraTargetId)) {
+      settings = settings.copyWith(
+        cameraTargetId: sprites.isEmpty ? '' : sprites.first.id,
+      );
+    }
     project = project.copyWith(
       sprites: sprites,
+      settings: settings,
       codeBySpriteId: code,
       selectedSpriteId: sprites.isEmpty ? '' : sprites.first.id,
     );
@@ -523,8 +579,8 @@ class FourthDemoController extends ChangeNotifier {
       id: id,
       name: _defaultWidgetName(type),
       type: type,
-      x: 18,
-      y: 18 + project.widgets.length * 34,
+      x: 200,
+      y: 150,
       text: type == FourthDemoWidgetKind.counter
           ? 'Score'
           : _defaultWidgetName(type),
@@ -950,8 +1006,84 @@ class FourthDemoController extends ChangeNotifier {
         statusMessage = 'Background set to ${action.text}.';
         notifyListeners();
         return true;
+      case FourthDemoActionType.setWorldWidth:
+        project = project.copyWith(
+          settings: project.settings.copyWith(
+            worldWidth: math.max(100, action.amount),
+          ),
+        );
+        notifyListeners();
+        return true;
+      case FourthDemoActionType.setWorldHeight:
+        project = project.copyWith(
+          settings: project.settings.copyWith(
+            worldHeight: math.max(100, action.amount),
+          ),
+        );
+        notifyListeners();
+        return true;
+      case FourthDemoActionType.setWorldSize:
+        project = project.copyWith(
+          settings: project.settings.copyWith(
+            worldWidth: math.max(100, action.amount),
+            worldHeight: math.max(100, double.tryParse(action.text) ?? 100),
+          ),
+        );
+        notifyListeners();
+        return true;
+      case FourthDemoActionType.setGravity:
+        project = project.copyWith(
+          settings: project.settings.copyWith(gravity: action.amount),
+        );
+        notifyListeners();
+        return true;
+      case FourthDemoActionType.setPhysics:
+        final mode = FourthDemoPhysicsMode.values
+            .where((item) => item.name == action.text.trim().toLowerCase())
+            .firstOrNull;
+        if (mode == null) {
+          _runtimeError(
+            'Physics mode "${action.text}" was not found.',
+            action,
+            hint:
+                'Use one of: ${FourthDemoPhysicsMode.values.map((mode) => mode.name).join(', ')}.',
+          );
+          return false;
+        }
+        project = project.copyWith(
+          settings: project.settings.copyWith(physicsMode: mode),
+        );
+        notifyListeners();
+        return true;
+      case FourthDemoActionType.setCameraTarget:
+        final target = _normalizeSpriteLookup(action.text);
+        final targetExists = project.sprites.any(
+          (sprite) =>
+              _normalizeSpriteLookup(sprite.id) == target ||
+              _normalizeSpriteLookup(sprite.name) == target,
+        );
+        if (!targetExists) {
+          _runtimeError(
+            'Sprite "${action.text}" was not found.',
+            action,
+            hint: 'Check the sprite name in the Sprites panel.',
+          );
+          return false;
+        }
+        project = project.copyWith(
+          settings: project.settings.copyWith(cameraTargetId: action.text),
+        );
+        notifyListeners();
+        return true;
       default:
         break;
+    }
+
+    if (_isWidgetAction(action.type)) {
+      return _runWidgetAction(action);
+    }
+    if (_isSoundAction(action.type)) {
+      return _runSoundAction(action);
     }
 
     final index = _spriteIndexForAction(spriteId, action);
@@ -1086,11 +1218,42 @@ class FourthDemoController extends ChangeNotifier {
       case FourthDemoActionType.ifTouching:
       case FourthDemoActionType.ifCondition:
       case FourthDemoActionType.setBackground:
+      case FourthDemoActionType.setWorldWidth:
+      case FourthDemoActionType.setWorldHeight:
+      case FourthDemoActionType.setWorldSize:
+      case FourthDemoActionType.setGravity:
+      case FourthDemoActionType.setPhysics:
+      case FourthDemoActionType.setCameraTarget:
       case FourthDemoActionType.getX:
       case FourthDemoActionType.getY:
       case FourthDemoActionType.getRotation:
       case FourthDemoActionType.getDistanceFrom:
       case FourthDemoActionType.getScale:
+      case FourthDemoActionType.widgetShow:
+      case FourthDemoActionType.widgetHide:
+      case FourthDemoActionType.widgetSetText:
+      case FourthDemoActionType.widgetSetX:
+      case FourthDemoActionType.widgetSetY:
+      case FourthDemoActionType.widgetSetOpacity:
+      case FourthDemoActionType.widgetSetValue:
+      case FourthDemoActionType.widgetAdd:
+      case FourthDemoActionType.widgetSubtract:
+      case FourthDemoActionType.widgetReset:
+      case FourthDemoActionType.widgetAppend:
+      case FourthDemoActionType.widgetClear:
+      case FourthDemoActionType.widgetStart:
+      case FourthDemoActionType.widgetStop:
+      case FourthDemoActionType.widgetSetDuration:
+      case FourthDemoActionType.widgetEnable:
+      case FourthDemoActionType.widgetDisable:
+      case FourthDemoActionType.widgetSetTitle:
+      case FourthDemoActionType.widgetSetButtonText:
+      case FourthDemoActionType.soundPlay:
+      case FourthDemoActionType.soundStop:
+      case FourthDemoActionType.soundPause:
+      case FourthDemoActionType.soundResume:
+      case FourthDemoActionType.soundSetVolume:
+      case FourthDemoActionType.soundSetLoop:
         statusMessage = 'That block is saved for the next lesson.';
         shouldNotify = true;
     }
@@ -1101,6 +1264,513 @@ class FourthDemoController extends ChangeNotifier {
       notifyListeners();
     }
     return true;
+  }
+
+  bool _runWidgetAction(FourthDemoAction action) {
+    final index = _widgetIndexForReceiver(action.receiver);
+    if (index == -1) {
+      _runtimeError(
+        'Widget "${action.receiver}" was not found.',
+        action,
+        hint: 'Check the widget name in the Widgets panel.',
+      );
+      return false;
+    }
+
+    final widget = project.widgets[index];
+    FourthDemoScreenWidget next = widget;
+    switch (action.type) {
+      case FourthDemoActionType.widgetShow:
+        next = widget.copyWith(visible: true);
+      case FourthDemoActionType.widgetHide:
+        next = widget.copyWith(visible: false);
+      case FourthDemoActionType.widgetSetText:
+        next = widget.copyWith(text: action.text);
+      case FourthDemoActionType.widgetSetX:
+        next = widget.copyWith(
+          x: action.amount.clamp(0, project.settings.worldWidth).toDouble(),
+        );
+      case FourthDemoActionType.widgetSetY:
+        next = widget.copyWith(
+          y: action.amount.clamp(0, project.settings.worldHeight).toDouble(),
+        );
+      case FourthDemoActionType.widgetSetOpacity:
+        next = widget.copyWith(opacity: action.amount.clamp(0, 1).toDouble());
+      case FourthDemoActionType.widgetSetValue:
+        if (!_widgetSupportsValue(widget)) {
+          _runtimeError(
+            'Command "setValue" only works on counter, timer, and clock widgets.',
+            action,
+          );
+          return false;
+        }
+        next = widget.copyWith(value: math.max(0, action.amount));
+      case FourthDemoActionType.widgetAdd:
+        if (widget.type != FourthDemoWidgetKind.counter) {
+          _runtimeError('Command "add" only works on counter widgets.', action);
+          return false;
+        }
+        next = widget.copyWith(value: widget.value + action.amount);
+      case FourthDemoActionType.widgetSubtract:
+        if (widget.type != FourthDemoWidgetKind.counter) {
+          _runtimeError(
+            'Command "subtract" only works on counter widgets.',
+            action,
+          );
+          return false;
+        }
+        next = widget.copyWith(value: widget.value - action.amount);
+      case FourthDemoActionType.widgetReset:
+        next = switch (widget.type) {
+          FourthDemoWidgetKind.timer => widget.copyWith(
+            value: widget.durationSeconds.toDouble(),
+            running: false,
+          ),
+          FourthDemoWidgetKind.clock => widget.copyWith(
+            value: 0,
+            running: false,
+          ),
+          FourthDemoWidgetKind.counter => widget.copyWith(value: 0),
+          _ => widget.copyWith(value: 0),
+        };
+      case FourthDemoActionType.widgetAppend:
+        if (widget.type != FourthDemoWidgetKind.text) {
+          _runtimeError('Command "append" only works on text widgets.', action);
+          return false;
+        }
+        next = widget.copyWith(text: '${widget.text}${action.text}');
+      case FourthDemoActionType.widgetClear:
+        if (widget.type != FourthDemoWidgetKind.text) {
+          _runtimeError('Command "clear" only works on text widgets.', action);
+          return false;
+        }
+        next = widget.copyWith(text: '');
+      case FourthDemoActionType.widgetStart:
+        if (widget.type != FourthDemoWidgetKind.timer &&
+            widget.type != FourthDemoWidgetKind.clock) {
+          _runtimeError(
+            'Command "start" only works on timer and clock widgets.',
+            action,
+          );
+          return false;
+        }
+        if (widget.type == FourthDemoWidgetKind.timer &&
+            widget.durationSeconds <= 0) {
+          _runtimeError('Timer "${widget.name}" has no duration.', action);
+          return false;
+        }
+        if (widget.running &&
+            (widget.type != FourthDemoWidgetKind.timer || widget.value > 0)) {
+          return true;
+        }
+        next = widget.copyWith(
+          running: true,
+          value: widget.type == FourthDemoWidgetKind.timer && widget.value <= 0
+              ? widget.durationSeconds.toDouble()
+              : widget.value,
+        );
+      case FourthDemoActionType.widgetStop:
+        if (widget.type != FourthDemoWidgetKind.timer &&
+            widget.type != FourthDemoWidgetKind.clock) {
+          _runtimeError(
+            'Command "stop" only works on timer and clock widgets.',
+            action,
+          );
+          return false;
+        }
+        next = widget.copyWith(running: false);
+      case FourthDemoActionType.widgetSetDuration:
+        if (widget.type != FourthDemoWidgetKind.timer) {
+          _runtimeError(
+            'Command "setDuration" only works on timer widgets.',
+            action,
+          );
+          return false;
+        }
+        final duration = math.max(0, action.amount).round();
+        next = widget.copyWith(
+          durationSeconds: duration,
+          value: duration.toDouble(),
+        );
+      case FourthDemoActionType.widgetEnable:
+        next = widget.copyWith(enabled: true);
+      case FourthDemoActionType.widgetDisable:
+        next = widget.copyWith(enabled: false);
+      case FourthDemoActionType.widgetSetTitle:
+        if (widget.type != FourthDemoWidgetKind.dialog) {
+          _runtimeError(
+            'Command "setTitle" only works on dialog widgets.',
+            action,
+          );
+          return false;
+        }
+        next = widget.copyWith(title: action.text);
+      case FourthDemoActionType.widgetSetButtonText:
+        if (widget.type != FourthDemoWidgetKind.dialog) {
+          _runtimeError(
+            'Command "setButtonText" only works on dialog widgets.',
+            action,
+          );
+          return false;
+        }
+        next = widget.copyWith(buttonText: action.text);
+      default:
+        return false;
+    }
+
+    final widgets = List<FourthDemoScreenWidget>.from(project.widgets)
+      ..[index] = next;
+    project = project.copyWith(widgets: widgets);
+    notifyListeners();
+    return true;
+  }
+
+  bool _isWidgetAction(FourthDemoActionType type) {
+    return switch (type) {
+      FourthDemoActionType.widgetShow ||
+      FourthDemoActionType.widgetHide ||
+      FourthDemoActionType.widgetSetText ||
+      FourthDemoActionType.widgetSetX ||
+      FourthDemoActionType.widgetSetY ||
+      FourthDemoActionType.widgetSetOpacity ||
+      FourthDemoActionType.widgetSetValue ||
+      FourthDemoActionType.widgetAdd ||
+      FourthDemoActionType.widgetSubtract ||
+      FourthDemoActionType.widgetReset ||
+      FourthDemoActionType.widgetAppend ||
+      FourthDemoActionType.widgetClear ||
+      FourthDemoActionType.widgetStart ||
+      FourthDemoActionType.widgetStop ||
+      FourthDemoActionType.widgetSetDuration ||
+      FourthDemoActionType.widgetEnable ||
+      FourthDemoActionType.widgetDisable ||
+      FourthDemoActionType.widgetSetTitle ||
+      FourthDemoActionType.widgetSetButtonText => true,
+      _ => false,
+    };
+  }
+
+  bool _isSoundAction(FourthDemoActionType type) {
+    return switch (type) {
+      FourthDemoActionType.soundPlay ||
+      FourthDemoActionType.soundStop ||
+      FourthDemoActionType.soundPause ||
+      FourthDemoActionType.soundResume ||
+      FourthDemoActionType.soundSetVolume ||
+      FourthDemoActionType.soundSetLoop => true,
+      _ => false,
+    };
+  }
+
+  bool _runSoundAction(FourthDemoAction action) {
+    final index = _soundIndexForReceiver(action.receiver);
+    if (index == -1) {
+      _runtimeError(
+        'Sound "${action.receiver}" was not found.',
+        action,
+        hint: 'Check the sound name in the Sounds panel.',
+      );
+      return false;
+    }
+
+    final sound = project.sounds[index];
+    switch (action.type) {
+      case FourthDemoActionType.soundPlay:
+        unawaited(_playSound(sound, action));
+      case FourthDemoActionType.soundStop:
+        unawaited(_activeSoundPlayers[sound.id]?.stop());
+        _updateSoundAt(index, sound.copyWith(isPlaying: false));
+      case FourthDemoActionType.soundPause:
+        unawaited(_activeSoundPlayers[sound.id]?.pause());
+        _updateSoundAt(index, sound.copyWith(isPlaying: false));
+      case FourthDemoActionType.soundResume:
+        unawaited(_activeSoundPlayers[sound.id]?.resume());
+        _updateSoundAt(index, sound.copyWith(isPlaying: true));
+      case FourthDemoActionType.soundSetVolume:
+        final volume = action.amount.clamp(0.0, 1.0).toDouble();
+        unawaited(_activeSoundPlayers[sound.id]?.setVolume(volume));
+        _updateSoundAt(index, sound.copyWith(volume: volume));
+      case FourthDemoActionType.soundSetLoop:
+        final loop = const <String>{'true', 'yes'}.contains(action.text);
+        final player = _activeSoundPlayers[sound.id];
+        if (player != null) {
+          unawaited(
+            player.setReleaseMode(
+              loop ? ReleaseMode.loop : ReleaseMode.release,
+            ),
+          );
+        }
+        _updateSoundAt(index, sound.copyWith(loop: loop));
+      default:
+        return false;
+    }
+    return true;
+  }
+
+  Future<void> _playSound(
+    FourthDemoSound sound,
+    FourthDemoAction action,
+  ) async {
+    try {
+      final player = _soundPlayerFor(sound);
+      await player.stop();
+      await player.setVolume(sound.volume.clamp(0.0, 1.0).toDouble());
+      await player.setReleaseMode(
+        sound.loop ? ReleaseMode.loop : ReleaseMode.release,
+      );
+      final audio = await _loadSoundAssetData(sound.assetPath);
+      final bytes = Uint8List.view(
+        audio.buffer,
+        audio.offsetInBytes,
+        audio.lengthInBytes,
+      );
+      await player.play(
+        BytesSource(bytes, mimeType: _audioMimeType(sound.assetPath)),
+      );
+      final index = _soundIndexForReceiver(sound.id);
+      if (index != -1) {
+        _updateSoundAt(index, project.sounds[index].copyWith(isPlaying: true));
+      }
+    } catch (_) {
+      _runtimeError(
+        'Could not play sound "${sound.name}".',
+        action,
+        hint: 'Check that the sound asset is available.',
+      );
+    }
+  }
+
+  AudioPlayer _soundPlayerFor(FourthDemoSound sound) {
+    return _activeSoundPlayers.putIfAbsent(sound.id, () {
+      final player = AudioPlayer();
+      player.onPlayerComplete.listen((_) {
+        final index = _soundIndexForReceiver(sound.id);
+        if (index != -1) {
+          _updateSoundAt(
+            index,
+            project.sounds[index].copyWith(isPlaying: false),
+          );
+        }
+      });
+      return player;
+    });
+  }
+
+  void _stopAllSounds() {
+    final playersById = _soundPlayers;
+    if (playersById == null || playersById.isEmpty) {
+      return;
+    }
+
+    final players = List<AudioPlayer>.from(playersById.values);
+    playersById.clear();
+
+    for (final player in players) {
+      unawaited(player.stop().catchError((_) {}));
+      unawaited(player.release().catchError((_) {}));
+      unawaited(player.dispose().catchError((_) {}));
+    }
+  }
+
+  int _soundIndexForReceiver(String receiver) {
+    final normalized = _normalizeSpriteLookup(receiver);
+    return project.sounds.indexWhere(
+      (sound) =>
+          _normalizeSpriteLookup(sound.id) == normalized ||
+          _normalizeSpriteLookup(sound.name) == normalized,
+    );
+  }
+
+  void _updateSoundAt(int index, FourthDemoSound sound) {
+    final sounds = List<FourthDemoSound>.from(project.sounds)..[index] = sound;
+    project = project.copyWith(sounds: sounds);
+    notifyListeners();
+  }
+
+  Future<ByteData> _loadSoundAssetData(String assetPath) async {
+    Object? lastError;
+    for (final candidate in _soundAssetBundleCandidates(assetPath)) {
+      try {
+        return await rootBundle.load(candidate);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError ?? FlutterError('Sound asset was not found: $assetPath');
+  }
+
+  List<String> _soundAssetBundleCandidates(String assetPath) {
+    final normalized = _normalizeSoundAssetPath(assetPath);
+    final withoutAssetPrefix = normalized.startsWith('assets/')
+        ? normalized.substring('assets/'.length)
+        : normalized;
+    final withAssetPrefix = withoutAssetPrefix.startsWith('assets/')
+        ? withoutAssetPrefix
+        : 'assets/$withoutAssetPrefix';
+    return <String>{normalized, withAssetPrefix, withoutAssetPrefix}.toList();
+  }
+
+  String _normalizeSoundAssetPath(String assetPath) {
+    var path = assetPath.trim().replaceAll('\\', '/');
+    for (var i = 0; i < 3; i++) {
+      try {
+        final decoded = Uri.decodeFull(path);
+        if (decoded == path) {
+          break;
+        }
+        path = decoded;
+      } on FormatException {
+        break;
+      }
+    }
+    return path.replaceAll('%20', ' ');
+  }
+
+  String _audioMimeType(String assetPath) {
+    final extension = assetPath.split('.').last.toLowerCase();
+    return switch (extension) {
+      'mp3' => 'audio/mpeg',
+      'wav' => 'audio/wav',
+      'ogg' => 'audio/ogg',
+      'm4a' => 'audio/mp4',
+      'aac' => 'audio/aac',
+      _ => 'application/octet-stream',
+    };
+  }
+
+  bool _widgetSupportsValue(FourthDemoScreenWidget widget) {
+    return widget.type == FourthDemoWidgetKind.counter ||
+        widget.type == FourthDemoWidgetKind.timer ||
+        widget.type == FourthDemoWidgetKind.clock;
+  }
+
+  int _widgetIndexForReceiver(String receiver) {
+    final normalized = _normalizeSpriteLookup(receiver);
+    return project.widgets.indexWhere(
+      (widget) =>
+          _normalizeSpriteLookup(widget.id) == normalized ||
+          _normalizeSpriteLookup(widget.name) == normalized,
+    );
+  }
+
+  FourthDemoScreenWidget? _widgetAt(Offset worldPosition) {
+    for (final widget in project.widgets.reversed) {
+      if (!widget.visible) {
+        continue;
+      }
+      if (_widgetRect(widget).contains(worldPosition)) {
+        return widget;
+      }
+    }
+    return null;
+  }
+
+  Rect _widgetRect(FourthDemoScreenWidget widget) {
+    return switch (widget.type) {
+      FourthDemoWidgetKind.dialog => Rect.fromLTWH(
+        widget.x,
+        widget.y,
+        260,
+        118,
+      ),
+      FourthDemoWidgetKind.button => Rect.fromLTWH(widget.x, widget.y, 120, 38),
+      _ => Rect.fromLTWH(widget.x - 8, widget.y - 5, 180, 34),
+    };
+  }
+
+  FourthDemoScreenWidget _moveWidgetTo(
+    FourthDemoScreenWidget widget,
+    Offset worldPosition,
+  ) {
+    final rect = _widgetRect(widget);
+    final anchorOffset = Offset(widget.x - rect.left, widget.y - rect.top);
+    final maxLeft = math.max(0.0, project.settings.worldWidth - rect.width);
+    final maxTop = math.max(0.0, project.settings.worldHeight - rect.height);
+    final left = (worldPosition.dx - rect.width / 2).clamp(0.0, maxLeft);
+    final top = (worldPosition.dy - rect.height / 2).clamp(0.0, maxTop);
+    return widget.copyWith(
+      x: left.toDouble() + anchorOffset.dx,
+      y: top.toDouble() + anchorOffset.dy,
+    );
+  }
+
+  void _handleWidgetClick(FourthDemoScreenWidget widget, Offset worldPosition) {
+    if (widget.type == FourthDemoWidgetKind.dialog) {
+      if (!_dialogButtonRect(widget).contains(worldPosition)) {
+        return;
+      }
+      project = project.copyWith(
+        widgets: project.widgets
+            .map(
+              (item) =>
+                  item.id == widget.id ? item.copyWith(visible: false) : item,
+            )
+            .toList(),
+      );
+      notifyListeners();
+      return;
+    }
+    if (widget.type != FourthDemoWidgetKind.button) {
+      return;
+    }
+    if (!widget.enabled) {
+      return;
+    }
+    _runHandlers('onWidgetClick', eventArgument: widget.name);
+    if (_normalizeSpriteLookup(widget.id) !=
+        _normalizeSpriteLookup(widget.name)) {
+      _runHandlers('onWidgetClick', eventArgument: widget.id);
+    }
+    _runHandlers('onButtonClick', eventArgument: widget.name);
+    if (_normalizeSpriteLookup(widget.id) !=
+        _normalizeSpriteLookup(widget.name)) {
+      _runHandlers('onButtonClick', eventArgument: widget.id);
+    }
+  }
+
+  Rect _dialogButtonRect(FourthDemoScreenWidget widget) {
+    final rect = _widgetRect(widget);
+    return Rect.fromCenter(
+      center: Offset(rect.center.dx, rect.bottom - 22),
+      width: 64,
+      height: 24,
+    );
+  }
+
+  void _advanceWidgets(double dt) {
+    var changed = false;
+    final endedTimers = <FourthDemoScreenWidget>[];
+    final widgets = project.widgets.map((widget) {
+      if (!widget.running) {
+        return widget;
+      }
+      if (widget.type == FourthDemoWidgetKind.timer) {
+        final nextValue = math.max(0.0, widget.value - dt);
+        if (nextValue <= 0 && widget.value > 0) {
+          changed = true;
+          endedTimers.add(widget);
+          return widget.copyWith(value: 0, running: false);
+        }
+        changed = true;
+        return widget.copyWith(value: nextValue);
+      }
+      if (widget.type == FourthDemoWidgetKind.clock) {
+        changed = true;
+        return widget.copyWith(value: widget.value + dt);
+      }
+      return widget;
+    }).toList();
+
+    if (changed) {
+      project = project.copyWith(widgets: widgets);
+    }
+    for (final widget in endedTimers) {
+      _runHandlers('onTimerEnd', eventArgument: widget.name);
+      if (_normalizeSpriteLookup(widget.id) !=
+          _normalizeSpriteLookup(widget.name)) {
+        _runHandlers('onTimerEnd', eventArgument: widget.id);
+      }
+    }
   }
 
   Offset _directionForRotation(double rotation) {

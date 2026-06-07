@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/builder/shared/widgets/course_level_nav_banner.dart';
 import 'package:flutter/material.dart';
 
 import '../models/block_template.dart';
@@ -27,6 +28,8 @@ class ScratchBuilderPage extends StatefulWidget {
   final int? initialOrderInCourse;
   final String initialDifficulty;
   final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 
   const ScratchBuilderPage({
     super.key,
@@ -40,6 +43,8 @@ class ScratchBuilderPage extends StatefulWidget {
     this.initialOrderInCourse,
     this.initialDifficulty = 'medium',
     this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   @override
@@ -67,6 +72,7 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
   bool isLoading = false;
   bool isRuntimeRunning = false;
   bool isRuntimePaused = false;
+  bool _hasSavedCourseProgress = false;
   String selectedSpriteId = 'polar';
   final Map<String, Object> runtimeVariables = {};
   final Set<String> _runtimeTriggeredTouchEvents = {};
@@ -676,6 +682,7 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
       _clearSpriteSpeech();
     });
 
+    var completedRun = false;
     try {
       for (final topBlock in topBlocks) {
         if (!isRuntimeRunning) {
@@ -690,6 +697,7 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
         await _executeStack(startId, runningSpriteId, depth: 0);
       }
       await _runTouchingEventStacks();
+      completedRun = true;
     } finally {
       if (mounted) {
         setState(() {
@@ -697,6 +705,34 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
           isRuntimePaused = false;
         });
       }
+      if (completedRun && widget.playMode) {
+        unawaited(_saveCourseProgress());
+      }
+    }
+  }
+
+  Future<void> _saveCourseProgress() async {
+    if (_hasSavedCourseProgress) {
+      return;
+    }
+    final courseId = widget.courseProgressCourseId;
+    final levelId = widget.courseProgressLevelId ?? _savedProjectId;
+    if (courseId == null ||
+        courseId.isEmpty ||
+        levelId == null ||
+        levelId.isEmpty) {
+      return;
+    }
+    _hasSavedCourseProgress = true;
+    final result = await ApiService.completePublicCourseLevel(
+      authToken: widget.session.token,
+      courseId: courseId,
+      levelId: levelId,
+    );
+    if (result['success'] != true) {
+      _hasSavedCourseProgress = false;
+    } else if (mounted) {
+      setState(() {});
     }
   }
 
@@ -1891,6 +1927,17 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
                       onPublish: () => _saveProject(publish: true),
                       isSaving: isSaving,
                       playMode: widget.playMode,
+                      courseNavigator: widget.playMode
+                          ? CourseLevelNavBanner(
+                              session: widget.session,
+                              courseId: widget.courseProgressCourseId,
+                              currentLevelId:
+                                  widget.courseProgressLevelId ??
+                                  _savedProjectId,
+                              currentLevelSolved: _hasSavedCourseProgress,
+                              topBarMode: true,
+                            )
+                          : null,
                     ),
                     Expanded(
                       child: Row(

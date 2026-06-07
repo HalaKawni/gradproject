@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/saved_builder_project.dart';
 
 enum _GameCreatorOption { scratch, frontView, topView, fourthDemo }
@@ -32,6 +37,9 @@ class MyGamesPage extends StatefulWidget {
 }
 
 class _MyGamesPageState extends State<MyGamesPage> {
+  static const double _cardWidth = 240;
+  static const double _cardHeight = 250;
+
   bool isLoading = true;
   String? errorMessage;
   List<SavedBuilderProject> projects = const [];
@@ -113,6 +121,8 @@ class _MyGamesPageState extends State<MyGamesPage> {
         ? AppRoutes.topViewBuilder
         : project.isScratch
         ? AppRoutes.scratchBuilder
+        : project.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builder;
     final routeData = project.isTopView
         ? TopViewBuilderRouteData(
@@ -121,6 +131,11 @@ class _MyGamesPageState extends State<MyGamesPage> {
           )
         : project.isScratch
         ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+          )
+        : project.isFourthDemo
+        ? FourthDemoBuilderRouteData(
             session: widget.session,
             initialProjectId: project.id,
           )
@@ -143,6 +158,8 @@ class _MyGamesPageState extends State<MyGamesPage> {
         ? AppRoutes.topViewBuilder
         : project.isScratch
         ? AppRoutes.scratchBuilder
+        : project.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builderPlay;
     final routeData = project.isTopView
         ? TopViewBuilderRouteData(
@@ -154,6 +171,14 @@ class _MyGamesPageState extends State<MyGamesPage> {
           )
         : project.isScratch
         ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: project.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: project.title,
+          )
+        : project.isFourthDemo
+        ? FourthDemoBuilderRouteData(
             session: widget.session,
             initialProjectId: project.id,
             allowPublishedAccess: true,
@@ -296,28 +321,6 @@ class _MyGamesPageState extends State<MyGamesPage> {
           behavior: SnackBarBehavior.floating,
         ),
       );
-  }
-
-  String _buildSubtitle(SavedBuilderProject project) {
-    final parts = <String>['Status: ${project.status}'];
-
-    if (project.updatedAt != null) {
-      final localTime = project.updatedAt!.toLocal();
-      parts.add(
-        'Updated ${localTime.year}-${_twoDigits(localTime.month)}-${_twoDigits(localTime.day)} '
-        '${_twoDigits(localTime.hour)}:${_twoDigits(localTime.minute)}',
-      );
-    }
-
-    if (project.description.isNotEmpty) {
-      parts.add(project.description);
-    }
-
-    return parts.join(' | ');
-  }
-
-  String _twoDigits(int value) {
-    return value.toString().padLeft(2, '0');
   }
 
   void _openFrontViewBuilder(BuildContext context) {
@@ -469,57 +472,307 @@ class _MyGamesPageState extends State<MyGamesPage> {
               );
             }
 
-            return ListView.separated(
+            return GridView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: _cardWidth,
+                mainAxisExtent: _cardHeight,
+                mainAxisSpacing: 18,
+                crossAxisSpacing: 18,
+              ),
               itemCount: projects.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final project = projects[index];
                 final isDeleting = deletingProjectIds.contains(project.id);
 
-                return Card(
-                  child: ListTile(
-                    title: Text(project.title),
-                    subtitle: Text(_buildSubtitle(project)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          widget.openProjectOnTap
-                              ? Icons.chevron_right
-                              : widget.playProjectOnTap
-                              ? Icons.play_circle_outline
-                              : Icons.public_outlined,
-                        ),
-                        const SizedBox(width: 4),
-                        if (isDeleting)
-                          const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: Padding(
-                              padding: EdgeInsets.all(2),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                              ),
-                            ),
-                          )
-                        else
-                          IconButton(
-                            tooltip: 'Delete game',
-                            onPressed: () => _confirmDeleteProject(project),
-                            icon: const Icon(Icons.delete_outline),
-                          ),
-                      ],
-                    ),
-                    onTap: isDeleting
-                        ? null
-                        : () => _handleProjectPressed(project),
-                  ),
+                return _MyGameProjectCard(
+                  title: project.title,
+                  description: project.description,
+                  builderTypeLabel: _builderTypeLabel(project),
+                  imageBase64: project.coverImageBase64,
+                  coverFrameScale: project.coverFrameScale,
+                  coverFrameOffsetX: project.coverFrameOffsetX,
+                  coverFrameOffsetY: project.coverFrameOffsetY,
+                  isPublished: project.isPublished,
+                  isDeleting: isDeleting,
+                  actionIcon: widget.playProjectOnTap
+                      ? Icons.play_circle_outline_rounded
+                      : Icons.chevron_right_rounded,
+                  onTap: isDeleting
+                      ? null
+                      : () => _handleProjectPressed(project),
+                  onDelete: isDeleting
+                      ? null
+                      : () => _confirmDeleteProject(project),
                 );
               },
             );
           },
+        ),
+      ),
+    );
+  }
+
+  String _builderTypeLabel(SavedBuilderProject project) {
+    if (project.isTopView) {
+      return 'Top View';
+    }
+    if (project.isScratch) {
+      return 'Scratch';
+    }
+    if (project.isFourthDemo) {
+      return 'Fourth Demo';
+    }
+    return 'Front View';
+  }
+}
+
+class _MyGameProjectCard extends StatefulWidget {
+  const _MyGameProjectCard({
+    required this.title,
+    required this.description,
+    required this.builderTypeLabel,
+    required this.isPublished,
+    required this.isDeleting,
+    required this.actionIcon,
+    required this.onTap,
+    required this.onDelete,
+    this.imageBase64,
+    this.coverFrameScale = 1,
+    this.coverFrameOffsetX = 0,
+    this.coverFrameOffsetY = 0,
+  });
+
+  final String title;
+  final String description;
+  final String builderTypeLabel;
+  final String? imageBase64;
+  final double coverFrameScale;
+  final double coverFrameOffsetX;
+  final double coverFrameOffsetY;
+  final bool isPublished;
+  final bool isDeleting;
+  final IconData actionIcon;
+  final VoidCallback? onTap;
+  final VoidCallback? onDelete;
+
+  @override
+  State<_MyGameProjectCard> createState() => _MyGameProjectCardState();
+}
+
+class _MyGameProjectCardState extends State<_MyGameProjectCard> {
+  bool _hovered = false;
+
+  void _setHovered(bool value) {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _hovered = value);
+  }
+
+  Uint8List? _safeDecodeBase64(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Widget _fallbackHeader() {
+    return Container(
+      height: 120,
+      width: double.infinity,
+      color: const Color(0xFF4DD0C4),
+      child: Center(
+        child: Icon(
+          Icons.videogame_asset_rounded,
+          size: 38,
+          color: Colors.white.withValues(alpha: 0.9),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      cursor: widget.onTap == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: _MyGamesPageState._cardWidth,
+          height: _MyGamesPageState._cardHeight,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: _hovered && widget.onTap != null
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.07),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+                child: SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: widget.imageBase64 != null
+                      ? FramedImagePreview(
+                          bytes: _safeDecodeBase64(widget.imageBase64),
+                          scale: widget.coverFrameScale,
+                          offsetX: widget.coverFrameOffsetX,
+                          offsetY: widget.coverFrameOffsetY,
+                          placeholderIcon: Icons.videogame_asset_rounded,
+                        )
+                      : _fallbackHeader(),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.title,
+                              style: GoogleFonts.montserrat(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFF222222),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: widget.isPublished
+                                  ? const Color(0xFF4DD0C4)
+                                  : const Color(0xFFFFC83D),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              widget.isPublished ? 'Published' : 'Draft',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: widget.isPublished
+                                    ? Colors.white
+                                    : const Color(0xFF1A1A2E),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (widget.description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.description,
+                          style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            color: const Color(0xFF888888),
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const Spacer(),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.layers_outlined,
+                            size: 14,
+                            color: Color(0xFF888888),
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              widget.builderTypeLabel,
+                              style: GoogleFonts.nunito(
+                                fontSize: 12,
+                                color: const Color(0xFF888888),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (widget.isDeleting)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else ...[
+                            IconButton(
+                              tooltip: 'Open game',
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: widget.onTap,
+                              icon: Icon(
+                                widget.actionIcon,
+                                size: 20,
+                                color: const Color(0xFF4DD0C4),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Delete game',
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                              padding: EdgeInsets.zero,
+                              onPressed: widget.onDelete,
+                              icon: const Icon(
+                                Icons.settings_rounded,
+                                size: 18,
+                                color: Color(0xFFCCCCCC),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

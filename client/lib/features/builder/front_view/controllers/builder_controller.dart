@@ -15,6 +15,7 @@ import '../models/tile_data.dart';
 import '../shared/builder_character.dart';
 import '../shared/builder_collectable.dart';
 import '../shared/builder_tool.dart';
+import '../../shared/level_score.dart';
 
 class BuilderController extends ChangeNotifier {
   static const int _worldExpansionChunk = 8;
@@ -73,6 +74,16 @@ class BuilderController extends ChangeNotifier {
 
   int get collectedCollectableCount =>
       playbackState?.collectedCollectableIds.length ?? 0;
+
+  int get totalLevelScore {
+    var total = 0;
+    for (final entity in project.entities) {
+      if (entity.type == 'collectable' || entity.type == 'goal') {
+        total += scoreForEntity(entity);
+      }
+    }
+    return total;
+  }
 
   String get suggestedDifficulty =>
       _difficultyForScore(_calculateDifficultyScore());
@@ -304,6 +315,15 @@ class BuilderController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDescription(String description) {
+    if (project.description == description) {
+      return;
+    }
+
+    project = project.copyWith(description: description);
+    notifyListeners();
+  }
+
   void setPlayerInitialDirection(String direction) {
     final normalizedDirection = _normalizeFacingDirection(direction);
     final playerStart = _playerStartEntity;
@@ -376,6 +396,59 @@ class BuilderController extends ChangeNotifier {
 
     _clearPlaybackPreview();
     _pendingCollectableItemId = normalizedCollectableId;
+    notifyListeners();
+  }
+
+  int scoreForEntity(EntityData entity) {
+    return readScoreValue(
+      entity.config['score'],
+      fallback: entity.type == 'goal'
+          ? defaultGoalScore
+          : defaultCollectableScore,
+    );
+  }
+
+  int scoreForCollectedCollectables(Set<String> collectedIds) {
+    var score = 0;
+    for (final entity in project.entities) {
+      if (entity.type == 'collectable' && collectedIds.contains(entity.id)) {
+        score += scoreForEntity(entity);
+      }
+    }
+    return score;
+  }
+
+  int get goalScore {
+    final goal = _goalEntity;
+    return goal == null ? 0 : scoreForEntity(goal);
+  }
+
+  void setEntityScore(String entityId, int score) {
+    if (isPlaybackRunning) {
+      return;
+    }
+    final normalizedScore = score < 0 ? 0 : score;
+    var changed = false;
+    final updatedEntities = project.entities.map((entity) {
+      if (entity.id != entityId ||
+          (entity.type != 'collectable' && entity.type != 'goal')) {
+        return entity;
+      }
+      if (scoreForEntity(entity) == normalizedScore) {
+        return entity;
+      }
+      changed = true;
+      return entity.copyWith(
+        config: <String, dynamic>{...entity.config, 'score': normalizedScore},
+      );
+    }).toList();
+
+    if (!changed) {
+      return;
+    }
+
+    _clearPlaybackPreview();
+    project = project.copyWith(entities: updatedEntities);
     notifyListeners();
   }
 
@@ -466,11 +539,19 @@ class BuilderController extends ChangeNotifier {
           'collectable',
           x,
           y,
-          config: <String, dynamic>{'item': collectableItemId},
+          config: <String, dynamic>{
+            'item': collectableItemId,
+            'score': defaultCollectableScore,
+          },
         );
         break;
       case BuilderTool.goal:
-        _placeUniqueEntity('goal', x, y);
+        _placeUniqueEntity(
+          'goal',
+          x,
+          y,
+          config: const <String, dynamic>{'score': defaultGoalScore},
+        );
         break;
     }
 
@@ -802,7 +883,10 @@ class BuilderController extends ChangeNotifier {
           'collectable',
           x,
           y,
-          config: _customAssetReferenceConfig(asset),
+          config: <String, dynamic>{
+            ..._customAssetReferenceConfig(asset),
+            'score': defaultCollectableScore,
+          },
         );
         break;
       case CustomAssetType.goal:
@@ -810,7 +894,10 @@ class BuilderController extends ChangeNotifier {
           'goal',
           x,
           y,
-          config: _customAssetReferenceConfig(asset),
+          config: <String, dynamic>{
+            ..._customAssetReferenceConfig(asset),
+            'score': defaultGoalScore,
+          },
         );
         break;
       case CustomAssetType.background:
@@ -1842,6 +1929,17 @@ class BuilderController extends ChangeNotifier {
             'item': builderCollectableById(
               entity.config['item']?.toString(),
             ).id,
+            'score': scoreForEntity(entity),
+          },
+        );
+      }
+
+      if (normalizedType == 'goal') {
+        return entity.copyWith(
+          type: normalizedType,
+          config: <String, dynamic>{
+            ...entity.config,
+            'score': scoreForEntity(entity),
           },
         );
       }

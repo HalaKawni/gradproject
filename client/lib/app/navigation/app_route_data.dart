@@ -37,23 +37,45 @@ class BuilderPlayRouteData {
     required this.session,
     required this.projectId,
     this.initialTitle,
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   final AuthSession session;
   final String projectId;
   final String? initialTitle;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 }
 
 class FourthDemoBuilderRouteData {
   const FourthDemoBuilderRouteData({
     required this.session,
+    this.initialProjectId,
+    this.allowPublishedAccess = false,
+    this.playMode = false,
+    this.initialTitle,
+    this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
+    this.initialDifficulty = 'medium',
+    this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   final AuthSession session;
+  final String? initialProjectId;
+  final bool allowPublishedAccess;
+  final bool playMode;
+  final String? initialTitle;
+  final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
+  final String initialDifficulty;
+  final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 }
 
 class TopViewBuilderRouteData {
@@ -68,6 +90,8 @@ class TopViewBuilderRouteData {
     this.initialOrderInCourse,
     this.initialDifficulty = 'medium',
     this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   final AuthSession session;
@@ -80,6 +104,8 @@ class TopViewBuilderRouteData {
   final int? initialOrderInCourse;
   final String initialDifficulty;
   final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 }
 
 class ScratchBuilderRouteData {
@@ -94,6 +120,8 @@ class ScratchBuilderRouteData {
     this.initialOrderInCourse,
     this.initialDifficulty = 'medium',
     this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   final AuthSession session;
@@ -106,6 +134,8 @@ class ScratchBuilderRouteData {
   final int? initialOrderInCourse;
   final String initialDifficulty;
   final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 }
 
 class MyGamesRouteData {

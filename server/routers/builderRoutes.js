@@ -14,6 +14,7 @@ router.get('/assets/:id', uploadedAssetController.getAssetMetadata);
 router.put('/assets/:id', uploadedAssetController.updateAsset);
 router.delete('/assets/:id', uploadedAssetController.deleteAsset);
 router.post('/projects', builderController.createProject);
+router.patch('/projects/:id/settings', builderController.updateProjectSettings);
 router.put('/projects/:id', builderController.updateProject);
 router.delete('/projects/:id', builderController.deleteProject);
 router.get('/projects/published', builderController.getPublishedProjects);

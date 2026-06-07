@@ -2,7 +2,13 @@ const SlideCourseModel = require('../model/slideCourse.model');
 
 class CourseService {
   static async createCourse(userId, title, description, lessons, courseImageBase64) {
-    const course = new SlideCourseModel({ userId, title, description, lessons, courseImageBase64 });
+    const course = new SlideCourseModel({
+      userId,
+      title,
+      description,
+      lessons,
+      courseImageBase64,
+    });
     return await course.save();
   }
 

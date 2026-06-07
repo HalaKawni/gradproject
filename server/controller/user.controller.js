@@ -8,7 +8,17 @@ const buildAuthUserResponse = (user) => ({
     emailVerified: user.emailVerified,
     authProvider: user.authProvider,
     authProviders: user.authProviders,
-    lastSignInProvider: user.lastSignInProvider
+    lastSignInProvider: user.lastSignInProvider,
+    photoUrl: user.photoUrl,
+    profileAvatarType: user.profileAvatarType,
+    profileAvatarAssetPath: user.profileAvatarAssetPath,
+    profilePhotoBase64: user.profilePhotoBase64,
+    profilePhotoFrameScale: user.profilePhotoFrameScale,
+    profilePhotoFrameOffsetX: user.profilePhotoFrameOffsetX,
+    profilePhotoFrameOffsetY: user.profilePhotoFrameOffsetY,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    lastLoginAt: user.lastLoginAt
 });
 
 
@@ -123,13 +133,78 @@ exports.getProfile = async (req, res, next) => {
     try {
         res.json({
             status: true,
-            user: req.user
+            user: buildAuthUserResponse(req.user)
         });
     }
     catch (err) {
         res.status(500).json({
             status: false,
             error: "Failed to fetch profile"
+        });
+    }
+};
+
+exports.updateProfileAvatar = async (req, res, next) => {
+    try {
+        const {
+            profileAvatarType,
+            profileAvatarAssetPath,
+            profilePhotoBase64,
+            profilePhotoFrameScale,
+            profilePhotoFrameOffsetX,
+            profilePhotoFrameOffsetY
+        } = req.body;
+
+        if (!['asset', 'upload'].includes(profileAvatarType)) {
+            return res.status(400).json({
+                status: false,
+                error: "Profile avatar type must be asset or upload"
+            });
+        }
+
+        if (profileAvatarType === 'asset') {
+            if (!profileAvatarAssetPath || typeof profileAvatarAssetPath !== 'string') {
+                return res.status(400).json({
+                    status: false,
+                    error: "Profile avatar asset path is required"
+                });
+            }
+
+            req.user.profileAvatarType = 'asset';
+            req.user.profileAvatarAssetPath = profileAvatarAssetPath;
+            req.user.profilePhotoBase64 = undefined;
+            req.user.profilePhotoFrameScale = 1;
+            req.user.profilePhotoFrameOffsetX = 0;
+            req.user.profilePhotoFrameOffsetY = 0;
+            req.user.photoUrl = profileAvatarAssetPath;
+        } else {
+            if (!profilePhotoBase64 || typeof profilePhotoBase64 !== 'string') {
+                return res.status(400).json({
+                    status: false,
+                    error: "Profile photo data is required"
+                });
+            }
+
+            req.user.profileAvatarType = 'upload';
+            req.user.profilePhotoBase64 = profilePhotoBase64;
+            req.user.profilePhotoFrameScale = Number(profilePhotoFrameScale ?? 1);
+            req.user.profilePhotoFrameOffsetX = Number(profilePhotoFrameOffsetX ?? 0);
+            req.user.profilePhotoFrameOffsetY = Number(profilePhotoFrameOffsetY ?? 0);
+            req.user.photoUrl = undefined;
+        }
+
+        await req.user.save();
+
+        res.json({
+            status: true,
+            success: "Profile photo updated successfully",
+            user: buildAuthUserResponse(req.user)
+        });
+    }
+    catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Failed to update profile photo"
         });
     }
 };

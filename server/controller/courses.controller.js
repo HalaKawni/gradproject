@@ -27,7 +27,41 @@ async function getPublicCourseLevels(req, res) {
   }
 }
 
+async function getCourseProgress(req, res) {
+  try {
+    const progress = await coursesService.getCourseProgress(
+      req.params.courseId,
+      req.user._id
+    );
+    return res.json({ success: true, data: progress });
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
+async function completeCourseLevel(req, res) {
+  try {
+    const progress = await coursesService.completeCourseLevel(
+      req.params.courseId,
+      req.user._id,
+      req.params.levelId,
+      req.body || {}
+    );
+    return res.json({ success: true, data: progress });
+  } catch (error) {
+    return res.status(404).json({
+      success: false,
+      message: error.message,
+    });
+  }
+}
+
 module.exports = {
   getPublicCourses,
   getPublicCourseLevels,
+  getCourseProgress,
+  completeCourseLevel,
 };

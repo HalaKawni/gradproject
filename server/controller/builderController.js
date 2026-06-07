@@ -63,6 +63,36 @@ async function updateProject(req, res) {
   }
 }
 
+async function updateProjectSettings(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.updateProjectSettings(
+      id,
+      req.body,
+      req.user
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Project settings updated successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update project settings.',
+      error: error.message,
+    });
+  }
+}
+
 async function getProjectById(req, res) {
   try {
     const { id } = req.params;
@@ -176,6 +206,7 @@ async function deleteProject(req, res) {
 module.exports = {
   createProject,
   updateProject,
+  updateProjectSettings,
   getProjectById,
   getAllProjects,
   getPublishedProjects,

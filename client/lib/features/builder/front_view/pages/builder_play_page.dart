@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:client/core/models/auth_session.dart';
+import 'package:client/core/services/api_service.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../controllers/builder_controller.dart';
@@ -10,17 +13,26 @@ import '../models/builder_playback_state.dart';
 import '../models/builder_project.dart';
 import '../models/level_settings.dart';
 import '../models/logic_command.dart';
+import '../shared/builder_character.dart';
+import '../../shared/level_score.dart';
+import '../../shared/widgets/course_level_nav_banner.dart';
+import '../../shared/widgets/kids_top_bar_style.dart';
+import '../../shared/widgets/level_result_dialog.dart';
 
 class BuilderPlayPage extends StatefulWidget {
   final AuthSession session;
   final String projectId;
   final String? initialTitle;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 
   const BuilderPlayPage({
     super.key,
     required this.session,
     required this.projectId,
     this.initialTitle,
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   @override
@@ -28,25 +40,39 @@ class BuilderPlayPage extends StatefulWidget {
 }
 
 class _BuilderPlayPageState extends State<BuilderPlayPage> {
+  static const String _playPageBackgroundAssetPath =
+      'assets/game_builder/background/sequence_level.jpg';
+  static const String _playPageWebBackgroundPath =
+      'assets/game_builder/background/sequence_level.jpg';
   static const double _rootLogicLaneHeight = 54;
   static const double _logicDropSnapPadding = 30;
   static const double _logicGhostProbeYOffset = -18;
+  static const double _cameraFollowLerp = 0.32;
 
   late final BuilderController controller;
   late final BuilderGame game;
   late final ScrollController horizontalScrollController;
   late final ScrollController verticalScrollController;
   late final VoidCallback controllerListener;
+  Timer? cameraFollowTimer;
+  Timer? hintPulseTimer;
   final Map<_LogicDropTarget, GlobalKey> _logicDropTargetKeys =
       <_LogicDropTarget, GlobalKey>{};
+  List<LogicCommandNode> expectedSolutionCommands = const <LogicCommandNode>[];
 
   String? selectedSolutionCommandId;
   String? selectedLoopInsertionTargetId;
   bool hasPreparedLoadedProject = false;
   bool hasShownCompletionDialog = false;
+  bool hasShownInstructionDialog = false;
+  bool hasSavedCourseProgress = false;
+  bool isSavingCourseProgress = false;
   bool isLogicDragActive = false;
+  bool hintGlowOn = true;
+  LogicCommandType? pendingHintCommand;
   _LogicDragData? activeLogicDragData;
   _LogicDropTarget? proximityLogicDropTarget;
+  Size _actualViewportSize = Size.zero;
 
   @override
   void initState() {
@@ -62,11 +88,26 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     verticalScrollController = ScrollController();
     controllerListener = _handleControllerChanged;
     controller.addListener(controllerListener);
+    cameraFollowTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (controller.playbackState != null) {
+        _syncCameraToCharacter(defer: false, smooth: true);
+      }
+    });
+    hintPulseTimer = Timer.periodic(const Duration(milliseconds: 820), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        hintGlowOn = !hintGlowOn;
+      });
+    });
     _loadProject();
   }
 
   @override
   void dispose() {
+    cameraFollowTimer?.cancel();
+    hintPulseTimer?.cancel();
     horizontalScrollController.dispose();
     verticalScrollController.dispose();
     controller.removeListener(controllerListener);
@@ -77,8 +118,12 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
   Future<void> _loadProject() async {
     hasPreparedLoadedProject = false;
     hasShownCompletionDialog = false;
+    hasShownInstructionDialog = false;
+    hasSavedCourseProgress = false;
     selectedSolutionCommandId = null;
     selectedLoopInsertionTargetId = null;
+    pendingHintCommand = null;
+    expectedSolutionCommands = const <LogicCommandNode>[];
     await controller.loadProject(widget.projectId, allowPublishedAccess: true);
   }
 
@@ -86,12 +131,131 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     _syncSelectedSolutionCommandSelection();
     _prepareLoadedProjectForPlay();
     _handleCompletionState();
+    _syncCameraToCharacter(smooth: controller.playbackState != null);
 
     if (!mounted) {
       return;
     }
 
     setState(() {});
+  }
+
+  void _syncCameraToCharacter({bool defer = true, bool smooth = false}) {
+    if (!mounted) {
+      return;
+    }
+    final target = _characterCameraTarget();
+    if (target == null) {
+      return;
+    }
+    void syncNow() {
+      if (!mounted ||
+          !horizontalScrollController.hasClients ||
+          !verticalScrollController.hasClients) {
+        return;
+      }
+      final settings = controller.project.settings;
+      final tileSize = settings.tileSize;
+      final fallbackViewportWidth = math.min(
+        settings.viewportWidth,
+        settings.columns * tileSize,
+      );
+      final fallbackViewportHeight = math.min(
+        settings.viewportHeight,
+        settings.rows * tileSize,
+      );
+      final viewportWidth = _actualViewportSize.width > 0
+          ? _actualViewportSize.width
+          : fallbackViewportWidth;
+      final viewportHeight = _actualViewportSize.height > 0
+          ? _actualViewportSize.height
+          : fallbackViewportHeight;
+      final nextX = _cameraScrollAfterMidpoint(
+        targetCenter: target.dx,
+        viewportExtent: viewportWidth,
+        minScrollExtent: horizontalScrollController.position.minScrollExtent,
+        maxScrollExtent: horizontalScrollController.position.maxScrollExtent,
+      );
+      final nextY = _cameraScrollAfterMidpoint(
+        targetCenter: target.dy,
+        viewportExtent: viewportHeight,
+        minScrollExtent: verticalScrollController.position.minScrollExtent,
+        maxScrollExtent: verticalScrollController.position.maxScrollExtent,
+      );
+      _moveCameraAxis(
+        controller: horizontalScrollController,
+        target: nextX,
+        smooth: smooth,
+      );
+      _moveCameraAxis(
+        controller: verticalScrollController,
+        target: nextY,
+        smooth: smooth,
+      );
+    }
+
+    if (defer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => syncNow());
+    } else {
+      syncNow();
+    }
+  }
+
+  void _moveCameraAxis({
+    required ScrollController controller,
+    required double target,
+    required bool smooth,
+  }) {
+    final current = controller.offset;
+    final next = smooth
+        ? current + (target - current) * _cameraFollowLerp
+        : target;
+    final clamped = next
+        .clamp(
+          controller.position.minScrollExtent,
+          controller.position.maxScrollExtent,
+        )
+        .toDouble();
+    if ((clamped - current).abs() < 0.35) {
+      if ((target - current).abs() >= 0.35) {
+        controller.jumpTo(target);
+      }
+      return;
+    }
+    controller.jumpTo(clamped);
+  }
+
+  double _cameraScrollAfterMidpoint({
+    required double targetCenter,
+    required double viewportExtent,
+    required double minScrollExtent,
+    required double maxScrollExtent,
+  }) {
+    return (targetCenter - viewportExtent / 2)
+        .clamp(minScrollExtent, maxScrollExtent)
+        .toDouble();
+  }
+
+  Offset? _characterCameraTarget() {
+    final visualCenter = game.visualPlayerCenter;
+    if (visualCenter != null) {
+      return visualCenter;
+    }
+    final playbackState = controller.playbackState;
+    if (playbackState != null) {
+      final tileSize = controller.project.settings.tileSize;
+      return Offset(
+        (playbackState.playerX + 0.5) * tileSize,
+        (playbackState.playerY + 0.5) * tileSize,
+      );
+    }
+    for (final entity in controller.project.entities) {
+      if (entity.type == 'playerStart') {
+        final tileSize = controller.project.settings.tileSize;
+        return Offset((entity.x + 0.5) * tileSize, (entity.y + 0.5) * tileSize);
+      }
+    }
+    return null;
   }
 
   void _handleLogicDragStateChanged(bool isDragging) {
@@ -251,6 +415,12 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
 
     hasPreparedLoadedProject = true;
 
+    expectedSolutionCommands = controller.solutionCommands
+        .map((command) => LogicCommandNode.tryParse(command.toJson())!)
+        .toList(growable: false);
+
+    _maybeShowInstructionDialog();
+
     if (controller.solutionCommands.isEmpty) {
       return;
     }
@@ -264,10 +434,31 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     });
   }
 
+  void _maybeShowInstructionDialog() {
+    if (hasShownInstructionDialog) {
+      return;
+    }
+
+    final message = controller.project.description.trim();
+    if (message.isEmpty) {
+      return;
+    }
+
+    hasShownInstructionDialog = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _showInstructionDialog();
+    });
+  }
+
   void _handleCompletionState() {
     final playbackState = controller.playbackState;
 
-    if (playbackState?.hasSucceeded == true) {
+    if (playbackState != null &&
+        !playbackState.isPlaying &&
+        (playbackState.hasSucceeded || playbackState.hasFailed)) {
       if (hasShownCompletionDialog) {
         return;
       }
@@ -278,7 +469,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
           return;
         }
 
-        _showCompletionDialog(playbackState!);
+        _showResultDialog(playbackState);
       });
       return;
     }
@@ -316,6 +507,170 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     }
   }
 
+  Future<void> _showInstructionDialog() async {
+    final message = controller.project.description.trim();
+    if (message.isEmpty) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 440),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFCF2),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE6D8A8), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.14),
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: const Color(0xFFE3F2FF),
+                      child: ClipOval(child: _buildHelperAvatar(size: 48)),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'How to play',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFF3A241D),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE7E5D4)),
+                  ),
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 15,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF66B64A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: const Text('Got it'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHelperAvatar({double size = 56}) {
+    final character = builderCharacterById(controller.playerCharacterId);
+    return Image.asset(
+      character.idlePreviewAssetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.support_agent_rounded, size: size * 0.72);
+      },
+    );
+  }
+
+  LogicCommandType? _nextHintCommand() {
+    final expectedTokens = _flattenCommandTokens(expectedSolutionCommands);
+    if (expectedTokens.isEmpty) {
+      return null;
+    }
+
+    final userTokens = _flattenCommandTokens(controller.solutionCommands);
+    var index = 0;
+    while (index < expectedTokens.length &&
+        index < userTokens.length &&
+        expectedTokens[index] == userTokens[index]) {
+      index += 1;
+    }
+
+    if (index >= expectedTokens.length) {
+      return null;
+    }
+
+    final nextToken = expectedTokens[index];
+    return nextToken == 'loop'
+        ? null
+        : LogicCommandTypeExtension.fromString(nextToken);
+  }
+
+  void _requestHint() {
+    final nextHint = _nextHintCommand();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      pendingHintCommand = nextHint;
+    });
+  }
+
+  List<String> _flattenCommandTokens(List<LogicCommandNode> commands) {
+    final tokens = <String>[];
+
+    void visit(LogicCommandNode node) {
+      if (node.isLoop) {
+        tokens.add('loop');
+        for (final child in node.children) {
+          visit(child);
+        }
+        return;
+      }
+
+      final command = node.command;
+      if (command != null) {
+        tokens.add(command.value);
+      }
+    }
+
+    for (final command in commands) {
+      visit(command);
+    }
+    return tokens;
+  }
+
   void _setLogicSelection(String? commandId, {String? loopInsertionTargetId}) {
     selectedSolutionCommandId = commandId;
 
@@ -338,39 +693,89 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     selectedLoopInsertionTargetId = null;
   }
 
-  Future<void> _showCompletionDialog(BuilderPlaybackState playbackState) async {
-    final totalCollectables = controller.totalCollectableCount;
-    final collectedCollectables = playbackState.collectedCollectableIds.length;
-    final score = totalCollectables == 0
-        ? 100
-        : ((collectedCollectables / totalCollectables) * 100).round();
+  Future<void> _showResultDialog(BuilderPlaybackState playbackState) async {
+    final result = _buildScoreResult(playbackState);
+    if (result.success) {
+      await _saveCourseProgress(result);
+    }
+    if (!mounted) {
+      return;
+    }
+    final nextLevel = result.success
+        ? await loadNextCourseBuilderLevel(
+            session: widget.session,
+            courseId: widget.courseProgressCourseId,
+            currentLevelId: widget.courseProgressLevelId ?? widget.projectId,
+          )
+        : null;
+    if (!mounted) {
+      return;
+    }
 
-    await showDialog<void>(
+    await showLevelResultDialog(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Level Complete'),
-          content: Text(
-            totalCollectables == 0
-                ? 'You reached the goal. Score: $score%.'
-                : 'You reached the goal and collected $collectedCollectables of $totalCollectables collectables. Score: $score%.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                controller.resetPlaybackPreview();
-              },
-              child: const Text('Replay'),
-            ),
-          ],
-        );
+      success: result.success,
+      score: result.score,
+      totalScore: result.totalScore,
+      stars: result.stars,
+      onPlayAgain: () {
+        hasShownCompletionDialog = false;
+        controller.resetPlaybackPreview();
       },
+      onNextLevel: nextLevel == null
+          ? null
+          : () => openCourseBuilderLevel(
+              context: context,
+              session: widget.session,
+              courseId: widget.courseProgressCourseId!,
+              level: nextLevel,
+              replace: true,
+            ),
     );
+  }
+
+  LevelScoreResult _buildScoreResult(BuilderPlaybackState playbackState) {
+    final collectedScore = controller.scoreForCollectedCollectables(
+      playbackState.collectedCollectableIds,
+    );
+    final score =
+        collectedScore +
+        (playbackState.hasSucceeded ? controller.goalScore : 0);
+    final totalScore = controller.totalLevelScore;
+    return LevelScoreResult(
+      success: playbackState.hasSucceeded,
+      score: score,
+      totalScore: totalScore,
+      stars: starsForScore(score: score, totalScore: totalScore),
+    );
+  }
+
+  Future<void> _saveCourseProgress(LevelScoreResult result) async {
+    if (isSavingCourseProgress) {
+      return;
+    }
+    final courseId = widget.courseProgressCourseId;
+    final levelId = widget.courseProgressLevelId ?? widget.projectId;
+    if (courseId == null || courseId.isEmpty || levelId.isEmpty) {
+      return;
+    }
+    isSavingCourseProgress = true;
+    final apiResult = await ApiService.completePublicCourseLevel(
+      authToken: widget.session.token,
+      courseId: courseId,
+      levelId: levelId,
+      score: result.score,
+      totalScore: result.totalScore,
+      stars: result.stars,
+    );
+    isSavingCourseProgress = false;
+    if (apiResult['success'] != true) {
+      return;
+    } else if (mounted) {
+      setState(() {
+        hasSavedCourseProgress = true;
+      });
+    }
   }
 
   String get _pageTitle {
@@ -387,39 +792,72 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     return 'Play Level';
   }
 
+  ImageProvider<Object> get _playPageBackgroundImage {
+    if (kIsWeb) {
+      return const NetworkImage(_playPageWebBackgroundPath);
+    }
+    return const AssetImage(_playPageBackgroundAssetPath);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_pageTitle)),
+      appBar: AppBar(
+        toolbarHeight: KidsTopBarStyle.toolbarHeight,
+        backgroundColor: KidsTopBarStyle.background,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        bottom: KidsTopBarStyle.appBarBottom(),
+        title: Stack(
+          alignment: Alignment.center,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_pageTitle, style: KidsTopBarStyle.titleTextStyle),
+            ),
+            CourseLevelNavBanner(
+              session: widget.session,
+              courseId: widget.courseProgressCourseId,
+              currentLevelId: widget.courseProgressLevelId ?? widget.projectId,
+              currentLevelSolved: hasSavedCourseProgress,
+              topBarMode: true,
+            ),
+          ],
+        ),
+      ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
-            color: const Color(0xFFEAF6FF),
-            child: controller.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : controller.savedProjectId == null
-                ? _buildLoadErrorState()
-                : Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1380),
-                        child: Column(
-                          children: [
-                            _buildTopSummary(),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: Center(
-                                child: _buildFixedGameWindow(
-                                  controller.project,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xFFEAF6FF),
+              image: DecorationImage(
+                image: _playPageBackgroundImage,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+          ColoredBox(color: Colors.white.withValues(alpha: 0.2)),
+          controller.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : controller.savedProjectId == null
+              ? _buildLoadErrorState()
+              : Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1380),
+                      child: Center(
+                        child: _buildFixedGameWindow(controller.project),
                       ),
                     ),
                   ),
+                ),
+          Positioned(
+            left: 18,
+            bottom: 18,
+            child: _buildInstructionHelperButton(),
           ),
           Positioned(
             left: 0,
@@ -553,72 +991,49 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     );
   }
 
-  Widget _buildTopSummary() {
-    final totalCollectables = controller.totalCollectableCount;
-    final collectedCollectables = controller.collectedCollectableCount;
-    final score = totalCollectables == 0
-        ? 100
-        : ((collectedCollectables / totalCollectables) * 100).round();
+  Widget _buildInstructionHelperButton() {
+    if (controller.project.description.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blueGrey.shade100),
-      ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(
-            'Reach the goal to complete the level. Collectables improve your score.',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.blueGrey.shade900,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          _buildSummaryPill(
-            icon: Icons.star_rounded,
-            label: totalCollectables == 0
-                ? 'Score: $score%'
-                : 'Collectables: $collectedCollectables / $totalCollectables',
-            color: const Color(0xFFF59E0B),
-          ),
-          _buildSummaryPill(
-            icon: Icons.emoji_events_outlined,
-            label: 'Current score: $score%',
-            color: const Color(0xFF2563EB),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryPill({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _showInstructionDialog,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.blueGrey.shade100, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFFE3F2FF),
+                child: ClipOval(child: _buildHelperAvatar(size: 34)),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Help',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -636,6 +1051,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
           project.settings.viewportHeight,
           constraints.maxHeight,
         );
+        _rememberActualViewportSize(Size(viewportWidth, viewportHeight));
         final protectedGroundHeight =
             LevelSettings.requiredGroundRowsForTileSize(
               project.settings.tileSize,
@@ -715,6 +1131,18 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     );
   }
 
+  void _rememberActualViewportSize(Size size) {
+    if (_actualViewportSize == size) {
+      return;
+    }
+    _actualViewportSize = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncCameraToCharacter(smooth: controller.playbackState != null);
+      }
+    });
+  }
+
   Widget _buildLogicOverlay({
     required double viewportHeight,
     required double maxGroundOverlayHeight,
@@ -734,6 +1162,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     );
     final canEditCommands = !controller.isPlaybackRunning;
     final hasSelectedCommand = selectedCommandKey != null;
+    final hintedCommand = pendingHintCommand;
 
     return Material(
       elevation: 10,
@@ -763,6 +1192,8 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
                               command: command,
                               enabled: canEditCommands,
                               targetLoopId: selectedLoopTargetId,
+                              highlightedForHint:
+                                  hintGlowOn && hintedCommand == command,
                             ),
                           ),
                         ],
@@ -775,6 +1206,23 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                IconButton(
+                  onPressed: _nextHintCommand() == null ? null : _requestHint,
+                  tooltip: 'Hint',
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.cyan.shade50,
+                    side: BorderSide(color: Colors.cyan.shade200),
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    padding: const EdgeInsets.all(6),
+                  ),
+                  icon: Icon(
+                    Icons.lightbulb_outline_rounded,
+                    color: Colors.cyan.shade700,
+                    size: 16,
+                  ),
+                ),
+                const SizedBox(width: 2),
                 IconButton(
                   onPressed: controller.isPlaybackRunning
                       ? controller.stopPlayback
@@ -877,7 +1325,9 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
                 Expanded(
                   child: Text(
                     controller.logicStatusMessage ??
-                        (selectedLoopTargetId == null
+                        (hintedCommand != null
+                            ? 'Hint: try ${_logicCommandChipLabel(hintedCommand)} next.'
+                            : selectedLoopTargetId == null
                             ? 'Add commands, then press play.'
                             : 'Loop selected. New commands will be added inside it.'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -973,6 +1423,7 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     required LogicCommandType command,
     required bool enabled,
     required String? targetLoopId,
+    bool highlightedForHint = false,
   }) {
     final baseColor = _logicCommandColor(command);
     final chip = Material(
@@ -985,6 +1436,9 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
                   parentLoopId: targetLoopId,
                 );
                 setState(() {
+                  if (pendingHintCommand == command) {
+                    pendingHintCommand = null;
+                  }
                   _setLogicSelection(
                     newCommandId,
                     loopInsertionTargetId: targetLoopId,
@@ -996,9 +1450,29 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           decoration: BoxDecoration(
-            color: baseColor.withValues(alpha: enabled ? 0.12 : 0.06),
+            color: baseColor.withValues(
+              alpha: highlightedForHint
+                  ? 0.2
+                  : enabled
+                  ? 0.12
+                  : 0.06,
+            ),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: baseColor.withValues(alpha: 0.24)),
+            border: Border.all(
+              color: highlightedForHint
+                  ? Colors.amber.shade600
+                  : baseColor.withValues(alpha: 0.24),
+              width: highlightedForHint ? 2.4 : 1,
+            ),
+            boxShadow: highlightedForHint
+                ? [
+                    BoxShadow(
+                      color: Colors.amber.withValues(alpha: 0.38),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -1645,6 +2119,9 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
       }
 
       setState(() {
+        if (pendingHintCommand == data.command) {
+          pendingHintCommand = null;
+        }
         _setLogicSelection(
           newCommandId,
           loopInsertionTargetId: target.parentLoopId,

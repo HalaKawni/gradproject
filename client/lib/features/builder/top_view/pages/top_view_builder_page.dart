@@ -7,9 +7,13 @@ import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/front_view/models/custom_asset_data.dart';
+import 'package:client/features/builder/shared/level_score.dart';
 import 'package:client/features/builder/shared/solver/grid_position.dart';
+import 'package:client/features/builder/shared/widgets/course_level_nav_banner.dart';
 import 'package:client/features/builder/shared/widgets/game_builder_back_icon.dart';
 import 'package:client/features/builder/shared/widgets/game_builder_level_title_field.dart';
+import 'package:client/features/builder/shared/widgets/kids_top_bar_style.dart';
+import 'package:client/features/builder/shared/widgets/level_result_dialog.dart';
 import 'package:client/features/builder/top_view/flame/top_view_builder_game.dart';
 import 'package:client/features/builder/top_view/models/top_view_board_style.dart';
 import 'package:client/features/builder/top_view/models/top_view_character.dart';
@@ -31,6 +35,8 @@ class TopViewBuilderPage extends StatefulWidget {
   final int? initialOrderInCourse;
   final String initialDifficulty;
   final String initialStatus;
+  final String? courseProgressCourseId;
+  final String? courseProgressLevelId;
 
   const TopViewBuilderPage({
     super.key,
@@ -44,6 +50,8 @@ class TopViewBuilderPage extends StatefulWidget {
     this.initialOrderInCourse,
     this.initialDifficulty = 'medium',
     this.initialStatus = 'draft',
+    this.courseProgressCourseId,
+    this.courseProgressLevelId,
   });
 
   @override
@@ -81,6 +89,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   final Map<_Cell, String> _collectableStylesByCell = <_Cell, String>{};
   final Map<_Cell, String> _goalStylesByCell = <_Cell, String>{};
   final Map<_Cell, String> _customAssetIdsByCell = <_Cell, String>{};
+  final Map<_Cell, int> _scoresByCell = <_Cell, int>{};
   final Map<String, Uint8List> _customAssetImageBytes = <String, Uint8List>{};
   final Map<String, Future<void>> _customAssetImageLoads =
       <String, Future<void>>{};
@@ -88,6 +97,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   List<CustomAssetData> _savedAssetLibrary = const <CustomAssetData>[];
   final List<_CodeBlock> _allowedBlocks = <_CodeBlock>[];
   late final TextEditingController _titleController;
+  late final TextEditingController _instructionController;
   late final TextEditingController _codeController;
   late final ScrollController _codeScrollController;
   late final ScrollController _lineNumberScrollController;
@@ -98,6 +108,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   bool _isBoardItemDragging = false;
   bool _isSolutionTrayBlockDragging = false;
   bool _isRunningCode = false;
+  bool _hasSavedCourseProgress = false;
+  bool _isSavingCourseProgress = false;
   bool _isLoadingProject = false;
   bool _isSavingProject = false;
   bool _useAnglesInGeneratedTurns = false;
@@ -120,7 +132,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   _PlayerPreviewData? _playerPreview;
   late final ValueNotifier<_RulerOverlayData> _rulerOverlay;
   Timer? _titleSaveDebounce;
+  Timer? _hintPulseTimer;
   String? _lastAutoSavedTitle;
+  bool _hintGlowOn = true;
+  bool _hasShownInstructionDialog = false;
+  String? _pendingHintBlockId;
 
   void _syncTopViewGame({bool resetPlayer = false}) {
     final playerCell = _playerCell;
@@ -181,6 +197,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _titleController = TextEditingController(
       text: AppLanguage.instance.t('builder.newLevel'),
     );
+    _instructionController = TextEditingController();
     _codeController = TextEditingController();
     _codeScrollController = ScrollController()..addListener(_handleCodeScroll);
     _lineNumberScrollController = ScrollController();
@@ -195,6 +212,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       runTilesPerSecond: _runTilesPerSecond,
     );
     _rulerOverlay = ValueNotifier<_RulerOverlayData>(const _RulerOverlayData());
+    _hintPulseTimer = Timer.periodic(const Duration(milliseconds: 820), (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _hintGlowOn = !_hintGlowOn;
+      });
+    });
     _courseId = widget.initialCourseId ?? '';
     _orderInCourse = widget.initialOrderInCourse ?? 0;
     _difficulty = widget.initialDifficulty;
@@ -213,6 +238,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _codeController.removeListener(_handleCodeChanged);
     _titleController.removeListener(_handleTitleChanged);
     _titleController.dispose();
+    _instructionController.dispose();
     _codeController.dispose();
     _codeScrollController
       ..removeListener(_handleCodeScroll)
@@ -220,6 +246,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     _lineNumberScrollController.dispose();
     _codeFocusNode.dispose();
     _rulerOverlay.dispose();
+    _hintPulseTimer?.cancel();
     super.dispose();
   }
 
@@ -265,6 +292,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       text: text,
       selection: TextSelection.collapsed(offset: start + insertedText.length),
     );
+    if (_pendingHintBlockId == block.id && mounted) {
+      setState(() {
+        _pendingHintBlockId = null;
+      });
+    }
     _codeFocusNode.requestFocus();
   }
 
@@ -423,6 +455,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     var headingDegrees = _initialPlayerHeadingDegrees;
     final path = <Offset>[start];
     final collectableCells = _collectableCells;
+    final collectedCells = <_Cell>{};
     final goalCell = _goalCell;
 
     _runGeneration = generation;
@@ -431,6 +464,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       TopViewRenderCell(column: playerCell.column, row: playerCell.row),
       headingDegrees,
     );
+    _collectAtPosition(position, collectableCells, collectedCells);
     _collectVisibleAtPosition(position, collectableCells);
     if (goalCell != null && _positionMatchesCell(position, goalCell)) {
       _topViewGame.openGoalChest();
@@ -484,6 +518,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         }
         position = targetPosition;
         path.add(position);
+        _collectAtPosition(position, collectableCells, collectedCells);
         _collectVisibleAtPosition(position, collectableCells);
         if (goalCell != null && _positionMatchesCell(position, goalCell)) {
           _topViewGame.openGoalChest();
@@ -508,6 +543,85 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _isRunningCode = false;
       _activeCodeLine = null;
     });
+    if (widget.playMode) {
+      final success =
+          goalCell != null && _positionMatchesCell(position, goalCell);
+      final scoreResult = _buildTopViewScoreResult(
+        success: success,
+        collectedCells: collectedCells,
+        goalCell: goalCell,
+      );
+      await _showTopViewResultDialog(scoreResult);
+    }
+  }
+
+  Future<void> _showTopViewResultDialog(LevelScoreResult result) async {
+    if (result.success) {
+      await _saveCourseProgress(result);
+    }
+    if (!mounted) {
+      return;
+    }
+
+    final nextLevel = result.success
+        ? await loadNextCourseBuilderLevel(
+            session: widget.session,
+            courseId: widget.courseProgressCourseId,
+            currentLevelId: widget.courseProgressLevelId ?? _savedProjectId,
+          )
+        : null;
+    if (!mounted) {
+      return;
+    }
+
+    await showLevelResultDialog(
+      context: context,
+      success: result.success,
+      score: result.score,
+      totalScore: result.totalScore,
+      stars: result.stars,
+      onPlayAgain: _resetRunState,
+      onNextLevel: nextLevel == null
+          ? null
+          : () => openCourseBuilderLevel(
+              context: context,
+              session: widget.session,
+              courseId: widget.courseProgressCourseId!,
+              level: nextLevel,
+              replace: true,
+            ),
+    );
+  }
+
+  Future<void> _saveCourseProgress(LevelScoreResult result) async {
+    if (_isSavingCourseProgress) {
+      return;
+    }
+    final courseId = widget.courseProgressCourseId;
+    final levelId = widget.courseProgressLevelId ?? _savedProjectId;
+    if (courseId == null ||
+        courseId.isEmpty ||
+        levelId == null ||
+        levelId.isEmpty) {
+      return;
+    }
+    _isSavingCourseProgress = true;
+    final apiResult = await ApiService.completePublicCourseLevel(
+      authToken: widget.session.token,
+      courseId: courseId,
+      levelId: levelId,
+      score: result.score,
+      totalScore: result.totalScore,
+      stars: result.stars,
+    );
+    _isSavingCourseProgress = false;
+    if (apiResult['success'] != true) {
+      return;
+    } else if (mounted) {
+      setState(() {
+        _hasSavedCourseProgress = true;
+      });
+    }
   }
 
   bool _isPlayerPositionInBounds(Offset position) {
@@ -753,6 +867,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     final collectableStylesByCell = <_Cell, String>{};
     final goalStylesByCell = <_Cell, String>{};
     final customAssetIdsByCell = <_Cell, String>{};
+    final scoresByCell = <_Cell, int>{};
     final rawItems = draftData['items'];
     if (rawItems is List) {
       for (final item in rawItems.whereType<Map>()) {
@@ -776,11 +891,19 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 itemMap['item']?.toString() ??
                 draftData['collectableStyle']?.toString(),
           ).id;
+          scoresByCell[cell] = readScoreValue(
+            itemMap['score'],
+            fallback: defaultCollectableScore,
+          );
         } else if (type == _BoardItemType.goal) {
           goalStylesByCell[cell] = topViewGoalStyleById(
             itemMap['goalStyle']?.toString() ??
                 draftData['goalStyle']?.toString(),
           ).id;
+          scoresByCell[cell] = readScoreValue(
+            itemMap['score'],
+            fallback: defaultGoalScore,
+          );
         }
         final customAssetId = itemMap['customAssetId']?.toString();
         if (customAssetId != null && customAssetId.isNotEmpty) {
@@ -870,6 +993,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _customAssetIdsByCell
         ..clear()
         ..addAll(customAssetIdsByCell);
+      _scoresByCell
+        ..clear()
+        ..addAll(scoresByCell);
       _customAssets
         ..clear()
         ..addAll(customAssets);
@@ -887,6 +1013,11 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _initialPlayerHeadingDegrees =
           (_readDouble(draftData['initialDirectionDegrees']) ?? 0) % 360;
       _loadedPossibleSolutionCode = draftData['solutionCode']?.toString() ?? '';
+      _instructionController.text =
+          data['description']?.toString() ??
+          draftData['description']?.toString() ??
+          '';
+      _pendingHintBlockId = null;
       _codeController.text = widget.playMode
           ? ''
           : (_loadedPossibleSolutionCode ?? '');
@@ -894,6 +1025,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _activeCodeLine = null;
     });
     _syncTopViewGame(resetPlayer: true);
+    _maybeShowInstructionDialog();
   }
 
   Map<String, dynamic> _buildProjectJson({required String status}) {
@@ -902,7 +1034,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       'title': _titleController.text.trim().isEmpty
           ? AppLanguage.instance.t('builder.newLevel')
           : _titleController.text.trim(),
-      'description': '',
+      'description': _instructionController.text.trim(),
       'status': status,
       'courseId': _courseId,
       'orderInCourse': _orderInCourse,
@@ -928,6 +1060,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     _collectableStylesByCell[entry.key] ?? _collectableStyleId,
               if (entry.value == _BoardItemType.goal)
                 'goalStyle': _goalStylesByCell[entry.key] ?? _goalStyleId,
+              if (entry.value == _BoardItemType.collectable ||
+                  entry.value == _BoardItemType.goal)
+                'score': _scoreForCell(entry.key, entry.value),
               if (_customAssetIdsByCell[entry.key] != null)
                 'customAssetId': _customAssetIdsByCell[entry.key],
               if (_customAssetIdsByCell[entry.key] != null &&
@@ -1157,6 +1292,183 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
+  void _maybeShowInstructionDialog() {
+    if (!widget.playMode || _hasShownInstructionDialog) {
+      return;
+    }
+
+    final message = _instructionController.text.trim();
+    if (message.isEmpty) {
+      return;
+    }
+
+    _hasShownInstructionDialog = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _showInstructionDialog();
+    });
+  }
+
+  Future<void> _showInstructionDialog() async {
+    final message = _instructionController.text.trim();
+    if (message.isEmpty) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 440),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFFCF2),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: const Color(0xFFE6D8A8), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.14),
+                  blurRadius: 28,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: const Color(0xFFE3F2FF),
+                      child: ClipOval(
+                        child: _buildInstructionCharacterAvatar(size: 48),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        'How to play',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: const Color(0xFF3A241D),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE7E5D4)),
+                  ),
+                  child: Text(
+                    message,
+                    style: const TextStyle(
+                      color: Color(0xFF334155),
+                      fontSize: 15,
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF66B64A),
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Got it'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInstructionCharacterAvatar({double size = 48}) {
+    final character = topViewCharacterById(_playerCharacterId);
+    return Image.asset(
+      character.stillAssetPath,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.support_agent_rounded, size: size * 0.7);
+      },
+    );
+  }
+
+  List<String> _solutionBlockSequenceFromCode(String code) {
+    final tokens = <String>[];
+    for (final rawLine in code.split('\n')) {
+      final line = rawLine.trim().toLowerCase();
+      if (line.isEmpty) {
+        continue;
+      }
+      final parts = line.split(RegExp(r'\s+'));
+      final command = parts.first;
+      if (command == 'turn') {
+        tokens.add('turn');
+        if (parts.length > 1 && double.tryParse(parts[1]) == null) {
+          tokens.add(parts[1]);
+        }
+        continue;
+      }
+      if (command == 'step') {
+        tokens.add('step');
+        continue;
+      }
+      if (_screenDirectionDegrees(command) != null) {
+        tokens.add(command);
+      }
+    }
+    return tokens;
+  }
+
+  String? _nextTopViewHintBlockId() {
+    final expected = _solutionBlockSequenceFromCode(
+      _loadedPossibleSolutionCode ?? '',
+    );
+    if (expected.isEmpty) {
+      return null;
+    }
+    final current = _solutionBlockSequenceFromCode(_codeController.text);
+    var index = 0;
+    while (index < expected.length &&
+        index < current.length &&
+        expected[index] == current[index]) {
+      index += 1;
+    }
+    return index < expected.length ? expected[index] : null;
+  }
+
+  void _requestTopViewHint() {
+    final nextHint = _nextTopViewHintBlockId();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _pendingHintBlockId = nextHint;
+    });
+  }
+
   String? _validatePublishableLevel() {
     final playerCell = _playerCell;
     if (playerCell == null) {
@@ -1192,6 +1504,54 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
         .where((entry) => entry.value == _BoardItemType.collectable)
         .map((entry) => entry.key)
         .toList();
+  }
+
+  int _scoreForCell(_Cell cell, _BoardItemType type) {
+    return readScoreValue(
+      _scoresByCell[cell],
+      fallback: type == _BoardItemType.goal
+          ? defaultGoalScore
+          : defaultCollectableScore,
+    );
+  }
+
+  int get _totalLevelScore {
+    var total = 0;
+    for (final entry in _items.entries) {
+      if (entry.value == _BoardItemType.collectable ||
+          entry.value == _BoardItemType.goal) {
+        total += _scoreForCell(entry.key, entry.value);
+      }
+    }
+    return total;
+  }
+
+  int _collectableScoreFor(Set<_Cell> collectedCells) {
+    var score = 0;
+    for (final cell in collectedCells) {
+      if (_items[cell] == _BoardItemType.collectable) {
+        score += _scoreForCell(cell, _BoardItemType.collectable);
+      }
+    }
+    return score;
+  }
+
+  LevelScoreResult _buildTopViewScoreResult({
+    required bool success,
+    required Set<_Cell> collectedCells,
+    required _Cell? goalCell,
+  }) {
+    final goalScore = success && goalCell != null
+        ? _scoreForCell(goalCell, _BoardItemType.goal)
+        : 0;
+    final score = _collectableScoreFor(collectedCells) + goalScore;
+    final totalScore = _totalLevelScore;
+    return LevelScoreResult(
+      success: success,
+      score: score,
+      totalScore: totalScore,
+      stars: starsForScore(score: score, totalScore: totalScore),
+    );
   }
 
   _TopViewSolutionResult _simulateTopViewSolution({
@@ -1511,6 +1871,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       for (final cell in cellsUsingAsset) {
         _customAssetIdsByCell.remove(cell);
         _items.remove(cell);
+        _scoresByCell.remove(cell);
       }
       if (_customBackgroundAssetId == assetId) {
         _customBackgroundAssetId = null;
@@ -1962,12 +2323,14 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       final movedCustomAssetId = source == null
           ? null
           : _customAssetIdsByCell[source];
+      final movedScore = source == null ? null : _scoresByCell[source];
       if (source != null) {
         _items.remove(source);
         _obstacleStylesByCell.remove(source);
         _collectableStylesByCell.remove(source);
         _goalStylesByCell.remove(source);
         _customAssetIdsByCell.remove(source);
+        _scoresByCell.remove(source);
       }
       if (type == _BoardItemType.player || type == _BoardItemType.goal) {
         final removedCells = _items.entries
@@ -1980,6 +2343,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           _collectableStylesByCell.remove(cell);
           _goalStylesByCell.remove(cell);
           _customAssetIdsByCell.remove(cell);
+          _scoresByCell.remove(cell);
         }
       }
       _items[target] = type;
@@ -1996,13 +2360,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       if (type == _BoardItemType.collectable) {
         _collectableStylesByCell[target] =
             movedCollectableStyle ?? _collectableStyleId;
+        _scoresByCell[target] = movedScore ?? defaultCollectableScore;
       } else {
         _collectableStylesByCell.remove(target);
       }
       if (type == _BoardItemType.goal) {
         _goalStylesByCell[target] = movedGoalStyle ?? _goalStyleId;
+        _scoresByCell[target] = movedScore ?? defaultGoalScore;
       } else {
         _goalStylesByCell.remove(target);
+      }
+      if (type != _BoardItemType.collectable && type != _BoardItemType.goal) {
+        _scoresByCell.remove(target);
       }
     });
     _syncTopViewGame(resetPlayer: true);
@@ -2040,6 +2409,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
           _collectableStylesByCell.remove(cell);
           _goalStylesByCell.remove(cell);
           _customAssetIdsByCell.remove(cell);
+          _scoresByCell.remove(cell);
         }
       }
       _items[target] = type;
@@ -2051,13 +2421,18 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       }
       if (type == _BoardItemType.collectable) {
         _collectableStylesByCell[target] = _collectableStyleId;
+        _scoresByCell[target] = defaultCollectableScore;
       } else {
         _collectableStylesByCell.remove(target);
       }
       if (type == _BoardItemType.goal) {
         _goalStylesByCell[target] = _goalStyleId;
+        _scoresByCell[target] = defaultGoalScore;
       } else {
         _goalStylesByCell.remove(target);
+      }
+      if (type != _BoardItemType.collectable && type != _BoardItemType.goal) {
+        _scoresByCell.remove(target);
       }
     });
     _syncTopViewGame(resetPlayer: true);
@@ -2075,6 +2450,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _collectableStylesByCell.remove(cell);
       _goalStylesByCell.remove(cell);
       _customAssetIdsByCell.remove(cell);
+      _scoresByCell.remove(cell);
     });
     _syncTopViewGame(resetPlayer: true);
     _stopCodeRun();
@@ -2256,6 +2632,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       _collectableStylesByCell.clear();
       _goalStylesByCell.clear();
       _customAssetIdsByCell.clear();
+      _scoresByCell.clear();
       _customAssets.clear();
       _customAssetImageBytes.clear();
       _customBackgroundAssetId = null;
@@ -2378,12 +2755,37 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       textDirection: TextDirection.ltr,
       child: Scaffold(
         appBar: AppBar(
+          toolbarHeight: KidsTopBarStyle.toolbarHeight,
+          backgroundColor: KidsTopBarStyle.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          bottom: KidsTopBarStyle.appBarBottom(),
           leading: IconButton(
             onPressed: () => Navigator.of(context).maybePop(),
             icon: const GameBuilderBackIcon(),
           ),
           title: widget.playMode
-              ? Text(widget.initialTitle ?? _titleController.text)
+              ? Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.initialTitle ?? _titleController.text,
+                        style: KidsTopBarStyle.titleTextStyle,
+                      ),
+                    ),
+                    CourseLevelNavBanner(
+                      session: widget.session,
+                      courseId: widget.courseProgressCourseId,
+                      currentLevelId:
+                          widget.courseProgressLevelId ?? _savedProjectId,
+                      currentLevelSolved: _hasSavedCourseProgress,
+                      topBarMode: true,
+                    ),
+                  ],
+                )
               : GameBuilderLevelTitleField(
                   controller: _titleController,
                   hintText: language.t('builder.newLevel'),
@@ -2395,10 +2797,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: TextButton(
                       onPressed: _isSavingProject ? null : _handleSavePressed,
-                      child: Text(
-                        language.t('builder.save'),
-                        style: TextStyle(color: Colors.black),
-                      ),
+                      style: KidsTopBarStyle.playfulText(KidsTopBarStyle.blue),
+                      child: Text(language.t('builder.save')),
                     ),
                   ),
                   Padding(
@@ -2407,6 +2807,9 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                       onPressed: _isSavingProject
                           ? null
                           : _handlePublishPressed,
+                      style: KidsTopBarStyle.playfulFilled(
+                        KidsTopBarStyle.green,
+                      ),
                       child: Text(
                         _isSavingProject
                             ? language.t('builder.saving')
@@ -2420,82 +2823,97 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ? const Center(child: CircularProgressIndicator())
             : Container(
                 color: const Color(0xFFEAF6FF),
-                child: Stack(
+                child: Column(
                   children: [
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        final compact = constraints.maxWidth < 1280;
-                        final tools = _buildToolsSidebar();
-                        final grid = _buildGridPanel();
-                        final editor = _buildCodeWorkspace();
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final compact = constraints.maxWidth < 1280;
+                              final tools = _buildToolsSidebar();
+                              final grid = _buildGridPanel();
+                              final editor = _buildCodeWorkspace();
 
-                        if (compact) {
-                          return SingleChildScrollView(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                if (!widget.playMode) ...[
-                                  SizedBox(height: 520, child: tools),
-                                  const SizedBox(height: 20),
-                                ],
-                                SizedBox(height: 700, child: grid),
-                                const SizedBox(height: 20),
-                                SizedBox(
-                                  height: widget.playMode ? 920 : 760,
-                                  child: editor,
-                                ),
-                              ],
-                            ),
-                          );
-                        }
+                              if (compact) {
+                                return SingleChildScrollView(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (!widget.playMode) ...[
+                                        SizedBox(height: 520, child: tools),
+                                        const SizedBox(height: 20),
+                                      ],
+                                      SizedBox(height: 700, child: grid),
+                                      const SizedBox(height: 20),
+                                      SizedBox(
+                                        height: widget.playMode ? 920 : 760,
+                                        child: editor,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
 
-                        return Row(
-                          children: [
-                            if (!widget.playMode)
-                              Container(
-                                width: _leftPanelWidth,
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  16,
-                                  12,
-                                  16,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.92),
-                                  border: Border(
-                                    right: BorderSide(
-                                      color: Colors.blueGrey.shade100,
+                              return Row(
+                                children: [
+                                  if (!widget.playMode)
+                                    Container(
+                                      width: _leftPanelWidth,
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        16,
+                                        12,
+                                        16,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.92,
+                                        ),
+                                        border: Border(
+                                          right: BorderSide(
+                                            color: Colors.blueGrey.shade100,
+                                          ),
+                                        ),
+                                      ),
+                                      child: tools,
+                                    ),
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(20),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(flex: 13, child: grid),
+                                          const SizedBox(width: 20),
+                                          Expanded(flex: 7, child: editor),
+                                        ],
+                                      ),
                                     ),
                                   ),
-                                ),
-                                child: tools,
-                              ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(flex: 13, child: grid),
-                                    const SizedBox(width: 20),
-                                    Expanded(flex: 7, child: editor),
-                                  ],
-                                ),
-                              ),
+                                ],
+                              );
+                            },
+                          ),
+                          if (widget.playMode)
+                            Positioned(
+                              left: 18,
+                              bottom: 18,
+                              child: _buildInstructionHelperButton(),
                             ),
-                          ],
-                        );
-                      },
-                    ),
-                    if (!widget.playMode)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 18,
-                        child: Center(child: _buildTrash()),
+                          if (!widget.playMode)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 18,
+                              child: Center(child: _buildTrash()),
+                            ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -2537,6 +2955,8 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
             ],
           ),
         ),
+        const SizedBox(height: 14),
+        _buildSidebarSection(title: 'Scores', child: _buildScoreControls()),
         const SizedBox(height: 14),
         _buildSidebarSection(
           title: AppLanguage.of(context).t('builder.instructions'),
@@ -3115,6 +3535,10 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               ),
             ),
             const SizedBox(height: 16),
+            if (!widget.playMode) ...[
+              _buildInstructionEditorCard(),
+              const SizedBox(height: 16),
+            ],
             Text(
               AppLanguage.of(context).t('builder.solutionBlocks'),
               textAlign: TextAlign.center,
@@ -3124,52 +3548,30 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               ),
             ),
             const SizedBox(height: 12),
-            _buildSolutionTray(),
-            if (widget.playMode &&
-                (_loadedPossibleSolutionCode ?? '').trim().isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildPossibleSolutionPanel(),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPossibleSolutionPanel() {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 180),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade50,
-        border: Border.all(color: Colors.amber.shade200, width: 1.6),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            AppLanguage.of(context).t('builder.possibleSolution'),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.blueGrey.shade900,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              child: SelectableText(
-                _loadedPossibleSolutionCode ?? '',
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 14,
-                  height: 1.35,
+            if (widget.playMode) ...[
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  onPressed: _nextTopViewHintBlockId() == null
+                      ? null
+                      : _requestTopViewHint,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFE0F2FE),
+                    foregroundColor: const Color(0xFF0F5E9C),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  icon: const Icon(Icons.lightbulb_outline_rounded, size: 18),
+                  label: const Text('Hint'),
                 ),
               ),
-            ),
-          ),
-        ],
+              const SizedBox(height: 12),
+            ],
+            _buildSolutionTray(),
+          ],
+        ),
       ),
     );
   }
@@ -3225,6 +3627,102 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 ),
         );
       },
+    );
+  }
+
+  Widget _buildInstructionEditorCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.blueGrey.shade100, width: 1.6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppLanguage.of(context).t('builder.instructions'),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Colors.blueGrey.shade900,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _instructionController,
+            minLines: 5,
+            maxLines: 8,
+            textInputAction: TextInputAction.newline,
+            decoration: InputDecoration(
+              hintText: 'Tell the player what to do in this level.',
+              filled: true,
+              fillColor: Colors.blueGrey.shade50,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.blueGrey.shade100),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(color: Colors.green.shade300, width: 2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstructionHelperButton() {
+    if (_instructionController.text.trim().isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _showInstructionDialog,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.96),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: Colors.blueGrey.shade100, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: const Color(0xFFE3F2FF),
+                child: ClipOval(
+                  child: _buildInstructionCharacterAvatar(size: 34),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Help',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF334155),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -4023,6 +4521,180 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
+  Widget _buildScoreControls() {
+    final scoreEntries =
+        _items.entries
+            .where(
+              (entry) =>
+                  entry.value == _BoardItemType.collectable ||
+                  entry.value == _BoardItemType.goal,
+            )
+            .toList()
+          ..sort((a, b) {
+            final rowCompare = a.key.row.compareTo(b.key.row);
+            if (rowCompare != 0) {
+              return rowCompare;
+            }
+            return a.key.column.compareTo(b.key.column);
+          });
+
+    if (scoreEntries.isEmpty) {
+      return Text(
+        'Add collectables or a goal to set points.',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.blueGrey.shade600,
+          height: 1.25,
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        for (final entry in scoreEntries) ...[
+          _buildCellScoreField(entry.key, entry.value),
+          if (entry != scoreEntries.last) const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCellScoreField(_Cell cell, _BoardItemType type) {
+    return Row(
+      children: [
+        _buildCellScorePreview(cell, type),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            '(${cell.column}, ${cell.row})',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Colors.blueGrey.shade800,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 74,
+          child: TextFormField(
+            key: ValueKey<String>('top-score-${cell.column}-${cell.row}'),
+            initialValue: _scoreForCell(cell, type).toString(),
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w800),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 9,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onChanged: (value) {
+              final score = int.tryParse(value.trim());
+              if (score == null) {
+                return;
+              }
+              _setCellScore(cell, score);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCellScorePreview(_Cell cell, _BoardItemType type) {
+    final customAsset = _customAssetById(_customAssetIdsByCell[cell]);
+    Widget child;
+    if (customAsset != null) {
+      final bytes = _assetImageBytes(customAsset);
+      if (bytes == null) {
+        unawaited(_ensureAssetImageLoaded(customAsset));
+      }
+      child = bytes == null
+          ? Icon(
+              Icons.image_not_supported_outlined,
+              size: 18,
+              color: Colors.blueGrey.shade400,
+            )
+          : _buildFramedImagePreview(
+              bytes: bytes,
+              scale: customAsset.frameScale,
+              offsetX: customAsset.frameOffsetX,
+              offsetY: customAsset.frameOffsetY,
+            );
+    } else if (type == _BoardItemType.collectable) {
+      final collectable = topViewCollectableStyleById(
+        _collectableStylesByCell[cell] ?? _collectableStyleId,
+      );
+      child = Image.asset(
+        collectable.assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.image_not_supported_outlined,
+            size: 18,
+            color: Colors.blueGrey.shade400,
+          );
+        },
+      );
+    } else {
+      final goal = topViewGoalStyleById(
+        _goalStylesByCell[cell] ?? _goalStyleId,
+      );
+      child = Image.asset(
+        goal.assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.image_not_supported_outlined,
+            size: 18,
+            color: Colors.blueGrey.shade400,
+          );
+        },
+      );
+    }
+
+    return _buildCellScorePreviewShell(child: child);
+  }
+
+  Widget _buildCellScorePreviewShell({required Widget child}) {
+    return Container(
+      width: 38,
+      height: 38,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.blueGrey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(borderRadius: BorderRadius.circular(8), child: child),
+    );
+  }
+
+  void _setCellScore(_Cell cell, int score) {
+    if (widget.playMode) {
+      return;
+    }
+    final type = _items[cell];
+    if (type != _BoardItemType.collectable && type != _BoardItemType.goal) {
+      return;
+    }
+    setState(() {
+      _scoresByCell[cell] = score < 0 ? 0 : score;
+    });
+  }
+
   Widget _buildCharacterMenuItem(TopViewCharacter character) {
     return Row(
       children: [
@@ -4225,11 +4897,17 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
   }
 
   Widget _allowedChip(_CodeBlock block) {
+    final hintedBlockId = _pendingHintBlockId;
+    final highlightForHint =
+        widget.playMode && _hintGlowOn && hintedBlockId == block.id;
     if (widget.playMode) {
       return InkWell(
         onTap: () => _insertBlock(block),
         borderRadius: BorderRadius.circular(16),
-        child: _buildAllowedChipVisual(block),
+        child: _buildAllowedChipVisual(
+          block,
+          highlightForHint: highlightForHint,
+        ),
       );
     }
 
@@ -4237,11 +4915,17 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       data: _Payload.solutionTrayBlock(block),
       feedback: Material(
         color: Colors.transparent,
-        child: _buildAllowedChipVisual(block),
+        child: _buildAllowedChipVisual(
+          block,
+          highlightForHint: highlightForHint,
+        ),
       ),
       childWhenDragging: Opacity(
         opacity: 0.35,
-        child: _buildAllowedChipVisual(block),
+        child: _buildAllowedChipVisual(
+          block,
+          highlightForHint: highlightForHint,
+        ),
       ),
       onDragStarted: () {
         setState(() {
@@ -4259,18 +4943,38 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       child: InkWell(
         onTap: () => _insertBlock(block),
         borderRadius: BorderRadius.circular(16),
-        child: _buildAllowedChipVisual(block),
+        child: _buildAllowedChipVisual(
+          block,
+          highlightForHint: highlightForHint,
+        ),
       ),
     );
   }
 
-  Widget _buildAllowedChipVisual(_CodeBlock block) {
+  Widget _buildAllowedChipVisual(
+    _CodeBlock block, {
+    bool highlightForHint = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: block.color.withValues(alpha: 0.12),
+        color: block.color.withValues(alpha: highlightForHint ? 0.2 : 0.12),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: block.color.withValues(alpha: 0.32)),
+        border: Border.all(
+          color: highlightForHint
+              ? Colors.amber.shade600
+              : block.color.withValues(alpha: 0.32),
+          width: highlightForHint ? 2.4 : 1,
+        ),
+        boxShadow: highlightForHint
+            ? [
+                BoxShadow(
+                  color: Colors.amber.withValues(alpha: 0.34),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

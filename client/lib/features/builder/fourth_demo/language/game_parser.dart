@@ -36,6 +36,9 @@ class GameParser {
     'onSwipe',
     'onAnimationEnd',
     'onAnimationLoop',
+    'onWidgetClick',
+    'onButtonClick',
+    'onTimerEnd',
   };
 
   static const Set<String> _spriteCommands = <String>{
@@ -56,6 +59,37 @@ class GameParser {
     'addAnimation',
     'startAnimation',
     'stopAnimation',
+  };
+
+  static const Set<String> _widgetCommands = <String>{
+    'show',
+    'hide',
+    'setText',
+    'setX',
+    'setY',
+    'setOpacity',
+    'setValue',
+    'add',
+    'subtract',
+    'reset',
+    'append',
+    'clear',
+    'start',
+    'stop',
+    'setDuration',
+    'enable',
+    'disable',
+    'setTitle',
+    'setButtonText',
+  };
+
+  static const Set<String> _soundCommands = <String>{
+    'play',
+    'stop',
+    'pause',
+    'resume',
+    'setVolume',
+    'setLoop',
   };
 
   GameParseResult parse({
@@ -493,9 +527,96 @@ class GameParser {
       return _ActionResult.failure(state.error(line, 'Unknown command.'));
     }
     if (call.receiver == 'game') {
-      if (call.command != 'setBackground') {
+      if (!const <String>{
+        'setBackground',
+        'setWidth',
+        'setHeight',
+        'setSize',
+        'setGravity',
+        'setPhysics',
+        'setCameraTarget',
+      }.contains(call.command)) {
         return _ActionResult.failure(
           state.error(line, 'Unknown game command "${call.command}".'),
+        );
+      }
+      if (call.command == 'setWidth' ||
+          call.command == 'setHeight' ||
+          call.command == 'setGravity') {
+        final amount = call.args.isEmpty
+            ? null
+            : double.tryParse(call.args.first);
+        if (amount == null) {
+          return _ActionResult.failure(
+            state.error(
+              line,
+              'Expected a number after ${call.rawCommand}.',
+              hint: 'Example: ${call.rawCommand} 600',
+            ),
+          );
+        }
+        return _ActionResult.success(
+          FourthDemoAction(
+            type: switch (call.command) {
+              'setWidth' => FourthDemoActionType.setWorldWidth,
+              'setHeight' => FourthDemoActionType.setWorldHeight,
+              _ => FourthDemoActionType.setGravity,
+            },
+            amount: amount,
+            receiver: 'game',
+            sourceSpan: line.span,
+          ),
+        );
+      }
+      if (call.command == 'setSize') {
+        if (call.args.length < 2) {
+          return _ActionResult.failure(
+            state.error(
+              line,
+              'game.setSize needs width and height.',
+              hint: 'Example: game.setSize 800 480',
+            ),
+          );
+        }
+        final width = double.tryParse(call.args[0]);
+        final height = double.tryParse(call.args[1]);
+        if (width == null || height == null) {
+          return _ActionResult.failure(
+            state.error(line, 'game.setSize needs two numbers.'),
+          );
+        }
+        return _ActionResult.success(
+          FourthDemoAction(
+            type: FourthDemoActionType.setWorldSize,
+            amount: width,
+            text: height.toString(),
+            receiver: 'game',
+            sourceSpan: line.span,
+          ),
+        );
+      }
+      if (call.command == 'setPhysics' || call.command == 'setCameraTarget') {
+        final value = _singleStringArg(call.args);
+        if (value == null) {
+          return _ActionResult.failure(
+            state.error(
+              line,
+              '${call.rawCommand} needs a value.',
+              hint: call.command == 'setPhysics'
+                  ? 'Example: ${call.rawCommand} "arcade"'
+                  : 'Example: ${call.rawCommand} "polar"',
+            ),
+          );
+        }
+        return _ActionResult.success(
+          FourthDemoAction(
+            type: call.command == 'setPhysics'
+                ? FourthDemoActionType.setPhysics
+                : FourthDemoActionType.setCameraTarget,
+            text: value,
+            receiver: 'game',
+            sourceSpan: line.span,
+          ),
         );
       }
       final background = _singleStringArg(call.args);
@@ -518,7 +639,32 @@ class GameParser {
       );
     }
 
-    if (!_spriteCommands.contains(call.command)) {
+    if (call.receiver == '@' &&
+        const <String>{'playSound', 'stopSound'}.contains(call.command)) {
+      final soundName = _singleStringArg(call.args);
+      if (soundName == null) {
+        return _ActionResult.failure(
+          state.error(
+            line,
+            '${call.rawCommand} needs a sound name.',
+            hint: 'Example: ${call.rawCommand} "collectSound"',
+          ),
+        );
+      }
+      return _ActionResult.success(
+        FourthDemoAction(
+          type: call.command == 'playSound'
+              ? FourthDemoActionType.soundPlay
+              : FourthDemoActionType.soundStop,
+          receiver: soundName,
+          sourceSpan: line.span,
+        ),
+      );
+    }
+
+    if (!_spriteCommands.contains(call.command) &&
+        !_widgetCommands.contains(call.command) &&
+        !_soundCommands.contains(call.command)) {
       return _ActionResult.failure(
         state.error(
           line,
@@ -529,11 +675,36 @@ class GameParser {
       );
     }
 
-    if (!_validReceiver(state, call.receiver, loopVariables)) {
+    final receiverKind = _receiverKind(state, call.receiver, loopVariables);
+    if (receiverKind == _ReceiverKind.ambiguous) {
+      return _ActionResult.failure(
+        state.error(
+          line,
+          'Name "${call.receiver}" is used by more than one object. Please use unique names.',
+          type: GameDiagnosticType.validation,
+        ),
+      );
+    }
+    if (receiverKind == _ReceiverKind.unknown) {
       return _ActionResult.failure(
         state.error(
           line,
           'Unknown receiver "${call.receiver}".',
+          type: GameDiagnosticType.validation,
+        ),
+      );
+    }
+    if (receiverKind == _ReceiverKind.widget) {
+      return _parseWidgetAction(state, line, call);
+    }
+    if (receiverKind == _ReceiverKind.sound) {
+      return _parseSoundAction(state, line, call);
+    }
+    if (!_spriteCommands.contains(call.command)) {
+      return _ActionResult.failure(
+        state.error(
+          line,
+          'Command "${call.command}" only works on widgets or sounds.',
           type: GameDiagnosticType.validation,
         ),
       );
@@ -656,6 +827,246 @@ class GameParser {
     return _ActionResult.failure(state.error(line, 'Unknown command.'));
   }
 
+  _ActionResult _parseWidgetAction(
+    _ParseState state,
+    _CodeLine line,
+    _ParsedCall call,
+  ) {
+    if (!_widgetCommands.contains(call.command)) {
+      return _ActionResult.failure(
+        state.error(
+          line,
+          'Command "${call.command}" only works on sprites.',
+          type: GameDiagnosticType.validation,
+        ),
+      );
+    }
+
+    double? numberArg({required bool required}) {
+      if (call.args.isEmpty) {
+        return required ? null : 0;
+      }
+      return double.tryParse(call.args.first);
+    }
+
+    _ActionResult numeric(FourthDemoActionType type, String hint) {
+      final amount = numberArg(required: true);
+      if (amount == null) {
+        return _ActionResult.failure(
+          state.error(
+            line,
+            'Expected a number after ${call.rawCommand}.',
+            hint: hint,
+          ),
+        );
+      }
+      return _ActionResult.success(
+        _widgetAction(type, call, line, amount: amount),
+      );
+    }
+
+    _ActionResult text(FourthDemoActionType type, String hint) {
+      final value = _singleStringArg(call.args);
+      if (value == null) {
+        return _ActionResult.failure(
+          state.error(line, '${call.rawCommand} needs text.', hint: hint),
+        );
+      }
+      return _ActionResult.success(
+        _widgetAction(type, call, line, text: value),
+      );
+    }
+
+    switch (call.command) {
+      case 'show':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetShow, call, line),
+        );
+      case 'hide':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetHide, call, line),
+        );
+      case 'setText':
+        return text(
+          FourthDemoActionType.widgetSetText,
+          'Example: ${call.rawCommand} "Hello"',
+        );
+      case 'setX':
+        return numeric(
+          FourthDemoActionType.widgetSetX,
+          'Example: ${call.rawCommand} 100',
+        );
+      case 'setY':
+        return numeric(
+          FourthDemoActionType.widgetSetY,
+          'Example: ${call.rawCommand} 50',
+        );
+      case 'setOpacity':
+        return numeric(
+          FourthDemoActionType.widgetSetOpacity,
+          'Example: ${call.rawCommand} 1',
+        );
+      case 'setValue':
+        return numeric(
+          FourthDemoActionType.widgetSetValue,
+          'Example: ${call.rawCommand} 10',
+        );
+      case 'add':
+        return numeric(
+          FourthDemoActionType.widgetAdd,
+          'Example: ${call.rawCommand} 1',
+        );
+      case 'subtract':
+        return numeric(
+          FourthDemoActionType.widgetSubtract,
+          'Example: ${call.rawCommand} 1',
+        );
+      case 'reset':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetReset, call, line),
+        );
+      case 'append':
+        return text(
+          FourthDemoActionType.widgetAppend,
+          'Example: ${call.rawCommand} "!"',
+        );
+      case 'clear':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetClear, call, line),
+        );
+      case 'start':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetStart, call, line),
+        );
+      case 'stop':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetStop, call, line),
+        );
+      case 'setDuration':
+        return numeric(
+          FourthDemoActionType.widgetSetDuration,
+          'Example: ${call.rawCommand} 30',
+        );
+      case 'enable':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetEnable, call, line),
+        );
+      case 'disable':
+        return _ActionResult.success(
+          _widgetAction(FourthDemoActionType.widgetDisable, call, line),
+        );
+      case 'setTitle':
+        return text(
+          FourthDemoActionType.widgetSetTitle,
+          'Example: ${call.rawCommand} "Welcome"',
+        );
+      case 'setButtonText':
+        return text(
+          FourthDemoActionType.widgetSetButtonText,
+          'Example: ${call.rawCommand} "OK"',
+        );
+    }
+
+    return _ActionResult.failure(state.error(line, 'Unknown widget command.'));
+  }
+
+  FourthDemoAction _widgetAction(
+    FourthDemoActionType type,
+    _ParsedCall call,
+    _CodeLine line, {
+    double amount = 0,
+    String text = '',
+  }) {
+    return FourthDemoAction(
+      type: type,
+      amount: amount,
+      text: text,
+      receiver: call.receiver,
+      sourceSpan: line.span,
+    );
+  }
+
+  _ActionResult _parseSoundAction(
+    _ParseState state,
+    _CodeLine line,
+    _ParsedCall call,
+  ) {
+    if (!_soundCommands.contains(call.command)) {
+      return _ActionResult.failure(
+        state.error(
+          line,
+          'Command "${call.command}" only works on sprites or widgets.',
+          type: GameDiagnosticType.validation,
+        ),
+      );
+    }
+
+    FourthDemoAction soundAction(
+      FourthDemoActionType type, {
+      double amount = 0,
+      String text = '',
+    }) {
+      return FourthDemoAction(
+        type: type,
+        amount: amount,
+        text: text,
+        receiver: call.receiver,
+        sourceSpan: line.span,
+      );
+    }
+
+    switch (call.command) {
+      case 'play':
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundPlay),
+        );
+      case 'stop':
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundStop),
+        );
+      case 'pause':
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundPause),
+        );
+      case 'resume':
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundResume),
+        );
+      case 'setVolume':
+        final amount = call.args.isEmpty
+            ? null
+            : double.tryParse(call.args.first);
+        if (amount == null) {
+          return _ActionResult.failure(
+            state.error(
+              line,
+              'Expected a volume number after ${call.rawCommand}.',
+              hint: 'Example: ${call.rawCommand} 0.5',
+            ),
+          );
+        }
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundSetVolume, amount: amount),
+        );
+      case 'setLoop':
+        final raw = call.args.join(' ').trim();
+        if (!const <String>{'true', 'false', 'yes', 'no'}.contains(raw)) {
+          return _ActionResult.failure(
+            state.error(
+              line,
+              'Expected true or false after ${call.rawCommand}.',
+              hint: 'Example: ${call.rawCommand} true',
+            ),
+          );
+        }
+        return _ActionResult.success(
+          soundAction(FourthDemoActionType.soundSetLoop, text: raw),
+        );
+    }
+
+    return _ActionResult.failure(state.error(line, 'Unknown sound command.'));
+  }
+
   _ParsedEvent? _parseEventHeader(_CodeLine line) {
     final text = line.text;
     final name = RegExp(r'^@(\w+)').firstMatch(text)?.group(1);
@@ -666,6 +1077,9 @@ class GameParser {
     final collideMatch = RegExp(
       r'^@onCollide\s+("[^"]+"|[A-Za-z_][\w -]*)\s*,\s*\(\s*\)\s*=>\s*$',
     ).firstMatch(text);
+    final namedEventMatch = RegExp(
+      '^@$name\\s+("[^"]+"|[A-Za-z_][\\w -]*)\\s*,\\s*\\(\\s*\\)\\s*=>\\s*\$',
+    ).firstMatch(text);
     final animationMatch = RegExp(
       '^@$name\\s+"([^"]+)"\\s*,\\s*\\(\\s*\\)\\s*=>\\s*\$',
     ).firstMatch(text);
@@ -674,6 +1088,9 @@ class GameParser {
     }
     if (animationMatch != null) {
       argument = animationMatch.group(1)!;
+    }
+    if (namedEventMatch != null) {
+      argument = _unquote(namedEventMatch.group(1)!);
     }
     final valid = switch (name) {
       'onStart' || 'onUpdate' || 'onClick' || 'onDragEnd' => RegExp(
@@ -687,6 +1104,9 @@ class GameParser {
         r'^@onSwipe\s*=\s*\(\s*direction\s*\)\s*=>\s*$',
       ).hasMatch(text),
       'onCollide' => collideMatch != null,
+      'onWidgetClick' ||
+      'onButtonClick' ||
+      'onTimerEnd' => namedEventMatch != null,
       'onAnimationEnd' || 'onAnimationLoop' => animationMatch != null,
       _ => false,
     };
@@ -714,24 +1134,54 @@ class GameParser {
     return !condition.contains('=>');
   }
 
-  bool _validReceiver(
+  _ReceiverKind _receiverKind(
     _ParseState state,
     String receiver,
     Set<String> loopVariables,
   ) {
     if (receiver == '@' || loopVariables.contains(receiver)) {
-      return true;
+      return _ReceiverKind.sprite;
     }
     final project = state.project;
     if (project == null) {
-      return RegExp(r'^[A-Za-z_]\w*$').hasMatch(receiver);
+      return RegExp(r'^[A-Za-z_]\w*$').hasMatch(receiver)
+          ? _ReceiverKind.widget
+          : _ReceiverKind.unknown;
     }
     final normalized = receiver.toLowerCase();
-    return project.sprites.any(
+    final spriteMatches = project.sprites.any(
       (sprite) =>
           sprite.id.toLowerCase() == normalized ||
           sprite.name.toLowerCase() == normalized,
     );
+    final widgetMatches = project.widgets.any(
+      (widget) =>
+          widget.id.toLowerCase() == normalized ||
+          widget.name.toLowerCase() == normalized,
+    );
+    final soundMatches = project.sounds.any(
+      (sound) =>
+          sound.id.toLowerCase() == normalized ||
+          sound.name.toLowerCase() == normalized,
+    );
+    final matchCount = <bool>[
+      spriteMatches,
+      widgetMatches,
+      soundMatches,
+    ].where((matches) => matches).length;
+    if (matchCount > 1) {
+      return _ReceiverKind.ambiguous;
+    }
+    if (spriteMatches) {
+      return _ReceiverKind.sprite;
+    }
+    if (widgetMatches) {
+      return _ReceiverKind.widget;
+    }
+    if (soundMatches) {
+      return _ReceiverKind.sound;
+    }
+    return _ReceiverKind.unknown;
   }
 
   _ParsedCall _splitReceiver(String line) {
@@ -928,6 +1378,8 @@ class _ParsedCall {
     required this.args,
   });
 }
+
+enum _ReceiverKind { sprite, widget, sound, ambiguous, unknown }
 
 class _AnimationArgs {
   final String name;

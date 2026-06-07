@@ -52,7 +52,9 @@ async function attachCourseStats(courses) {
 }
 
 exports.getCourses = async () => {
-  const courses = await Course.find().sort({ createdAt: -1 });
+  const courses = await Course.find()
+    .populate('createdBy', 'name email role')
+    .sort({ createdAt: -1, courseName: 1 });
   return attachCourseStats(courses);
 };
 
@@ -62,6 +64,10 @@ exports.createCourse = async (data, userId) => {
     courseId: data.courseId,
     category: data.category,
     description: data.description,
+    courseImageBase64: data.courseImageBase64 ?? null,
+    coverFrameScale: Number(data.coverFrameScale ?? 1),
+    coverFrameOffsetX: Number(data.coverFrameOffsetX ?? 0),
+    coverFrameOffsetY: Number(data.coverFrameOffsetY ?? 0),
     isPublic: data.isPublic ?? false,
     createdBy: userId,
   });
@@ -90,6 +96,22 @@ exports.updateCourse = async (id, data, userId) => {
 
   if (data.description !== undefined) {
     update.description = data.description;
+  }
+
+  if (data.courseImageBase64 !== undefined) {
+    update.courseImageBase64 = data.courseImageBase64;
+  }
+
+  if (data.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(data.coverFrameScale);
+  }
+
+  if (data.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(data.coverFrameOffsetX);
+  }
+
+  if (data.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(data.coverFrameOffsetY);
   }
 
   if (data.isPublic !== undefined) {

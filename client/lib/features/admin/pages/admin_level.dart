@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/localization/app_language.dart';
@@ -5,7 +8,9 @@ import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/admin/models/admin_level.dart';
+import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 enum _AdminBuilderType { scratch, frontView, topView, fourthDemo }
 
@@ -19,6 +24,8 @@ class AdminLevelsPage extends StatefulWidget {
 }
 
 class _AdminLevelsPageState extends State<AdminLevelsPage> {
+  static const double _adminLevelCoverAspectRatio = 16 / 9;
+
   bool _isLoading = true;
   String? _errorMessage;
   List<AdminLevel> _levels = [];
@@ -141,44 +148,41 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
     return showDialog<_AdminBuilderType>(
       context: context,
       builder: (context) {
-        return SimpleDialog(
-          title: Text(title),
-          children: [
-            SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(context, _AdminBuilderType.scratch),
-              child: ListTile(
-                leading: const Icon(Icons.extension_outlined),
-                title: Text(language.t('scratchBuilder')),
-                subtitle: Text(language.t('scratchBuilderDescription')),
-              ),
+        return _AdminBuilderPickerDialog(
+          title: title,
+          subtitle: 'Choose the builder style for this admin level.',
+          options: [
+            _AdminBuilderCardData(
+              type: _AdminBuilderType.frontView,
+              title: language.t('frontViewBlockPuzzle'),
+              subtitle: language.t('frontViewDescription'),
+              icon: Icons.view_in_ar_rounded,
+              color: const Color(0xFF58C4DD),
+              accentColor: const Color(0xFFE4F9FD),
             ),
-            SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(context, _AdminBuilderType.frontView),
-              child: ListTile(
-                leading: const Icon(Icons.view_week_outlined),
-                title: Text(language.t('frontViewBlockPuzzle')),
-                subtitle: Text(language.t('frontViewDescription')),
-              ),
+            _AdminBuilderCardData(
+              type: _AdminBuilderType.topView,
+              title: language.t('topViewCodingLevel'),
+              subtitle: language.t('topViewDescription'),
+              icon: Icons.grid_view_rounded,
+              color: const Color(0xFF72C665),
+              accentColor: const Color(0xFFEAF9E5),
             ),
-            SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(context, _AdminBuilderType.topView),
-              child: ListTile(
-                leading: const Icon(Icons.grid_view_outlined),
-                title: Text(language.t('topViewCodingLevel')),
-                subtitle: Text(language.t('topViewDescription')),
-              ),
+            _AdminBuilderCardData(
+              type: _AdminBuilderType.scratch,
+              title: language.t('scratchBuilder'),
+              subtitle: language.t('scratchBuilderDescription'),
+              icon: Icons.extension_rounded,
+              color: const Color(0xFFB98AF3),
+              accentColor: const Color(0xFFF4ECFF),
             ),
-            SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(context, _AdminBuilderType.fourthDemo),
-              child: const ListTile(
-                leading: Icon(Icons.sports_esports_outlined),
-                title: Text('Fourth Demo Builder'),
-                subtitle: Text('Frontend-only Flame game builder demo.'),
-              ),
+            const _AdminBuilderCardData(
+              type: _AdminBuilderType.fourthDemo,
+              title: 'Game Builder',
+              subtitle: 'Create a custom playable game world.',
+              icon: Icons.sports_esports_rounded,
+              color: Color(0xFFFF7C9B),
+              accentColor: Color(0xFFFFEDF2),
             ),
           ],
         );
@@ -210,7 +214,12 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
     } else if (level.builderType == 'fourthDemo') {
       await Navigator.of(context).pushNamed(
         AppRoutes.fourthDemoBuilder,
-        arguments: FourthDemoBuilderRouteData(session: widget.session),
+        arguments: FourthDemoBuilderRouteData(
+          session: widget.session,
+          initialProjectId: level.id,
+          useAdminLevelApi: true,
+          initialTitle: level.title,
+        ),
       );
     } else {
       await Navigator.of(context).pushNamed(
@@ -257,6 +266,10 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
     String difficulty = level.difficulty.toLowerCase();
     String status = level.status;
     String selectedCourseId = _courseDropdownValue(level.courseId) ?? '';
+    String? coverImageBase64 = level.coverImageBase64;
+    double coverFrameScale = level.coverFrameScale;
+    double coverFrameOffsetX = level.coverFrameOffsetX;
+    double coverFrameOffsetY = level.coverFrameOffsetY;
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -371,6 +384,31 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                           });
                         },
                       ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final result = await showFramedImageUploadDialog(
+                            context: context,
+                            title: 'Upload cover',
+                            initialImageBase64: coverImageBase64,
+                            initialScale: coverFrameScale,
+                            initialOffsetX: coverFrameOffsetX,
+                            initialOffsetY: coverFrameOffsetY,
+                            aspectRatio: _adminLevelCoverAspectRatio,
+                          );
+                          if (result == null) {
+                            return;
+                          }
+                          setDialogState(() {
+                            coverImageBase64 = result.imageBase64;
+                            coverFrameScale = result.scale;
+                            coverFrameOffsetX = result.offsetX;
+                            coverFrameOffsetY = result.offsetY;
+                          });
+                        },
+                        icon: const Icon(Icons.upload_rounded),
+                        label: const Text('Upload cover'),
+                      ),
                     ],
                   ),
                 ),
@@ -400,6 +438,10 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
                       'difficulty': difficulty,
                       'status': status,
                       'courseId': selectedCourseId,
+                      'coverImageBase64': coverImageBase64,
+                      'coverFrameScale': coverFrameScale,
+                      'coverFrameOffsetX': coverFrameOffsetX,
+                      'coverFrameOffsetY': coverFrameOffsetY,
                     });
                   },
                   child: Text(language.t('save')),
@@ -631,6 +673,230 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
   }
 }
 
+class _AdminBuilderCardData {
+  final _AdminBuilderType type;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final Color accentColor;
+
+  const _AdminBuilderCardData({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.accentColor,
+  });
+}
+
+class _AdminBuilderPickerDialog extends StatelessWidget {
+  const _AdminBuilderPickerDialog({
+    required this.title,
+    required this.subtitle,
+    required this.options,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<_AdminBuilderCardData> options;
+
+  @override
+  Widget build(BuildContext context) {
+    final isCompact = MediaQuery.of(context).size.width < 760;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 860),
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFFCF0),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 24,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE59E),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 28,
+                        color: Color(0xFF6B4F1D),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF2C2A4A),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            subtitle,
+                            style: GoogleFonts.nunito(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                      color: const Color(0xFF6B7280),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: options.map((option) {
+                    return _AdminBuilderChoiceCard(
+                      data: option,
+                      width: isCompact ? double.infinity : 248,
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminBuilderChoiceCard extends StatefulWidget {
+  const _AdminBuilderChoiceCard({required this.data, required this.width});
+
+  final _AdminBuilderCardData data;
+  final double width;
+
+  @override
+  State<_AdminBuilderChoiceCard> createState() =>
+      _AdminBuilderChoiceCardState();
+}
+
+class _AdminBuilderChoiceCardState extends State<_AdminBuilderChoiceCard> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final data = widget.data;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: () => Navigator.pop(context, data.type),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: widget.width,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: data.accentColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: _hovered ? data.color : Colors.white,
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: data.color.withValues(alpha: _hovered ? 0.26 : 0.14),
+                blurRadius: _hovered ? 18 : 10,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: data.color,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(data.icon, color: Colors.white, size: 28),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                data.title,
+                style: GoogleFonts.montserrat(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF2C2A4A),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                data.subtitle,
+                style: GoogleFonts.nunito(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: const Color(0xFF5F6473),
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Text(
+                    'Open Builder',
+                    style: GoogleFonts.nunito(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: data.color,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: data.color,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _LevelsGrid extends StatelessWidget {
   const _LevelsGrid({
     required this.levels,
@@ -709,6 +975,17 @@ class _LevelCard extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onReview;
 
+  Uint8List? _safeDecodeCover(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
   Color _difficultyColor(BuildContext context) {
     switch (level.difficulty.toLowerCase()) {
       case 'easy':
@@ -751,7 +1028,15 @@ class _LevelCard extends StatelessWidget {
             height: 90,
             width: double.infinity,
             color: Colors.grey.shade300,
-            child: level.previewImageUrl == null
+            child: level.coverImageBase64 != null
+                ? FramedImagePreview(
+                    bytes: _safeDecodeCover(level.coverImageBase64),
+                    scale: level.coverFrameScale,
+                    offsetX: level.coverFrameOffsetX,
+                    offsetY: level.coverFrameOffsetY,
+                    placeholderIcon: Icons.image_outlined,
+                  )
+                : level.previewImageUrl == null
                 ? const Center(child: Icon(Icons.image_outlined, size: 32))
                 : Image.network(
                     level.previewImageUrl!,

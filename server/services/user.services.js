@@ -164,10 +164,6 @@ class UserService {
                 throw new Error("There was a problem signing in.");
             }
 
-            if (!user.emailVerified) {
-                throw new Error("Please verify your email before logging in.");
-            }
-
             if (!getAuthProviders(user).includes('local')) {
                 throw new Error("This account uses Google sign in.");
             }
@@ -179,6 +175,7 @@ class UserService {
             }
 
             user.lastSignInProvider = 'local';
+            user.lastLoginAt = new Date();
             await user.save();
 
             const token = signToken(user);

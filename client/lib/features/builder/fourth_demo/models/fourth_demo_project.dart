@@ -18,6 +18,8 @@ enum FourthDemoSpriteFacing { left, right }
 
 enum FourthDemoWidgetKind { counter, text, timer, clock, button, dialog }
 
+enum FourthDemoWidgetTextAlign { left, center, right }
+
 enum FourthDemoActionType {
   step,
   jump,
@@ -38,6 +40,12 @@ enum FourthDemoActionType {
   setScale,
   getScale,
   setBackground,
+  setWorldWidth,
+  setWorldHeight,
+  setWorldSize,
+  setGravity,
+  setPhysics,
+  setCameraTarget,
   addAnimation,
   startAnimation,
   stopAnimation,
@@ -54,6 +62,31 @@ enum FourthDemoActionType {
   functionCall,
   returnValue,
   ifTouching,
+  widgetShow,
+  widgetHide,
+  widgetSetText,
+  widgetSetX,
+  widgetSetY,
+  widgetSetOpacity,
+  widgetSetValue,
+  widgetAdd,
+  widgetSubtract,
+  widgetReset,
+  widgetAppend,
+  widgetClear,
+  widgetStart,
+  widgetStop,
+  widgetSetDuration,
+  widgetEnable,
+  widgetDisable,
+  widgetSetTitle,
+  widgetSetButtonText,
+  soundPlay,
+  soundStop,
+  soundPause,
+  soundResume,
+  soundSetVolume,
+  soundSetLoop,
 }
 
 class FourthDemoProject {
@@ -731,9 +764,14 @@ class FourthDemoScreenWidget {
   final double x;
   final double y;
   final bool visible;
+  final bool? _enabled;
+  final bool? _running;
   final double opacity;
   final int textColorValue;
   final String text;
+  final String? _title;
+  final String? _buttonText;
+  final FourthDemoWidgetTextAlign textAlign;
   final double value;
   final int durationSeconds;
 
@@ -744,12 +782,25 @@ class FourthDemoScreenWidget {
     required this.x,
     required this.y,
     this.visible = true,
+    bool? enabled = true,
+    bool? running = false,
     this.opacity = 1,
     this.textColorValue = 0xFF1F2937,
     this.text = '',
+    String? title = '',
+    String? buttonText = 'OK',
+    this.textAlign = FourthDemoWidgetTextAlign.left,
     this.value = 0,
     this.durationSeconds = 60,
-  });
+  }) : _enabled = enabled,
+       _running = running,
+       _title = title,
+       _buttonText = buttonText;
+
+  bool get enabled => _enabled ?? true;
+  bool get running => _running ?? false;
+  String get title => _title ?? '';
+  String get buttonText => _buttonText ?? 'OK';
 
   FourthDemoScreenWidget copyWith({
     String? id,
@@ -758,9 +809,14 @@ class FourthDemoScreenWidget {
     double? x,
     double? y,
     bool? visible,
+    bool? enabled,
+    bool? running,
     double? opacity,
     int? textColorValue,
     String? text,
+    String? title,
+    String? buttonText,
+    FourthDemoWidgetTextAlign? textAlign,
     double? value,
     int? durationSeconds,
   }) {
@@ -771,9 +827,14 @@ class FourthDemoScreenWidget {
       x: x ?? this.x,
       y: y ?? this.y,
       visible: visible ?? this.visible,
+      enabled: enabled ?? this.enabled,
+      running: running ?? this.running,
       opacity: opacity ?? this.opacity,
       textColorValue: textColorValue ?? this.textColorValue,
       text: text ?? this.text,
+      title: title ?? this.title,
+      buttonText: buttonText ?? this.buttonText,
+      textAlign: textAlign ?? this.textAlign,
       value: value ?? this.value,
       durationSeconds: durationSeconds ?? this.durationSeconds,
     );
@@ -787,9 +848,14 @@ class FourthDemoScreenWidget {
       'x': x,
       'y': y,
       'visible': visible,
+      'enabled': enabled,
+      'running': running,
       'opacity': opacity,
       'textColorValue': textColorValue,
       'text': text,
+      'title': title,
+      'buttonText': buttonText,
+      'textAlign': textAlign.name,
       'value': value,
       'durationSeconds': durationSeconds,
     };
@@ -808,9 +874,17 @@ class FourthDemoScreenWidget {
       x: (json['x'] as num?)?.toDouble() ?? 0,
       y: (json['y'] as num?)?.toDouble() ?? 0,
       visible: json['visible'] != false,
+      enabled: json['enabled'] != false,
+      running: json['running'] == true,
       opacity: (json['opacity'] as num?)?.toDouble() ?? 1,
       textColorValue: (json['textColorValue'] as num?)?.toInt() ?? 0xFF1F2937,
       text: json['text']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      buttonText: json['buttonText']?.toString() ?? 'OK',
+      textAlign: FourthDemoWidgetTextAlign.values.firstWhere(
+        (align) => align.name == json['textAlign']?.toString(),
+        orElse: () => FourthDemoWidgetTextAlign.left,
+      ),
       value: (json['value'] as num?)?.toDouble() ?? 0,
       durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 60,
     );
@@ -821,18 +895,33 @@ class FourthDemoSound {
   final String id;
   final String name;
   final String assetPath;
+  final double volume;
+  final bool loop;
+  final bool isPlaying;
 
   const FourthDemoSound({
     required this.id,
     required this.name,
     required this.assetPath,
+    this.volume = 1,
+    this.loop = false,
+    this.isPlaying = false,
   });
 
-  FourthDemoSound copyWith({String? name, String? assetPath}) {
+  FourthDemoSound copyWith({
+    String? name,
+    String? assetPath,
+    double? volume,
+    bool? loop,
+    bool? isPlaying,
+  }) {
     return FourthDemoSound(
       id: id,
       name: name ?? this.name,
       assetPath: assetPath ?? this.assetPath,
+      volume: volume ?? this.volume,
+      loop: loop ?? this.loop,
+      isPlaying: isPlaying ?? this.isPlaying,
     );
   }
 
@@ -840,6 +929,9 @@ class FourthDemoSound {
     'id': id,
     'name': name,
     'assetPath': assetPath,
+    'volume': volume,
+    'loop': loop,
+    'isPlaying': isPlaying,
   };
 
   factory FourthDemoSound.fromJson(Map<String, dynamic> json) {
@@ -853,6 +945,9 @@ class FourthDemoSound {
         json['assetPath']?.toString() ??
             _legacySoundAssetPath(json['id']?.toString(), name),
       ),
+      volume: ((json['volume'] as num?)?.toDouble() ?? 1).clamp(0, 1),
+      loop: json['loop'] == true,
+      isPlaying: json['isPlaying'] == true,
     );
   }
 }

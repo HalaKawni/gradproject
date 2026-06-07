@@ -7,6 +7,7 @@ router.post('/login', UserController.login);
 router.post('/resend-verification', UserController.resendVerificationEmail);
 router.post('/login/google', UserController.googleLogin);
 router.get('/profile', authMiddleware, UserController.getProfile);
+router.put('/profile/avatar', authMiddleware, UserController.updateProfileAvatar);
 router.put('/profile/password', authMiddleware, UserController.changePassword);
 router.get('/verify-email', UserController.verifyEmail);
 
