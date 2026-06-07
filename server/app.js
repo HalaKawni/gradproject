@@ -17,7 +17,7 @@ const cors = require('cors');
 app.use(cors());
 app.use('/api/user',      userRouter);
 app.use('/api/game',      gameRouter);
-app.use('/api/ai',        aiRouter);
+app.use('/api/ai',        aiRouter); 
 app.use('/api/course',    courseRouter);
 app.use('/api/classroom', classroomRouter);
 app.use('/', userRouter);

@@ -3688,12 +3688,12 @@ class _DashboardDiscoverBannerPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // This zooms the IMAGE itself, not the parent/container.
-    const double imageZoom = 1.0;
+    // Crop the source artwork slightly so the top white strip stays out of view.
+    const double imageZoom = 1.14;
 
     // x: -1 left, 0 center, 1 right
     // y: -1 top, 0 center, 1 bottom
-    const Alignment imagePosition = Alignment(0.0, -0.15);
+    const Alignment imagePosition = Alignment(0.0, -0.48);
 
     return ClipRect(
       child: LayoutBuilder(
