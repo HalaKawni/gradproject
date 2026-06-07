@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'data_lesson_page.dart';
+import 'data_learn_page_lesson2.dart';
 import '../services/api_service.dart';
 
 class DataCoursePage extends StatefulWidget {
@@ -109,7 +110,9 @@ class _DataCoursePageState extends State<DataCoursePage> {
     if (!mounted) return;
 
     Widget destination;
-    if (savedSlide != null && savedSlide >= 0) {
+    if (lesson.number == 2) {
+      destination = DataLearnPageLesson2(lesson: lesson.toMap());
+    } else if (savedSlide != null && savedSlide >= 0) {
       destination = DataLessonPage(lesson: lesson.toMap(), initialSlide: savedSlide);
     } else if (savedSlide == -1 || lesson.inProgress == true) {
       destination = DataLessonPage(lesson: lesson.toMap(), skipToPlay: true);

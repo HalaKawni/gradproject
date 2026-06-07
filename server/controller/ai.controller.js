@@ -242,6 +242,75 @@ ${combinedText}`,
   }
 };
 
+exports.generateSortConcepts = async (req, res) => {
+  try {
+    const { slideTexts = [], lessonNumber } = req.body;
+    const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    if (!slideTexts.length) {
+      return res.status(400).json({ status: false, error: 'No slide texts provided' });
+    }
+
+    const combinedText = slideTexts.join('\n\n');
+
+    const completion = await client.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      max_tokens: 512,
+      messages: [
+        {
+          role: 'user',
+          content: `You are a content generator for a children's data science game.
+Students must classify each data card as NUMERICAL (numbers/measurements) or NON-NUMERICAL (words/categories).
+Read the lesson text and generate exactly 6 data examples.
+Include at least 3 numerical and at least 2 non-numerical examples.
+
+Format EXACTLY like this, one example per line:
+LABEL|true|SOURCE|Short description here.
+
+Rules:
+- LABEL: short data name in CAPS (max 3 words), use \\n for line break between words if needed
+- true/false: true if NUMERICAL (counted or measured as a number), false if NON-NUMERICAL (text, category, name, color)
+- SOURCE: where data comes from, max 15 chars (e.g. SURVEY, SENSOR, QUESTIONNAIRE)
+- Short description: one simple sentence, max 12 words
+- No numbering, no extra text, nothing else
+
+Example lines:
+DAILY\\nTEMPERATURE|true|THERMOMETER|A sensor records temperature in degrees each day.
+FAVOURITE\\nCOLOR|false|CLASS SURVEY|Students chose their favourite color from a list.
+
+Lesson text:
+${combinedText}`,
+        },
+      ],
+    });
+
+    const raw = completion.choices[0].message.content.trim();
+    const concepts = raw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.split('|').length >= 4)
+      .map((line) => {
+        const parts = line.split('|');
+        return {
+          text: parts[0].trim(),
+          positive: parts[1].trim().toLowerCase() === 'true',
+          sender: parts[2].trim().substring(0, 20),
+          preview: parts.slice(3).join('|').trim(),
+        };
+      })
+      .filter((c) => c.text.length > 0 && c.preview.length > 0)
+      .slice(0, 6);
+
+    if (concepts.length < 3) {
+      return res.status(500).json({ status: false, error: 'Could not generate enough concepts from lesson content' });
+    }
+
+    res.json({ status: true, concepts });
+  } catch (err) {
+    res.status(500).json({ status: false, error: err.message || 'AI generation failed' });
+  }
+};
+
 exports.generateLessonText = async (req, res) => {
   try {
     const { message, lessonTitle = 'Lesson', lessonNumber = 1, history = [] } = req.body;

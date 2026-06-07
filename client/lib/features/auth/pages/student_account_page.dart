@@ -15,8 +15,10 @@ import '../widgets/google_sign_in_button_stub.dart'
     as google_button;
 
 import 'package:easy_localization/easy_localization.dart';
+
 class StudentAccountPage extends StatefulWidget {
-  const StudentAccountPage({super.key});
+  final String? classroomCode;
+  const StudentAccountPage({super.key, this.classroomCode});
 
   @override
   State<StudentAccountPage> createState() => _StudentAccountPageState();
@@ -97,6 +99,7 @@ class _StudentAccountPageState extends State<StudentAccountPage>
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
         role: 'child',
+        classroomCode: widget.classroomCode,
       );
 
       if (!mounted) return;
@@ -113,6 +116,8 @@ class _StudentAccountPageState extends State<StudentAccountPage>
       );
     } catch (e) {
       debugPrint('REGISTER ERROR: $e');
+      if (!mounted) return;
+
       setState(() {
         _apiError = e.toString().replaceAll('Exception: ', '');
         _loading = false;

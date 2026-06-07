@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'No_page.dart';
+import 'student_account_page.dart';
 
 class StudentSignupPage extends StatefulWidget {
   const StudentSignupPage({super.key});
@@ -202,12 +203,17 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                                       child: ElevatedButton(
                                         onPressed: () {
                                           if (_codeController.text.isEmpty) {
-                                            setState(
-                                                () => _showCodeError = true);
+                                            setState(() => _showCodeError = true);
                                           } else {
-                                            setState(
-                                                () => _showCodeError = false);
-                                            // TODO: handle next
+                                            setState(() => _showCodeError = false);
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => StudentAccountPage(
+                                                  classroomCode: _codeController.text.trim().toUpperCase(),
+                                                ),
+                                              ),
+                                            );
                                           }
                                         },
                                         style: ElevatedButton.styleFrom(

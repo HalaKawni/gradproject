@@ -19,6 +19,7 @@ import 'package:client/features/home/services/game_api_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
 import 'package:client/aicourse/ai_hoot_page_game.dart';
+import 'package:client/features/classroom/pages/classroom_page.dart';
 import 'package:client/utils/responsive.dart';
 import 'package:client/mycourses/course_detail_page.dart';
 import 'package:client/mycourses/create_course_page.dart';
@@ -857,6 +858,15 @@ class _DashboardPageState extends State<DashboardPage> {
             onTap: () => setState(() {
               _activeSection = _DashboardSection.discover;
             }),
+          ),
+          _SidebarItem(
+            label: 'My Classroom',
+            isActive: false,
+            icon: Icons.school,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ClassroomPage()),
+            ),
           ),
           const Spacer(),
           Padding(

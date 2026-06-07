@@ -24,7 +24,7 @@ const buildAuthUserResponse = (user) => ({
 
 exports.register = async(req,res,next)=>{
     try{
-        const {name,email,password,role} = req.body;
+        const { name, email, password, role, classroomCode } = req.body;
 
         if(!name || !email || !password || !role){
             return res.status(400).json({
@@ -33,12 +33,12 @@ exports.register = async(req,res,next)=>{
             });
         }
 
-        const successRes = await UserService.registerUser(name,email,password,role);
-res.status(201).json({
-    status: true,
-    success: "User registered successfully. Please check your email to verify your account.",
-    user: buildAuthUserResponse(successRes.user)
-});
+        const successRes = await UserService.registerUser(name, email, password, role, classroomCode);
+        res.status(201).json({
+            status: true,
+            success: "User registered successfully. Please check your email to verify your account.",
+            user: buildAuthUserResponse(successRes.user)
+        });
     }
     catch(err){
         res.status(400).json({

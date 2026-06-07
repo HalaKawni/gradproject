@@ -20,4 +20,11 @@ static const String baseUrl = 'http://127.0.0.1:3000/api';
   static const String linkChild = '$baseUrl/user/link-child';
   static String unlinkChild(String childId) => '$baseUrl/user/unlink-child/$childId';
   static const String linkedChildren = '$baseUrl/user/linked-children';
+
+  // Classroom
+  static const String joinClassroom = '$baseUrl/classroom/join';
+  static const String myClassroom = '$baseUrl/classroom/my-classroom';
+  static const String classroomMembers = '$baseUrl/classroom/members';
+  static const String classroomActivity = '$baseUrl/classroom/activity';
+  static String classroomLeaderboard(String gameId) => '$baseUrl/classroom/leaderboard/$gameId';
 }

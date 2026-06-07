@@ -83,9 +83,10 @@ const sendVerificationEmail = async (email, token) => {
 
 
 
-class UserService {
-    static async registerUser(name, email, password, role) {
-        try {
+
+class UserService{
+    static async registerUser(name, email, password, role, classroomCode) {
+        try{
             const existingUser = await UserModel.findOne({ email });
 
             if (existingUser) {
@@ -94,7 +95,7 @@ class UserService {
 
             const { rawToken, hashedToken } = createEmailVerificationToken();
 
-            const createUser = new UserModel({
+            const userData = {
                 name,
                 email,
                 password,
@@ -105,8 +106,12 @@ class UserService {
                 emailVerified: false,
                 emailVerificationToken: hashedToken,
                 emailVerificationExpires: Date.now() + 60 * 60 * 1000 // 1 hour
-            });
+            };
+            if (classroomCode) {
+                userData.classroomCode = classroomCode.toUpperCase();
+            }
 
+            const createUser = new UserModel(userData);
             const savedUser = await createUser.save();
 
             await sendVerificationEmail(savedUser.email, rawToken);

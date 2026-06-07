@@ -376,7 +376,7 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
     final totalSlides = _slides.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF7B9FD4),
+      backgroundColor: const Color.fromARGB(255,123, 127, 212),
       body: Column(
         children: [
           _buildTopBar(lessonNumber, lessonTitle, totalSlides),

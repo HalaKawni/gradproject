@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'data_review_page.dart';
+import 'data_fill_blank_page.dart';
+import 'data_lesson_slide_texts.dart';
 import '../services/api_service.dart';
 
 class DataPlayPageLesson2 extends StatefulWidget {
@@ -17,12 +18,31 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
   final GlobalKey _gameAreaKey = GlobalKey();
   final Map<String, double> _lineProgress = {};
 
-  final List<_Pair> _pairs = [
-    _Pair(word: 'Bar Graph', definition: 'Uses rectangular bars to compare different categories.'),
-    _Pair(word: 'Pie Chart', definition: 'A circle divided into slices showing parts of a whole.'),
-    _Pair(word: 'Line Graph', definition: 'Connected points that show how data changes over time.'),
-    _Pair(word: 'Frequency', definition: 'How often a value appears in a data set.'),
+  // ── RIVER SPRITES ──
+  final List<_RiverSprite> _riverSprites = [];
+  Timer? _riverTimer;
+  final Random _rng = Random();
+  int _riverSpawnCooldown = 0;
+
+  static const List<String> _riverSpriteAssets = [
+    'assets/images/sprites/star.png',
+    'assets/images/sprites/coin.png',
+    'assets/images/sprites/banana.png',
+    'assets/images/sprites/heart.png',
+    'assets/images/sprites/chocolate.png',
+    'assets/images/sprites/powerup.png',
   ];
+
+  // ── PAIRS ──
+  static final List<_Pair> _fallbackPairs = [
+    _Pair(word: 'Table',         definition: 'A chart that organizes data for easier understanding without graphing the data.'),
+    _Pair(word: 'Line Plot',     definition: 'A graph that uses X\'s to show the number of occurrences of data.'),
+    _Pair(word: 'Bar Graph',     definition: 'A graph that uses vertical columns to show the number of occurrences of data.'),
+    _Pair(word: 'Picture Graph', definition: 'A graph that uses images of the data to show the number of occurrences of data.'),
+  ];
+
+  List<_Pair> _pairs = List.of(_fallbackPairs);
+  bool _isLoading = false;
 
   String? _selectedWord;
   String? _selectedDef;
@@ -34,7 +54,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
   final Map<String, GlobalKey> _defKeys = {};
 
   int _playScore = 0;
-  final int _playTotal = 3;
+  int get _playTotal => _pairs.length;
   final int _reviewScore = 0;
   final int _reviewTotal = 5;
 
@@ -54,19 +74,123 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
   @override
   void initState() {
     super.initState();
-    for (final p in _pairs) {
+    _initPairs(_pairs);
+    _startRiverAnimation();
+  }
+
+  @override
+  void dispose() {
+    _riverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRiverAnimation() {
+    _spawnRiverSprite();
+    _riverTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final s in _riverSprites) {
+          s.y += s.speed;
+          s.rotation += s.rotationSpeed;
+        }
+        _riverSprites.removeWhere((s) => s.y > 1.1);
+        if (_riverSprites.isEmpty) {
+          if (_riverSpawnCooldown > 0) {
+            _riverSpawnCooldown--;
+          } else {
+            _spawnRiverSprite();
+            _riverSpawnCooldown = 45;
+          }
+        }
+      });
+    });
+  }
+
+  void _spawnRiverSprite() {
+    const riverCenter = 0.44;
+    const riverHalfWidth = 0.04;
+    final x = riverCenter - riverHalfWidth + _rng.nextDouble() * riverHalfWidth * 2;
+    final asset = _riverSpriteAssets[_rng.nextInt(_riverSpriteAssets.length)];
+    _riverSprites.add(_RiverSprite(
+      assetPath: asset,
+      x: x,
+      y: -0.08,
+      speed: 0.003 + _rng.nextDouble() * 0.002,
+      size: 52.0 + _rng.nextDouble() * 20.0,
+      rotationSpeed: (_rng.nextBool() ? 1 : -1) * (0.008 + _rng.nextDouble() * 0.015),
+    ));
+  }
+
+  void _initPairs(List<_Pair> pairs) {
+    _wordKeys.clear();
+    _defKeys.clear();
+    for (final p in pairs) {
       _wordKeys[p.word] = GlobalKey();
       _defKeys[p.definition] = GlobalKey();
     }
-    _shuffledWords = List.from(_pairs)..shuffle(Random());
-    _shuffledDefs = List.from(_pairs)..shuffle(Random());
+    _shuffledWords = List.from(pairs)..shuffle(Random());
+    _shuffledDefs  = List.from(pairs)..shuffle(Random());
+  }
+
+  Future<void> _loadAiPairs() async {
+    setState(() => _isLoading = true);
+    final lessonNumber = widget.lesson['number'] as int;
+    final slideTexts = DataLessonSlideTexts.forLesson(lessonNumber);
+    if (slideTexts.isEmpty) { setState(() => _isLoading = false); return; }
+
+    final aiPairs = await ApiService.generateWordMatchPairs(
+      lessonNumber: lessonNumber,
+      slideTexts: slideTexts,
+    );
+    if (!mounted) return;
+
+    if (aiPairs.length >= 2) {
+      final newPairs = aiPairs
+          .map((p) => _Pair(word: p['word']!, definition: p['definition']!))
+          .toList();
+      setState(() {
+        _pairs = newPairs;
+        _matched.clear();
+        _lines.clear();
+        _lineProgress.clear();
+        _selectedWord = null;
+        _selectedDef = null;
+        _wrongWords.clear();
+        _wrongDefs.clear();
+        _playScore = 0;
+        _initPairs(newPairs);
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('✨ New pairs generated from lesson!',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFF4CAF50),
+          duration: const Duration(seconds: 2),
+        ));
+      }
+    } else {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('⚠️ AI unavailable — using default pairs.',
+              style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          backgroundColor: const Color(0xFFE53935),
+          duration: const Duration(seconds: 3),
+        ));
+      }
+    }
   }
 
   void _onWordTap(String word) {
     if (_matched.containsKey(word)) return;
     setState(() {
-      _selectedWord = _selectedWord == word ? null : word;
-      _wrongWords.remove(word);
+      if (_selectedWord == word) {
+        _selectedWord = null;
+      } else {
+        _selectedWord = word;
+        _wrongWords.remove(word);
+      }
     });
     if (_selectedWord != null && _selectedDef != null) _checkMatch(_selectedWord!, _selectedDef!);
   }
@@ -74,8 +198,12 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
   void _onDefTap(String def) {
     if (_matched.values.contains(def)) return;
     setState(() {
-      _selectedDef = _selectedDef == def ? null : def;
-      _wrongDefs.remove(def);
+      if (_selectedDef == def) {
+        _selectedDef = null;
+      } else {
+        _selectedDef = def;
+        _wrongDefs.remove(def);
+      }
     });
     if (_selectedWord != null && _selectedDef != null) _checkMatch(_selectedWord!, _selectedDef!);
   }
@@ -129,7 +257,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
             style: TextStyle(fontFamily: 'Chennai', fontSize: 16)),
         actions: [
           ElevatedButton(
-            onPressed: () { Navigator.of(context).pop(); Navigator.of(context).pop(); },
+            onPressed: () => Navigator.of(context).pop(),
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF5A623)),
             child: const Text('CONTINUE',
                 style: TextStyle(fontFamily: 'Chennai', color: Colors.white, fontSize: 16)),
@@ -144,7 +272,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
     final lessonNumber = widget.lesson['number'] as int;
     final lessonTitle = widget.lesson['title'] as String;
     return Scaffold(
-      backgroundColor: const Color(0xFF7B9FD4),
+      backgroundColor: const Color.fromARGB(255, 123, 127, 212),
       body: Column(
         children: [
           _buildNavbar(lessonNumber, lessonTitle),
@@ -161,7 +289,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
                   icon: Icons.arrow_forward_ios, label: 'NEXT',
                   onTap: _matched.length == _pairs.length
                       ? () => Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => DataReviewPage(lesson: widget.lesson),
+                            builder: (_) => DataFillBlankPage(lesson: widget.lesson),
                           ))
                       : null,
                 ),
@@ -175,7 +303,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
 
   Widget _buildNavbar(int lessonNumber, String lessonTitle) {
     return Container(
-      color: const Color(0xFFFCB7C7), height: 52,
+      color: const Color.fromARGB(255, 252, 183, 199), height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -224,8 +352,28 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
           Text(lessonTitle,
               style: const TextStyle(fontFamily: 'Chennai', color: Color(0xFF333333), fontSize: 24)),
           const Spacer(),
+          GestureDetector(
+            onTap: _isLoading ? null : _loadAiPairs,
+            child: Opacity(
+              opacity: _isLoading ? 0.4 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5A623),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 5),
+                  Text('AI', style: GoogleFonts.nunito(
+                      color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13)),
+                ]),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           _buildTopBox(icon: Icons.menu_book, iconColor: const Color(0xFF5B8FD4),
-              label: 'LEARN', value: '10/10',
+              label: 'LEARN', value: '15/15',
               bgColor: const Color(0xFF5B8FD4).withValues(alpha: 0.15)),
           const SizedBox(width: 8),
           _buildPlayBox(),
@@ -276,18 +424,21 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
             children: [
           Text('PLAY', style: GoogleFonts.nunito(fontSize: 9, fontWeight: FontWeight.w800,
               color: const Color(0xFF555555))),
-          Row(children: List.generate(_playTotal, (i) => Container(
-            margin: const EdgeInsets.only(right: 3), width: 14, height: 14,
-            decoration: BoxDecoration(
-              color: i < _playScore ? const Color(0xFF4CAF50)
-                  : i == _playScore ? Colors.white : Colors.grey.withValues(alpha: 0.4),
-              shape: BoxShape.circle,
-              border: Border.all(color: i <= _playScore ? const Color(0xFF4CAF50) : Colors.grey, width: 1),
-            ),
-            child: i == _playScore ? Center(child: Text('${i + 1}',
-                style: const TextStyle(fontSize: 7, fontWeight: FontWeight.bold,
-                    color: Color(0xFF333333)))) : null,
-          ))),
+          Row(
+            children: List.generate(_playTotal, (i) => Container(
+              margin: const EdgeInsets.only(right: 3), width: 14, height: 14,
+              decoration: BoxDecoration(
+                color: i < _playScore ? const Color(0xFF4CAF50)
+                    : i == _playScore ? Colors.white : Colors.grey.withValues(alpha: 0.4),
+                shape: BoxShape.circle,
+                border: Border.all(
+                    color: i <= _playScore ? const Color(0xFF4CAF50) : Colors.grey, width: 1),
+              ),
+              child: i == _playScore ? Center(child: Text('${i + 1}',
+                  style: const TextStyle(fontSize: 7, fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333)))) : null,
+            )),
+          ),
         ]),
       ]),
     );
@@ -300,13 +451,57 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
       return Stack(
         key: _gameAreaKey, clipBehavior: Clip.none,
         children: [
-          Container(
-            width: w, height: h,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  colors: [Color(0xFF1A3A5C), Color(0xFF2D6A8A)]),
+          // ── BACKGROUND IMAGE ──
+          Image.asset(
+            'assets/images/digitalbackground.png',
+            width: w, height: h, fit: BoxFit.cover,
+            errorBuilder: (ctx, err, st) => Container(
+              width: w, height: h,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [Color(0xFF1A3A5C), Color(0xFF2D6A8A)]),
+              ),
             ),
           ),
+
+          // ── AI LOADING OVERLAY ──
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54, borderRadius: BorderRadius.circular(16)),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const CircularProgressIndicator(color: Color(0xFFF5A623)),
+                      const SizedBox(height: 14),
+                      Text('Generating new pairs…',
+                          style: GoogleFonts.nunito(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+
+          // ── RIVER FALLING SPRITES ──
+          Positioned.fill(
+            child: ClipRect(
+              child: Stack(
+                children: _riverSprites.map((sprite) => Positioned(
+                  left: sprite.x * w - sprite.size / 2,
+                  top: sprite.y * h - sprite.size / 2,
+                  child: Transform.rotate(
+                    angle: sprite.rotation,
+                    child: Image.asset(sprite.assetPath, width: sprite.size, height: sprite.size),
+                  ),
+                )).toList(),
+              ),
+            ),
+          ),
+
+          // ── MATCH LINES ──
           Positioned.fill(
             child: CustomPaint(
               painter: _LinePainter(lines: _lines, wordKeys: _wordKeys, defKeys: _defKeys,
@@ -314,6 +509,8 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
                   lineProgress: _lineProgress),
             ),
           ),
+
+          // ── LEFT WORDS ──
           Positioned(
             left: 12, top: 0, bottom: 0, width: w * 0.28,
             child: Column(
@@ -344,16 +541,49 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
                       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18),
                           blurRadius: 10, offset: const Offset(0, 4))],
                     ),
-                    child: Text(p.word, textAlign: TextAlign.center,
-                        style: const TextStyle(fontFamily: 'Chennai', fontSize: 20,
-                            color: Colors.black87)),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Text(p.word, textAlign: TextAlign.center,
+                            style: const TextStyle(fontFamily: 'Chennai', fontSize: 20,
+                                color: Colors.black87)),
+                        Positioned(
+                          top: 0, right: 0,
+                          child: Container(
+                            width: 16, height: 16,
+                            decoration: BoxDecoration(
+                              color: Colors.white, shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 2, offset: const Offset(1, 1))],
+                            ),
+                          ),
+                        ),
+                        if (isSelected)
+                          Positioned(
+                            left: 255, top: -60,
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 1.0, end: 0.0),
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) => Transform.translate(
+                                offset: Offset(-value * 100, 0),
+                                child: Opacity(opacity: 1 - value, child: child),
+                              ),
+                              child: Image.asset('assets/images/spider2.png',
+                                  width: 150, height: 150),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
             ),
           ),
+
+          // ── RIGHT DEFINITIONS ──
           Positioned(
-            right: 12, top: 0, bottom: 0, width: w * 0.38,
+            right: 12, top: 0, bottom: 0, width: w * 0.32,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -366,7 +596,7 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
                   child: AnimatedContainer(
                     key: _defKeys[p.definition], clipBehavior: Clip.none,
                     duration: const Duration(milliseconds: 200),
-                    width: w * 0.38,
+                    width: w * 0.32,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
                     decoration: BoxDecoration(
                       color: isMatched ? const Color(0xFFB8EEB8)
@@ -382,9 +612,37 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
                       boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.18),
                           blurRadius: 10, offset: const Offset(0, 4))],
                     ),
-                    child: Text(p.definition, textAlign: TextAlign.center,
-                        style: const TextStyle(fontFamily: 'Chennai', fontSize: 18,
-                            color: Colors.black87)),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Text(p.definition, textAlign: TextAlign.center,
+                            style: const TextStyle(fontFamily: 'Chennai', fontSize: 18,
+                                color: Colors.black87)),
+                        Positioned(
+                          top: 0, right: 0,
+                          child: Container(
+                            width: 16, height: 16,
+                            decoration: const BoxDecoration(
+                                color: Colors.white, shape: BoxShape.circle),
+                          ),
+                        ),
+                        if (isSelected)
+                          Positioned(
+                            right: 310, top: -45,
+                            child: TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 1.0, end: 0.0),
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, child) => Transform.translate(
+                                offset: Offset(value * 100, 0),
+                                child: Opacity(opacity: 1 - value, child: child),
+                              ),
+                              child: Image.asset('assets/images/spider.png',
+                                  width: 150, height: 150),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 );
               }).toList(),
@@ -400,7 +658,8 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 100, height: double.infinity, color: const Color(0xFF7B7FD4),
+        width: 100, height: double.infinity,
+        color: const Color.fromARGB(255, 123, 127, 212),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Container(
             width: 70, height: 70,
@@ -449,21 +708,40 @@ class _LinePainter extends CustomPainter {
           defPos.dy + defBox.size.height / 2 - gamePos.dy);
       final mid = Offset((start.dx + end.dx) / 2, (start.dy + end.dy) / 2 + 80);
       final progress = lineProgress[line.word] ?? 1.0;
+
       final path = Path();
       path.moveTo(start.dx, start.dy);
+      Offset tip = start;
       const segments = 30;
       for (int i = 1; i <= (segments * progress).round(); i++) {
         final t = i / segments;
-        path.lineTo(
-          (1 - t) * (1 - t) * start.dx + 2 * (1 - t) * t * mid.dx + t * t * end.dx,
-          (1 - t) * (1 - t) * start.dy + 2 * (1 - t) * t * mid.dy + t * t * end.dy,
-        );
+        final px = (1 - t) * (1 - t) * start.dx + 2 * (1 - t) * t * mid.dx + t * t * end.dx;
+        final py = (1 - t) * (1 - t) * start.dy + 2 * (1 - t) * t * mid.dy + t * t * end.dy;
+        path.lineTo(px, py);
+        tip = Offset(px, py);
       }
       canvas.drawPath(path, Paint()
         ..color = Colors.white.withValues(alpha: 0.9)
         ..strokeWidth = 2.5
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round);
+
+      if (progress < 1.0) {
+        canvas.drawCircle(tip, 6, Paint()..color = Colors.white.withValues(alpha: 0.9));
+      }
+
+      if (progress >= 1.0) {
+        final webPaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.45)
+          ..strokeWidth = 1.2
+          ..style = PaintingStyle.stroke;
+        for (double t = 0.15; t < 1.0; t += 0.18) {
+          final px = (1 - t) * (1 - t) * start.dx + 2 * (1 - t) * t * mid.dx + t * t * end.dx;
+          final py = (1 - t) * (1 - t) * start.dy + 2 * (1 - t) * t * mid.dy + t * t * end.dy;
+          canvas.drawLine(Offset(px - 7, py - 7), Offset(px + 7, py + 7), webPaint);
+          canvas.drawLine(Offset(px + 7, py - 7), Offset(px - 7, py + 7), webPaint);
+        }
+      }
     }
   }
 
@@ -471,5 +749,33 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(_LinePainter old) => true;
 }
 
-class _Pair { final String word; final String definition; _Pair({required this.word, required this.definition}); }
-class _MatchLine { final String word; final String def; _MatchLine({required this.word, required this.def}); }
+class _Pair {
+  final String word;
+  final String definition;
+  _Pair({required this.word, required this.definition});
+}
+
+class _MatchLine {
+  final String word;
+  final String def;
+  _MatchLine({required this.word, required this.def});
+}
+
+class _RiverSprite {
+  final String assetPath;
+  double x;
+  double y;
+  final double speed;
+  final double size;
+  double rotation;
+  final double rotationSpeed;
+
+  _RiverSprite({
+    required this.assetPath,
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.rotationSpeed,
+  }) : rotation = 0.0;
+}

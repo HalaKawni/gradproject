@@ -552,6 +552,40 @@ class ApiService {
     }
   }
 
+  // POST /api/ai/sort-concepts (numerical vs non-numerical data classification)
+  static Future<List<Map<String, dynamic>>> generateSortConcepts({
+    required int lessonNumber,
+    required List<String> slideTexts,
+  }) async {
+    try {
+      final url = '$baseUrl/ai/sort-concepts';
+      print('[AI] Calling $url');
+      final response = await http.post(
+        Uri.parse(url),
+        headers: await _authHeaders(),
+        body: jsonEncode({'lessonNumber': lessonNumber, 'slideTexts': slideTexts}),
+      );
+      print('[AI] Status: ${response.statusCode}  Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true && data['concepts'] != null) {
+          return List<Map<String, dynamic>>.from(
+            (data['concepts'] as List).map((c) => {
+              'text': c['text'].toString(),
+              'positive': c['positive'] as bool,
+              'sender': c['sender'].toString(),
+              'preview': c['preview'].toString(),
+            }),
+          );
+        }
+      }
+      return [];
+    } catch (e) {
+      print('[AI] Error: $e');
+      return [];
+    }
+  }
+
   // POST /api/ai/swipe-concepts
   static Future<List<Map<String, dynamic>>> generateSwipeConcepts({
     required int lessonNumber,
@@ -588,6 +622,203 @@ class ApiService {
     } catch (e) {
       print('[AI] Error: $e');
       return [];
+    }
+  }
+
+  // ── CLASSROOM ENDPOINTS ──────────────────────────────────
+
+  static Future<bool> joinClassroom(String code) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/classroom/join'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'code': code}),
+      );
+      final data = jsonDecode(response.body);
+      return data['status'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<String?> getMyClassroomCode() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/my-classroom'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data['classroomCode'] as String?;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getClassroomMembers() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/members'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getClassroomLeaderboard(String gameId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/leaderboard/$gameId'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getClassroomActivity() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/activity'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getClassroomStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/stats'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data['stats']);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<Map<String, dynamic>?> getWeeklyChallenge() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/weekly-challenge'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data['challenge'] != null ? Map<String, dynamic>.from(data['challenge']) : null;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static Future<bool> setWeeklyChallenge({
+    required String title,
+    required int targetLevels,
+    String? gameId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/classroom/weekly-challenge'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'title': title, 'targetLevels': targetLevels, 'gameId': gameId ?? ''}),
+      );
+      final data = jsonDecode(response.body);
+      return data['status'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<bool> sendChallenge({
+    required String challengedId,
+    required String challengedName,
+    required String gameId,
+    required int challengerScore,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/classroom/challenge'),
+        headers: await _authHeaders(),
+        body: jsonEncode({
+          'challengedId': challengedId,
+          'challengedName': challengedName,
+          'gameId': gameId,
+          'challengerScore': challengerScore,
+        }),
+      );
+      final data = jsonDecode(response.body);
+      return data['status'] == true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  static Future<List<dynamic>> getChallenges() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/classroom/challenges'),
+        headers: await _authHeaders(),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return data['challenges'] as List<dynamic>;
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  static Future<void> toggleReaction(String activityKey, String emoji) async {
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/classroom/reaction'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'activityKey': activityKey, 'emoji': emoji}),
+      );
+    } catch (_) {}
+  }
+
+  static Future<Map<String, dynamic>> getReactions(List<String> activityKeys) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/classroom/reactions'),
+        headers: await _authHeaders(),
+        body: jsonEncode({'keys': activityKeys}),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['status'] == true) return Map<String, dynamic>.from(data['reactions']);
+      }
+      return {};
+    } catch (e) {
+      return {};
     }
   }
 

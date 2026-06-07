@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'data_review_page.dart';
+import 'data_lesson_slide_texts.dart';
 import '../services/api_service.dart';
 
 // ── COLORS ───────────────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ class _Concept {
   });
 }
 
-const _concepts = [
+const _kFallbackConcepts = [
   _Concept(
     text: "STUDENTS'\nHEIGHT",
     isNumerical: true,
@@ -488,6 +489,9 @@ class _DataPlayPageSortState extends State<DataPlayPageSort> with TickerProvider
 
   final Random _rng = Random();
 
+  List<_Concept> _concepts = List.of(_kFallbackConcepts);
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -701,6 +705,45 @@ class _DataPlayPageSortState extends State<DataPlayPageSort> with TickerProvider
     );
   }
 
+  Future<void> _loadAiConcepts() async {
+    final lessonNumber = widget.lesson['number'] as int;
+    setState(() => _isLoading = true);
+    try {
+      final raw = await ApiService.generateSortConcepts(
+        lessonNumber: lessonNumber,
+        slideTexts: DataLessonSlideTexts.forLesson(lessonNumber),
+      );
+      if (!mounted) return;
+      if (raw.isNotEmpty) {
+        final newConcepts = raw.asMap().entries.map((e) {
+          final c = e.value;
+          final icon = _kFallbackConcepts[e.key % _kFallbackConcepts.length].icon;
+          return _Concept(
+            text: (c['text'] as String).replaceAll(r'\n', '\n'),
+            isNumerical: c['positive'] as bool,
+            source: c['sender'] as String,
+            preview: c['preview'] as String,
+            icon: icon,
+          );
+        }).toList();
+        setState(() => _concepts = newConcepts);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('AI loaded ${newConcepts.length} concepts!'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('AI failed. Using original concepts.'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   String _rank() {
     if (_correct == _concepts.length && _lives == 3) return 'S';
     if (_correct == _concepts.length) return 'A';
@@ -785,6 +828,27 @@ class _DataPlayPageSortState extends State<DataPlayPageSort> with TickerProvider
               style: GoogleFonts.nunito(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600)),
         ),
         const Spacer(),
+        GestureDetector(
+          onTap: _isLoading ? null : _loadAiConcepts,
+          child: Container(
+            width: 72,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            decoration: BoxDecoration(
+              color: _isLoading ? Colors.grey.withValues(alpha: 0.4) : const Color(0xFFF5A623),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _isLoading
+                ? const Center(child: SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)))
+                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 14),
+                    const SizedBox(width: 4),
+                    Text('✨ AI', style: GoogleFonts.nunito(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w800)),
+                  ]),
+          ),
+        ),
+        const SizedBox(height: 12),
         _buildSideButton(icon: Icons.arrow_back_ios, label: 'PREVIOUS', onTap: () => Navigator.of(context).pop()),
         const SizedBox(height: 24),
       ]),

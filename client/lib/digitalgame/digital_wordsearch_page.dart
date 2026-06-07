@@ -147,7 +147,7 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
   ];
 
   List<String> _words = List.of(_fallbackWords);
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   late _GameData _game;
   final Map<String, _Found> _found = {};
@@ -171,7 +171,6 @@ class _DigitalWordSearchPageState extends State<DigitalWordSearchPage>
     _bounceCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 700));
     _game = _generateGrid(_words, _kSize);
-    _loadAiWords();
   }
 
   Future<void> _loadAiWords() async {

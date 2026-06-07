@@ -101,6 +101,11 @@ const userSchema = new Schema({
         unique: true,
         sparse: true
     },
+    classroomCode: {
+        type: String,
+        sparse: true,
+        index: true
+    },
     linkedChildren: [{
         type: Schema.Types.ObjectId,
         ref: 'user'

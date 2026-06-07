@@ -21,6 +21,21 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
   final GlobalKey _gameAreaKey = GlobalKey();
   final Map<String, double> _lineProgress = {};
 
+  // ── RIVER SPRITES ──
+  final List<_RiverSprite> _riverSprites = [];
+  Timer? _riverTimer;
+  final Random _rng = Random();
+  int _riverSpawnCooldown = 0;
+
+  static const List<String> _riverSpriteAssets = [
+    'assets/images/sprites/truck.png',
+    'assets/images/sprites/star.png',
+    'assets/images/sprites/banana.png',
+    'assets/images/sprites/powerup.png',
+    'assets/images/sprites/chocolate.png',
+    'assets/images/sprites/coin.png',
+  ];
+
   static final List<_Pair> _fallbackPairs = [
     _Pair(
       word: 'Virtual Reality',
@@ -132,6 +147,50 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
     }
     _shuffledWords = List.from(_pairs)..shuffle(Random());
     _shuffledDefs = List.from(_pairs)..shuffle(Random());
+    _startRiverAnimation();
+  }
+
+  @override
+  void dispose() {
+    _riverTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startRiverAnimation() {
+    _spawnRiverSprite();
+    _riverTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (!mounted) return;
+      setState(() {
+        for (final s in _riverSprites) {
+          s.y += s.speed;
+          s.rotation += s.rotationSpeed;
+        }
+        _riverSprites.removeWhere((s) => s.y > 1.1);
+        if (_riverSprites.isEmpty) {
+          if (_riverSpawnCooldown > 0) {
+            _riverSpawnCooldown--;
+          } else {
+            _spawnRiverSprite();
+            _riverSpawnCooldown = 45;
+          }
+        }
+      });
+    });
+  }
+
+  void _spawnRiverSprite() {
+    const riverCenter = 0.44;
+    const riverHalfWidth = 0.04;
+    final x = riverCenter - riverHalfWidth + _rng.nextDouble() * riverHalfWidth * 2;
+    final asset = _riverSpriteAssets[_rng.nextInt(_riverSpriteAssets.length)];
+    _riverSprites.add(_RiverSprite(
+      assetPath: asset,
+      x: x,
+      y: -0.08,
+      speed: 0.003 + _rng.nextDouble() * 0.002,
+      size: 52.0 + _rng.nextDouble() * 20.0,
+      rotationSpeed: (_rng.nextBool() ? 1 : -1) * (0.008 + _rng.nextDouble() * 0.015),
+    ));
   }
 
   void _onWordTap(String word) {
@@ -245,7 +304,7 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
     final lessonTitle = widget.lesson['title'] as String;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF7B9FD4),
+      backgroundColor: const Color.fromARGB(255,123, 127, 212),
       body: Column(
         children: [
           // ── NAVBAR ──
@@ -490,6 +549,24 @@ class _DigitalPlayPageLesson3State extends State<DigitalPlayPageLesson3> {
         children: [
           Image.asset('assets/images/digitalbackground.png',
               width: w, height: h, fit: BoxFit.cover),
+
+          // ── RIVER FALLING SPRITES (clipped to game area) ──
+          Positioned.fill(
+            child: ClipRect(
+              child: Stack(
+                children: _riverSprites.map((sprite) => Positioned(
+                  left: sprite.x * w - sprite.size / 2,
+                  top: sprite.y * h - sprite.size / 2,
+                  child: Transform.rotate(
+                    angle: sprite.rotation,
+                    child: Image.asset(sprite.assetPath,
+                        width: sprite.size, height: sprite.size),
+                  ),
+                )).toList(),
+              ),
+            ),
+          ),
+
           Positioned.fill(
             child: CustomPaint(
               painter: _LinePainter(
@@ -748,4 +825,23 @@ class _MatchLine {
   final String word;
   final String def;
   _MatchLine({required this.word, required this.def});
+}
+
+class _RiverSprite {
+  final String assetPath;
+  double x;
+  double y;
+  final double speed;
+  final double size;
+  double rotation;
+  final double rotationSpeed;
+
+  _RiverSprite({
+    required this.assetPath,
+    required this.x,
+    required this.y,
+    required this.speed,
+    required this.size,
+    required this.rotationSpeed,
+  }) : rotation = 0.0;
 }
