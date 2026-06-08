@@ -250,8 +250,178 @@ class _parentAccountPageState extends State<parentAccountPage>
     });
   }
 
+  List<Widget> _buildFormContent() {
+    return [
+      Text(
+        'student.enter_details'.tr(),
+        style: GoogleFonts.montserrat(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF333333),
+        ),
+      ),
+      const SizedBox(height: 20),
+      _buildLabel('common.email'.tr()),
+      _buildTextField(
+        controller: _emailController,
+        hasError: _showEmailError,
+        onChanged: (_) => setState(() => _showEmailError = false),
+      ),
+      if (_showEmailError) _buildError('error.required'.tr()),
+      const SizedBox(height: 14),
+      _buildLabel('common.display_name'.tr()),
+      _buildTextField(
+        controller: _displayNameController,
+        hasError: _showNameError,
+        onChanged: (_) => setState(() => _showNameError = false),
+      ),
+      if (_showNameError) _buildError('error.required'.tr()),
+      Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Text(
+          'common.privacy_hint'.tr(),
+          style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888)),
+        ),
+      ),
+      const SizedBox(height: 14),
+      _buildLabel('common.password'.tr()),
+      _buildTextField(
+        controller: _passwordController,
+        hasError: _showPasswordError,
+        obscure: _obscurePassword,
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscurePassword ? Icons.visibility_off : Icons.visibility,
+            color: const Color(0xFF888888),
+            size: 20,
+          ),
+          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+        ),
+        onChanged: (_) => setState(() {
+          _showPasswordError = false;
+          _showPasswordMismatch = false;
+        }),
+      ),
+      if (_showPasswordError) _buildError('error.required'.tr()),
+      const SizedBox(height: 14),
+      _buildLabel('common.reenter_password'.tr()),
+      _buildTextField(
+        controller: _rePasswordController,
+        hasError: _showRePasswordError || _showPasswordMismatch,
+        obscure: _obscureRePassword,
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscureRePassword ? Icons.visibility_off : Icons.visibility,
+            color: const Color(0xFF888888),
+            size: 20,
+          ),
+          onPressed: () => setState(() => _obscureRePassword = !_obscureRePassword),
+        ),
+        onChanged: (_) => setState(() {
+          _showRePasswordError = false;
+          _showPasswordMismatch = false;
+        }),
+      ),
+      if (_showRePasswordError) _buildError('error.required'.tr()),
+      if (_showPasswordMismatch) _buildError('error.passwords_mismatch'.tr()),
+      const SizedBox(height: 28),
+      Container(
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(255, 195, 158, 222),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _loading ? null : _onSignUp,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 220, 202, 233),
+                foregroundColor: const Color(0xFF3A2A00),
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              child: _loading
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF3A2A00),
+                      ),
+                    )
+                  : Text(
+                      'nav.signup'.tr(),
+                      style: GoogleFonts.montserrat(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ),
+      if (_apiError != null) ...[
+        const SizedBox(height: 10),
+        Text(
+          _apiError!,
+          style: GoogleFonts.nunito(
+            color: const Color(0xFFE53935),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    ];
+  }
+
+  List<Widget> _buildSocialContent() {
+    return [
+      Text(
+        'common.or_signup_with'.tr(),
+        style: GoogleFonts.montserrat(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF333333),
+        ),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'common.future_login_hint'.tr(),
+        style: GoogleFonts.nunito(fontSize: 12, color: const Color(0xFF888888)),
+      ),
+      const SizedBox(height: 24),
+      Row(
+        children: [
+          Expanded(
+            child: google_button.buildGoogleSignInButton(
+              onPressed: _signUpWithGoogle,
+              isLoading: _googleLoading,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: _socialButton('C', 'Clever', const Color(0xFF1A5276))),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(child: _socialButton('O', 'Office 365', const Color(0xFFD83B01))),
+          const SizedBox(width: 12),
+          Expanded(child: _socialButton('CL', 'ClassLink', const Color(0xFF00AEEF))),
+        ],
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 650;
     return Scaffold(
       body: Column(
         children: [
@@ -317,7 +487,7 @@ class _parentAccountPageState extends State<parentAccountPage>
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
-                          fontSize: 52,
+                          fontSize: isMobile ? 38 : 52,
                           fontWeight: FontWeight.w700,
                           shadows: const [
                             Shadow(
@@ -335,326 +505,83 @@ class _parentAccountPageState extends State<parentAccountPage>
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          // Main white card
                           Container(
-                            width: 780,
+                            width: isMobile ? double.infinity : 780,
+                            margin: isMobile
+                                ? const EdgeInsets.symmetric(horizontal: 16)
+                                : EdgeInsets.zero,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
+                                  color: Colors.black.withValues(alpha: 0.08),
                                   blurRadius: 16,
                                   offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // ── LEFT: FORM ──
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(32),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'student.enter_details'.tr(),
-                                          style: GoogleFonts.montserrat(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFF333333),
+                            child: isMobile
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: _buildFormContent(),
+                                        ),
+                                      ),
+                                      Container(height: 1, color: const Color(0xFFE0E0E0)),
+                                      Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: _buildSocialContent(),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(32),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: _buildFormContent(),
                                           ),
                                         ),
-                                        const SizedBox(height: 20),
-
-                                        // Email
-                                        _buildLabel('common.email'.tr()),
-                                        _buildTextField(
-                                          controller: _emailController,
-                                          hasError: _showEmailError,
-                                          onChanged: (_) => setState(
-                                            () => _showEmailError = false,
+                                      ),
+                                      Container(
+                                        width: 1,
+                                        height: 520,
+                                        color: const Color(0xFFE0E0E0),
+                                        margin: const EdgeInsets.symmetric(vertical: 24),
+                                      ),
+                                      Expanded(
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(32),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: _buildSocialContent(),
                                           ),
                                         ),
-                                        if (_showEmailError)
-                                          _buildError('error.required'.tr()),
-                                        const SizedBox(height: 14),
-
-                                        // Display name
-                                        _buildLabel('common.display_name'.tr()),
-                                        _buildTextField(
-                                          controller: _displayNameController,
-                                          hasError: _showNameError,
-                                          onChanged: (_) => setState(
-                                            () => _showNameError = false,
-                                          ),
-                                        ),
-                                        if (_showNameError)
-                                          _buildError('error.required'.tr()),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            top: 6,
-                                          ),
-                                          child: Text(
-                                            'common.privacy_hint'.tr(),
-                                            style: GoogleFonts.nunito(
-                                              fontSize: 12,
-                                              color: const Color(0xFF888888),
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 14),
-
-                                        // Password
-                                        _buildLabel('common.password'.tr()),
-                                        _buildTextField(
-                                          controller: _passwordController,
-                                          hasError: _showPasswordError,
-                                          obscure: _obscurePassword,
-                                          suffixIcon: IconButton(
-                                            icon: Icon(
-                                              _obscurePassword
-                                                  ? Icons.visibility_off
-                                                  : Icons.visibility,
-                                              color: const Color(0xFF888888),
-                                              size: 20,
-                                            ),
-                                            onPressed: () => setState(
-                                              () => _obscurePassword =
-                                                  !_obscurePassword,
-                                            ),
-                                          ),
-                                          onChanged: (_) => setState(() {
-                                            _showPasswordError = false;
-                                            _showPasswordMismatch = false;
-                                          }),
-                                        ),
-                                        if (_showPasswordError)
-                                          _buildError('error.required'.tr()),
-                                        const SizedBox(height: 14),
-
-                                        // Re-enter password
-                                        _buildLabel(
-                                          'common.reenter_password'.tr(),
-                                        ),
-                                        _buildTextField(
-                                          controller: _rePasswordController,
-                                          hasError:
-                                              _showRePasswordError ||
-                                              _showPasswordMismatch,
-                                          obscure: _obscureRePassword,
-                                          suffixIcon: IconButton(
-                                            icon: Icon(
-                                              _obscureRePassword
-                                                  ? Icons.visibility_off
-                                                  : Icons.visibility,
-                                              color: const Color(0xFF888888),
-                                              size: 20,
-                                            ),
-                                            onPressed: () => setState(
-                                              () => _obscureRePassword =
-                                                  !_obscureRePassword,
-                                            ),
-                                          ),
-                                          onChanged: (_) => setState(() {
-                                            _showRePasswordError = false;
-                                            _showPasswordMismatch = false;
-                                          }),
-                                        ),
-                                        if (_showRePasswordError)
-                                          _buildError('error.required'.tr()),
-                                        if (_showPasswordMismatch)
-                                          _buildError(
-                                            'error.passwords_mismatch'.tr(),
-                                          ),
-                                        const SizedBox(height: 28),
-
-                                        // SIGN UP button
-                                        Container(
-                                          decoration: BoxDecoration(
-                                            color: const Color.fromARGB(
-                                              255,
-                                              195,
-                                              158,
-                                              222,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                          ),
-                                          child: Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: SizedBox(
-                                              width: double.infinity,
-                                              child: ElevatedButton(
-                                                onPressed: _loading
-                                                    ? null
-                                                    : _onSignUp,
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      const Color.fromARGB(
-                                                        255,
-                                                        220,
-                                                        202,
-                                                        233,
-                                                      ),
-                                                  foregroundColor: const Color(
-                                                    0xFF3A2A00,
-                                                  ),
-                                                  elevation: 0,
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 16,
-                                                      ),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          6,
-                                                        ),
-                                                  ),
-                                                ),
-                                                child: _loading
-                                                    ? const SizedBox(
-                                                        height: 18,
-                                                        width: 18,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                              color: Color(
-                                                                0xFF3A2A00,
-                                                              ),
-                                                            ),
-                                                      )
-                                                    : Text(
-                                                        'nav.signup'.tr(),
-                                                        style:
-                                                            GoogleFonts.montserrat(
-                                                              fontSize: 15,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w800,
-                                                              letterSpacing:
-                                                                  1.5,
-                                                            ),
-                                                      ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        if (_apiError != null) ...[
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            _apiError!,
-                                            style: GoogleFonts.nunito(
-                                              color: const Color(0xFFE53935),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-
-                                // ── DIVIDER ──
-                                Container(
-                                  width: 1,
-                                  height: 520,
-                                  color: const Color(0xFFE0E0E0),
-                                  margin: const EdgeInsets.symmetric(
-                                    vertical: 24,
-                                  ),
-                                ),
-
-                                // ── RIGHT: SOCIAL LOGIN ──
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(32),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'common.or_signup_with'.tr(),
-                                          style: GoogleFonts.montserrat(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                            color: const Color(0xFF333333),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'common.future_login_hint'.tr(),
-                                          style: GoogleFonts.nunito(
-                                            fontSize: 12,
-                                            color: const Color(0xFF888888),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 24),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: google_button
-                                                  .buildGoogleSignInButton(
-                                                    onPressed:
-                                                        _signUpWithGoogle,
-                                                    isLoading: _googleLoading,
-                                                  ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: _socialButton(
-                                                'C',
-                                                'Clever',
-                                                const Color(0xFF1A5276),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: _socialButton(
-                                                'O',
-                                                'Office 365',
-                                                const Color(0xFFD83B01),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: _socialButton(
-                                                'CL',
-                                                'ClassLink',
-                                                const Color(0xFF00AEEF),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-
-                          // ── MONKEY peeking from left ──
-                          Positioned(
-                            left: -139,
-                            top: -60,
-                            child: Image.asset(
-                              'assets/images/sign.png',
-                              width: 250,
-                              fit: BoxFit.contain,
+                          if (!isMobile)
+                            Positioned(
+                              left: -139,
+                              top: -60,
+                              child: Image.asset(
+                                'assets/images/sign.png',
+                                width: 250,
+                                fit: BoxFit.contain,
+                              ),
                             ),
-                          ),
                         ],
                       ),
 
@@ -724,10 +651,7 @@ class _parentAccountPageState extends State<parentAccountPage>
       obscureText: obscure,
       onChanged: onChanged,
       decoration: InputDecoration(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 12,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         enabledBorder: OutlineInputBorder(
           borderSide: BorderSide(
             color: hasError ? const Color(0xFFE53935) : const Color(0xFFDDDDDD),
@@ -862,7 +786,7 @@ class _CloudPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.85)
+      ..color = Colors.white.withValues(alpha: 0.85)
       ..style = PaintingStyle.fill;
     final w = size.width;
     final h = size.height;

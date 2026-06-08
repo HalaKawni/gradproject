@@ -62,6 +62,7 @@ class WelcomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F0),
       body: SingleChildScrollView(
@@ -74,18 +75,18 @@ class WelcomePage extends StatelessWidget {
             _buildFeatureCards(),
             _buildStatsBar(),
             // ── new sections below ──
-            _buildAboutSection(),
+            _buildAboutSection(isMobile),
             _buildWave(toBlue: true),
-            _buildParentsSection(),
+            _buildParentsSection(isMobile),
             _buildWave(toBlue: false),
             const _TypewriterSection(),
-            _buildCurriculumSection(),
+            _buildCurriculumSection(isMobile),
             _buildAwardsSection(),
-            _buildFeaturesSection(),
-            _buildAppsSection(),
+            _buildFeaturesSection(isMobile),
+            _buildAppsSection(isMobile),
             _buildNumbersSection(),
             _buildWave(toBlue: true),
-            _buildAllInOneSection(),
+            _buildAllInOneSection(isMobile),
             _buildWave(toBlue: false),
             _buildCTASection(),
             _buildFooter(),
@@ -104,12 +105,13 @@ class WelcomePage extends StatelessWidget {
     );
   }
 
-  // ── NAVBAR (original, unchanged) ────────────────────────────────────────────
+  // ── NAVBAR ────────────────────────────────────────────────────────────────────
   Widget _buildNavbar(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     return Container(
       color: const Color.fromARGB(255, 50, 136, 189),
       height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -118,32 +120,33 @@ class WelcomePage extends StatelessWidget {
             height: 40,
             fit: BoxFit.contain,
           ),
+          if (!isMobile)
+            Row(
+              children: [
+                const _CourseDropdown(),
+                const SizedBox(width: 28),
+                Text(
+                  'nav.plans'.tr(),
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(width: 28),
+                Text(
+                  'nav.resources'.tr(),
+                  style: GoogleFonts.montserrat(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
           Row(
             children: [
-              const _CourseDropdown(),
-              const SizedBox(width: 28),
-              Text(
-                'nav.plans'.tr(),
-                style: GoogleFonts.montserrat(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 28),
-              Text(
-                'nav.resources'.tr(),
-                style: GoogleFonts.montserrat(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              _HoverButton(label: 'nav.kids_signup'.tr(), onPressed: () {}),
+              if (!isMobile) _HoverButton(label: 'nav.kids_signup'.tr(), onPressed: () {}),
               _HoverButton(
                 label: 'nav.signup'.tr(),
                 onPressed: () => Navigator.push(
@@ -460,10 +463,59 @@ class WelcomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildAboutSection() {
+  Widget _buildAboutSection(bool isMobile) {
+    final textContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Codey is an AWARD-WINNING online platform that teaches kids real coding languages like Python and JavaScript. Children and teenagers learn block-based and text-based coding through an engaging game-like environment.',
+          style: GoogleFonts.nunito(
+            color: const Color(0xFF444444),
+            fontSize: isMobile ? 15 : 17,
+            height: 1.85,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          "Millions of Codey's students are now excited about coding! Codey does not require prior coding experience and is designed for home and family use.",
+          style: GoogleFonts.nunito(
+            color: const Color(0xFF444444),
+            fontSize: isMobile ? 15 : 17,
+            height: 1.85,
+          ),
+        ),
+        const SizedBox(height: 24),
+        RichText(
+          text: TextSpan(
+            style: GoogleFonts.nunito(
+              color: const Color(0xFF444444),
+              fontSize: isMobile ? 15 : 17,
+              height: 1.85,
+            ),
+            children: const [
+              TextSpan(
+                text: 'Do you want to start coding now? ',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF222222),
+                ),
+              ),
+              TextSpan(
+                text:
+                    'Kids from 5–14 years old can learn block-coding, text-coding, and Python all while playing! Kids as young as 5 can start programming and build their own games. Try it today!',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 120, vertical: 100),
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 24 : 120,
+        vertical: isMobile ? 48 : 100,
+      ),
       child: Column(
         children: [
           Center(
@@ -473,77 +525,48 @@ class WelcomePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 40),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                flex: 5,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Codey is an AWARD-WINNING online platform that teaches kids real coding languages like Python and JavaScript. Children and teenagers learn block-based and text-based coding through an engaging game-like environment.',
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFF444444),
-                        fontSize: 17,
-                        height: 1.85,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      "Millions of Codey's students are now excited about coding! Codey does not require prior coding experience and is designed for home and family use.",
-                      style: GoogleFonts.nunito(
-                        color: const Color(0xFF444444),
-                        fontSize: 17,
-                        height: 1.85,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    RichText(
-                      text: TextSpan(
-                        style: GoogleFonts.nunito(
-                          color: const Color(0xFF444444),
-                          fontSize: 17,
-                          height: 1.85,
-                        ),
-                        children: const [
-                          TextSpan(
-                            text: 'Do you want to start coding now? ',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF222222),
-                            ),
-                          ),
-                          TextSpan(
-                            text:
-                                'Kids from 5–14 years old can learn block-coding, text-coding, and Python all while playing! Kids as young as 5 can start programming and build their own games. Try it today!',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          if (isMobile)
+            Column(
+              children: [
+                Center(
+                  child: Image.asset(
+                    'assets/images/Teaching_to_code.png',
+                    width: 160,
+                    fit: BoxFit.contain,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 80),
-              SizedBox(
-                width: 200,
-                child: Image.asset(
-                  'assets/images/Teaching_to_code.png',
-                  fit: BoxFit.contain,
+                const SizedBox(height: 24),
+                textContent,
+              ],
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(flex: 5, child: textContent),
+                const SizedBox(width: 80),
+                SizedBox(
+                  width: 200,
+                  child: Image.asset(
+                    'assets/images/Teaching_to_code.png',
+                    fit: BoxFit.contain,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
   }
 
   // ── PARENTS SECTION ──────────────────────────────────────────────────────────
-  Widget _buildParentsSection() {
+  Widget _buildParentsSection(bool isMobile) {
     return Container(
       color: _skyBlue,
-      padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 80),
+      padding: EdgeInsets.symmetric(
+        vertical: 56,
+        horizontal: isMobile ? 24 : 80,
+      ),
       child: Stack(
         children: [
           Positioned.fill(
@@ -554,7 +577,7 @@ class WelcomePage extends StatelessWidget {
           ),
           Center(
             child: SizedBox(
-              width: 500,
+              width: isMobile ? double.infinity : 500,
               child: Column(
                 children: [
                   Image.asset('assets/images/Parent-Image2.png', height: 220),
@@ -628,107 +651,100 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── CURRICULUM SECTION ───────────────────────────────────────────────────────
-  Widget _buildCurriculumSection() {
+  Widget _buildCurriculumSection(bool isMobile) {
+    final imageWidget = Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.asset(
+            'assets/images/course1.jpg',
+            height: 280,
+            fit: BoxFit.cover,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'A fun coding course for kids',
+          style: GoogleFonts.nunito(color: Colors.grey[600], fontSize: 13),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            9,
+            (i) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i == 6 ? _navyText : Colors.grey[300],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final textWidget = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'CURRICULUM',
+          style: GoogleFonts.amaticSc(
+            color: _navyText,
+            fontSize: 52,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(
+          'Codey offers educational resources for students of different grades and experience levels. From Codey Jr. to advanced courses, students learn coding basics such as block-based and text-based coding. Kids also learn how to code in real programming languages like Python and JavaScript. Through Codey, kids will develop the necessary skills for the future while having fun!',
+          style: GoogleFonts.nunito(color: _darkTeal, fontSize: 14, height: 1.7),
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton(
+          onPressed: () {},
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _yellowBtn,
+            foregroundColor: Colors.black87,
+            padding: const EdgeInsets.symmetric(horizontal: 44, vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          child: Text(
+            'SIGN UP NOW',
+            style: GoogleFonts.montserrat(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        TextButton(
+          onPressed: () {},
+          child: Text(
+            'free trial',
+            style: GoogleFonts.nunito(color: _darkTeal, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.asset(
-                    'assets/images/course1.jpg',
-                    height: 280,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'A fun coding course for kids',
-                  style: GoogleFonts.nunito(
-                    color: Colors.grey[600],
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    9,
-                    (i) => Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: i == 6 ? _navyText : Colors.grey[300],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 64),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'CURRICULUM',
-                  style: GoogleFonts.amaticSc(
-                    color: _navyText,
-                    fontSize: 52,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Codey offers educational resources for students of different grades and experience levels. From Codey Jr. to advanced courses, students learn coding basics such as block-based and text-based coding. Kids also learn how to code in real programming languages like Python and JavaScript. Through Codey, kids will develop the necessary skills for the future while having fun!',
-                  style: GoogleFonts.nunito(
-                    color: _darkTeal,
-                    fontSize: 14,
-                    height: 1.7,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {},
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _yellowBtn,
-                    foregroundColor: Colors.black87,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 44,
-                      vertical: 16,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'SIGN UP NOW',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: Text(
-                    'free trial',
-                    style: GoogleFonts.nunito(color: _darkTeal, fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 24 : 80,
+        vertical: 60,
       ),
+      child: isMobile
+          ? Column(children: [imageWidget, const SizedBox(height: 32), textWidget])
+          : Row(
+              children: [
+                Expanded(child: imageWidget),
+                const SizedBox(width: 64),
+                Expanded(child: textWidget),
+              ],
+            ),
     );
   }
 
@@ -767,10 +783,22 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── FEATURES SECTION ─────────────────────────────────────────────────────────
-  Widget _buildFeaturesSection() {
+  Widget _buildFeaturesSection(bool isMobile) {
+    final cols = [
+      _featureCol('assets/images/Full-courses-ready-to-go.png', 'READY TO GO COURSES',
+          "With Codey's support team, anyone can learn the basics of computer science and start coding today.", isMobile),
+      _featureCol('assets/images/Real-coding-langauges.png', 'REAL CODING LANGUAGES',
+          "Codey's courses teach text-based coding so students learn to program like a real developer.", isMobile),
+      _featureCol('assets/images/game-based.png', 'GAME-BASED LEARNING',
+          'Kids learn coding in an engaging and rewarding environment that utilizes gaming elements.', isMobile),
+    ];
+
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 80),
+      padding: EdgeInsets.symmetric(
+        vertical: 60,
+        horizontal: isMobile ? 24 : 80,
+      ),
       child: Column(
         children: [
           Text(
@@ -784,34 +812,29 @@ class WelcomePage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 48),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _featureCol(
-                'assets/images/Full-courses-ready-to-go.png',
-                'READY TO GO COURSES',
-                "With Codey's support team, anyone can learn the basics of computer science and start coding today.",
-              ),
-              _featureCol(
-                'assets/images/Real-coding-langauges.png',
-                'REAL CODING LANGUAGES',
-                "Codey's courses teach text-based coding so students learn to program like a real developer.",
-              ),
-              _featureCol(
-                'assets/images/game-based.png',
-                'GAME-BASED LEARNING',
-                'Kids learn coding in an engaging and rewarding environment that utilizes gaming elements.',
-              ),
-            ],
-          ),
+          if (isMobile)
+            Column(
+              children: [
+                cols[0],
+                const SizedBox(height: 32),
+                cols[1],
+                const SizedBox(height: 32),
+                cols[2],
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: cols,
+            ),
         ],
       ),
     );
   }
 
-  Widget _featureCol(String imagePath, String title, String desc) {
+  Widget _featureCol(String imagePath, String title, String desc, bool isMobile) {
     return SizedBox(
-      width: 230,
+      width: isMobile ? double.infinity : 230,
       child: Column(
         children: [
           Image.asset(imagePath, height: 110, width: 110),
@@ -842,17 +865,21 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── APPS SECTION ─────────────────────────────────────────────────────────────
-  Widget _buildAppsSection() {
+  Widget _buildAppsSection(bool isMobile) {
     return Container(
       color: _yellowBg,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 80),
+      padding: EdgeInsets.symmetric(
+        vertical: 60,
+        horizontal: isMobile ? 24 : 80,
+      ),
       child: Column(
         children: [
           Text(
             'APPS AND WEB-BASED COURSES',
+            textAlign: TextAlign.center,
             style: GoogleFonts.amaticSc(
               color: Colors.white,
-              fontSize: 42,
+              fontSize: isMobile ? 34 : 42,
               fontWeight: FontWeight.w700,
               letterSpacing: 2,
             ),
@@ -861,7 +888,7 @@ class WelcomePage extends StatelessWidget {
           Center(
             child: Image.asset(
               'assets/images/codemonkey-devices-mobile.png',
-              width: 700,
+              width: isMobile ? double.infinity : 700,
               fit: BoxFit.contain,
             ),
           ),
@@ -946,10 +973,13 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── ALL IN ONE SECTION ────────────────────────────────────────────────────────
-  Widget _buildAllInOneSection() {
+  Widget _buildAllInOneSection(bool isMobile) {
     return Container(
       color: _skyBlue,
-      padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 80),
+      padding: EdgeInsets.symmetric(
+        vertical: 60,
+        horizontal: isMobile ? 24 : 80,
+      ),
       child: Stack(
         children: [
           Positioned.fill(
@@ -962,6 +992,7 @@ class WelcomePage extends StatelessWidget {
             children: [
               Text(
                 'All you need in one place',
+                textAlign: TextAlign.center,
                 style: GoogleFonts.amaticSc(
                   color: _navyText,
                   fontSize: 46,
@@ -969,87 +1000,146 @@ class WelcomePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 48),
-              // Progress Tracking row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'PROGRESS TRACKING',
-                          style: GoogleFonts.montserrat(
-                            color: _navyText,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "Equipped with student solutions, automatic grading, and progress management, Codey's dashboard allows you to effortlessly monitor your child's coding journey.",
-                          style: GoogleFonts.nunito(
-                            color: _navyText.withValues(alpha: 0.82),
-                            fontSize: 14,
-                            height: 1.7,
-                          ),
-                        ),
-                      ],
+              // Progress Tracking
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/images/classroom-management-2.png',
+                        height: 160,
+                        fit: BoxFit.contain,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 40),
-                  Image.asset(
-                    'assets/images/classroom-management-2.png',
-                    height: 190,
-                    fit: BoxFit.contain,
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'PROGRESS TRACKING',
+                      style: GoogleFonts.montserrat(
+                        color: _navyText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Equipped with student solutions, automatic grading, and progress management, Codey's dashboard allows you to effortlessly monitor your child's coding journey.",
+                      style: GoogleFonts.nunito(
+                        color: _navyText.withValues(alpha: 0.82),
+                        fontSize: 14,
+                        height: 1.7,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'PROGRESS TRACKING',
+                            style: GoogleFonts.montserrat(
+                              color: _navyText,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            "Equipped with student solutions, automatic grading, and progress management, Codey's dashboard allows you to effortlessly monitor your child's coding journey.",
+                            style: GoogleFonts.nunito(
+                              color: _navyText.withValues(alpha: 0.82),
+                              fontSize: 14,
+                              height: 1.7,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 40),
+                    Image.asset(
+                      'assets/images/classroom-management-2.png',
+                      height: 190,
+                      fit: BoxFit.contain,
+                    ),
+                  ],
+                ),
               const SizedBox(height: 48),
-              // Standards Alignment row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/images/standards-checklist1.png',
-                    height: 220,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(width: 32),
-                  Image.asset(
-                    'assets/images/teacher_-page-2.png',
-                    height: 220,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(width: 32),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // Standards Alignment
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'STANDARDS ALIGNMENT',
-                          style: GoogleFonts.montserrat(
-                            color: _navyText,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Codey places a high emphasis on content that aligns to today\'s standards. With online challenges and activities, students not only develop coding skills, but also computational thinking, collaboration, reasoning, and logic.',
-                          style: GoogleFonts.nunito(
-                            color: _navyText.withValues(alpha: 0.82),
-                            fontSize: 14,
-                            height: 1.7,
-                          ),
-                        ),
+                        Image.asset('assets/images/standards-checklist1.png', height: 140, fit: BoxFit.contain),
+                        const SizedBox(width: 16),
+                        Image.asset('assets/images/teacher_-page-2.png', height: 140, fit: BoxFit.contain),
                       ],
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'STANDARDS ALIGNMENT',
+                      style: GoogleFonts.montserrat(
+                        color: _navyText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Codey places a high emphasis on content that aligns to today\'s standards. With online challenges and activities, students not only develop coding skills, but also computational thinking, collaboration, reasoning, and logic.',
+                      style: GoogleFonts.nunito(
+                        color: _navyText.withValues(alpha: 0.82),
+                        fontSize: 14,
+                        height: 1.7,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Image.asset('assets/images/standards-checklist1.png', height: 220, fit: BoxFit.contain),
+                    const SizedBox(width: 32),
+                    Image.asset('assets/images/teacher_-page-2.png', height: 220, fit: BoxFit.contain),
+                    const SizedBox(width: 32),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'STANDARDS ALIGNMENT',
+                            style: GoogleFonts.montserrat(
+                              color: _navyText,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Codey places a high emphasis on content that aligns to today\'s standards. With online challenges and activities, students not only develop coding skills, but also computational thinking, collaboration, reasoning, and logic.',
+                            style: GoogleFonts.nunito(
+                              color: _navyText.withValues(alpha: 0.82),
+                              fontSize: 14,
+                              height: 1.7,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
         ],
@@ -1159,32 +1249,65 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
   @override
   Widget build(BuildContext context) {
     final display = _words[_wordIdx].substring(0, _charCount);
+    final isMobile = MediaQuery.of(context).size.width < 900;
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.symmetric(vertical: 56, horizontal: 40),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'TEACH KIDS COURSES THAT ARE ',
-            style: GoogleFonts.amaticSc(
-              color: const Color(0xFF2D3560),
-              fontSize: 36,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1,
-            ),
-          ),
-          Text(
-            display,
-            style: GoogleFonts.amaticSc(
-              color: const Color(0xFF5BA033),
-              fontSize: 36,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Container(width: 2.5, height: 36, color: const Color(0xFF2D3560)),
-        ],
+      padding: EdgeInsets.symmetric(
+        vertical: 56,
+        horizontal: isMobile ? 24 : 40,
       ),
+      child: isMobile
+          ? Column(
+              children: [
+                Text(
+                  'TEACH KIDS COURSES THAT ARE',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.amaticSc(
+                    color: const Color(0xFF2D3560),
+                    fontSize: 30,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      display,
+                      style: GoogleFonts.amaticSc(
+                        color: const Color(0xFF5BA033),
+                        fontSize: 30,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Container(width: 2.5, height: 30, color: const Color(0xFF2D3560)),
+                  ],
+                ),
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'TEACH KIDS COURSES THAT ARE ',
+                  style: GoogleFonts.amaticSc(
+                    color: const Color(0xFF2D3560),
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                  ),
+                ),
+                Text(
+                  display,
+                  style: GoogleFonts.amaticSc(
+                    color: const Color(0xFF5BA033),
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Container(width: 2.5, height: 36, color: const Color(0xFF2D3560)),
+              ],
+            ),
     );
   }
 }

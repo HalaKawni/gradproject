@@ -26,7 +26,8 @@
       "Bash(ls -la \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\\" | head -20)",
       "Read(//c/Users/magic/Downloads/**)",
       "Bash(node --check \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\server\\\\controller\\\\ai.controller.js\")",
-      "Bash(node --check \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\server\\\\routers\\\\ai.router.js\")"
+      "Bash(node --check \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\server\\\\routers\\\\ai.router.js\")",
+      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter.bat devices *)"
     ]
   }
 }

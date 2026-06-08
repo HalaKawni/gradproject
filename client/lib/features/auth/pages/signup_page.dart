@@ -34,6 +34,7 @@ class _SignupPageState extends State<SignupPage>
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return Scaffold(
       body: Column(
         children: [
@@ -206,7 +207,7 @@ class _SignupPageState extends State<SignupPage>
                         'signup.who_are_you'.tr(),
                         style: GoogleFonts.roboto(
                           color: Colors.white,
-                          fontSize: 52,
+                          fontSize: isMobile ? 36 : 52,
                           shadows: const [
                             Shadow(
                               offset: Offset(3, 3),
@@ -232,38 +233,55 @@ class _SignupPageState extends State<SignupPage>
                       const SizedBox(height: 32),
 
                       // ── CARDS ROW ──
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _RoleCard(
-                            title: 'signup.student'.tr(),
-                            subtitle: 'signup.student_subtitle'.tr(),
-                            imagePath: 'assets/images/student.jpg',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const StudentSignupPage(),
+                      isMobile
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 24),
+                              child: Column(
+                                children: [
+                                  _RoleCard(
+                                    title: 'signup.student'.tr(),
+                                    subtitle: 'signup.student_subtitle'.tr(),
+                                    imagePath: 'assets/images/student.jpg',
+                                    cardWidth: double.infinity,
+                                    onTap: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentSignupPage()));
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _RoleCard(
+                                    title: 'signup.parent'.tr(),
+                                    subtitle: 'signup.parent_subtitle'.tr(),
+                                    imagePath: 'assets/images/parent.jpg',
+                                    cardWidth: double.infinity,
+                                    onTap: () {
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const parentAccountPage()));
+                                    },
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _RoleCard(
+                                  title: 'signup.student'.tr(),
+                                  subtitle: 'signup.student_subtitle'.tr(),
+                                  imagePath: 'assets/images/student.jpg',
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const StudentSignupPage()));
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 24),
-                          _RoleCard(
-                            title: 'signup.parent'.tr(),
-                            subtitle: 'signup.parent_subtitle'.tr(),
-                            imagePath: 'assets/images/parent.jpg',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const parentAccountPage(),
+                                const SizedBox(width: 24),
+                                _RoleCard(
+                                  title: 'signup.parent'.tr(),
+                                  subtitle: 'signup.parent_subtitle'.tr(),
+                                  imagePath: 'assets/images/parent.jpg',
+                                  onTap: () {
+                                    Navigator.push(context, MaterialPageRoute(builder: (_) => const parentAccountPage()));
+                                  },
                                 ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
+                              ],
+                            ),
 
                       const SizedBox(height: 32),
 
@@ -351,12 +369,14 @@ class _RoleCard extends StatefulWidget {
   final String subtitle;
   final String imagePath;
   final VoidCallback onTap;
+  final double? cardWidth;
 
   const _RoleCard({
     required this.title,
     required this.subtitle,
     required this.imagePath,
     required this.onTap,
+    this.cardWidth,
   });
 
   @override
@@ -380,7 +400,7 @@ class _RoleCardState extends State<_RoleCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 260,
+          width: widget.cardWidth ?? 260,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -433,7 +453,7 @@ class _RoleCardState extends State<_RoleCard> {
                 ),
                 child: Image.asset(
                   widget.imagePath,
-                  width: 260,
+                  width: widget.cardWidth ?? 260,
                   height: 180,
                   fit: BoxFit.cover,
                 ),

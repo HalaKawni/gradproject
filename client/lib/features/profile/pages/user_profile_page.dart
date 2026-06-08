@@ -10,7 +10,7 @@ import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:web/web.dart' as web;
+import 'package:client/utils/web_redirect.dart';
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({
@@ -546,7 +546,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 
   void _logout() {
-    web.window.location.href = 'http://localhost:8080/';
+    webRedirect('http://localhost:8080/');
   }
 
   @override

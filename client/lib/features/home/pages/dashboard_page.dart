@@ -11,14 +11,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web/web.dart' as web;
+import 'package:client/utils/web_redirect.dart';
 import 'world_map_page.dart';
 import '../widgets/unlock_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:client/features/home/services/game_api_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
-import 'package:client/aicourse/ai_hoot_page_game.dart';
+import 'package:client/aicourse/ai_hoot_conditional.dart';
 import 'package:client/features/classroom/pages/classroom_page.dart';
 import 'package:client/utils/responsive.dart';
 import 'package:client/mycourses/course_detail_page.dart';
@@ -653,7 +653,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _signOut() {
-    web.window.location.href = 'http://localhost:8080/';
+    webRedirect('http://localhost:8080/');
   }
 
   Future<void> _showLanguageDialog() async {

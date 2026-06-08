@@ -39,6 +39,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return Scaffold(
       body: Column(
         children: [
@@ -114,7 +115,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
-                          fontSize: 58,
+                          fontSize: isMobile ? 40 : 58,
                           fontWeight: FontWeight.w700,
                           height: 1.1,
                           shadows: const [
@@ -152,8 +153,7 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  SizedBox(
-                                    width: 340,
+                                  Expanded(
                                     child: TextField(
                                       controller: _codeController,
                                       style: GoogleFonts.nunito(
@@ -247,15 +247,12 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                               ),
                               if (_showCodeError) ...[
                                 const SizedBox(height: 6),
-                                Padding(
-                                  padding: const EdgeInsets.only(left:520),
-                                  child: Text(
-                                    'error.required'.tr(),
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFFE53935),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                Text(
+                                  'error.required'.tr(),
+                                  style: GoogleFonts.nunito(
+                                    color: const Color(0xFFE53935),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
@@ -269,39 +266,66 @@ class _StudentSignupPageState extends State<StudentSignupPage>
                       // ── YES / NO CARDS ──
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _ClassroomCard(
-                              answer: 'common.yes'.tr(),
-                              subtitle: 'student.has_code'.tr(),
-                              imagePath: 'assets/images/elephant_yes.jpg',
-                              isSelected: _selected == 'YES',
-                              onTap: () {
-                                setState(() {
-                                  _selected = 'YES';
-                                  _showCodeError = false;
-                                  _codeController.clear();
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 24),
-                            _ClassroomCard(
-                              answer: 'common.no'.tr(),
-                              subtitle: 'student.no_code'.tr(),
-                              imagePath: 'assets/images/elephant_no.jpg',
-                              isSelected: _selected == 'NO',
-                             onTap: () {
-  setState(() => _selected = 'NO');
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const WherePlayingPage()),
-  );
-},
-                              
-                            ),
-                          ],
-                        ),
+                        child: isMobile
+                            ? Column(
+                                children: [
+                                  _ClassroomCard(
+                                    answer: 'common.yes'.tr(),
+                                    subtitle: 'student.has_code'.tr(),
+                                    imagePath: 'assets/images/elephant_yes.jpg',
+                                    isSelected: _selected == 'YES',
+                                    cardWidth: double.infinity,
+                                    onTap: () {
+                                      setState(() {
+                                        _selected = 'YES';
+                                        _showCodeError = false;
+                                        _codeController.clear();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _ClassroomCard(
+                                    answer: 'common.no'.tr(),
+                                    subtitle: 'student.no_code'.tr(),
+                                    imagePath: 'assets/images/elephant_no.jpg',
+                                    isSelected: _selected == 'NO',
+                                    cardWidth: double.infinity,
+                                    onTap: () {
+                                      setState(() => _selected = 'NO');
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WherePlayingPage()));
+                                    },
+                                  ),
+                                ],
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _ClassroomCard(
+                                    answer: 'common.yes'.tr(),
+                                    subtitle: 'student.has_code'.tr(),
+                                    imagePath: 'assets/images/elephant_yes.jpg',
+                                    isSelected: _selected == 'YES',
+                                    onTap: () {
+                                      setState(() {
+                                        _selected = 'YES';
+                                        _showCodeError = false;
+                                        _codeController.clear();
+                                      });
+                                    },
+                                  ),
+                                  const SizedBox(width: 24),
+                                  _ClassroomCard(
+                                    answer: 'common.no'.tr(),
+                                    subtitle: 'student.no_code'.tr(),
+                                    imagePath: 'assets/images/elephant_no.jpg',
+                                    isSelected: _selected == 'NO',
+                                    onTap: () {
+                                      setState(() => _selected = 'NO');
+                                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WherePlayingPage()));
+                                    },
+                                  ),
+                                ],
+                              ),
                       ),
 
                       const SizedBox(height: 36),
@@ -397,6 +421,7 @@ class _ClassroomCard extends StatefulWidget {
   final String imagePath;
   final bool isSelected;
   final VoidCallback onTap;
+  final double? cardWidth;
 
   const _ClassroomCard({
     required this.answer,
@@ -404,6 +429,7 @@ class _ClassroomCard extends StatefulWidget {
     required this.imagePath,
     required this.isSelected,
     required this.onTap,
+    this.cardWidth,
   });
 
   @override
@@ -422,7 +448,7 @@ class _ClassroomCardState extends State<_ClassroomCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 240,
+          width: widget.cardWidth ?? 240,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -437,14 +463,14 @@ class _ClassroomCardState extends State<_ClassroomCard> {
             boxShadow: (_hovered || widget.isSelected)
                 ? [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
+                      color: Colors.black.withValues(alpha:0.18),
                       blurRadius: 14,
                       offset: const Offset(0, 6),
                     )
                   ]
                 : [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha:0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     )
@@ -477,7 +503,7 @@ class _ClassroomCardState extends State<_ClassroomCard> {
                 ),
                 child: Image.asset(
                   widget.imagePath,
-                  width: 240,
+                  width: widget.cardWidth ?? 240,
                   height: 160,
                   fit: BoxFit.cover,
                 ),
@@ -495,7 +521,7 @@ class _CloudPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.85)
+      ..color = Colors.white.withValues(alpha:0.85)
       ..style = PaintingStyle.fill;
 
     final w = size.width;
