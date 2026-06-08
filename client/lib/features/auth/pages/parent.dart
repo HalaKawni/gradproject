@@ -101,6 +101,7 @@ class _parentAccountPageState extends State<parentAccountPage>
 
       if (!mounted) return;
 
+      ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
@@ -230,6 +231,7 @@ class _parentAccountPageState extends State<parentAccountPage>
       );
     }
 
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
     Navigator.of(context).pushNamedAndRemoveUntil(
       AppRoutes.dashboard,
       (route) => false,
@@ -435,7 +437,9 @@ class _parentAccountPageState extends State<parentAccountPage>
                                         const SizedBox(height: 14),
 
                                         // Re-enter password
-                                        _buildLabel('common.reenter_password'.tr()),
+                                        _buildLabel(
+                                          'common.reenter_password'.tr(),
+                                        ),
                                         _buildTextField(
                                           controller: _rePasswordController,
                                           hasError:
@@ -464,7 +468,8 @@ class _parentAccountPageState extends State<parentAccountPage>
                                           _buildError('error.required'.tr()),
                                         if (_showPasswordMismatch)
                                           _buildError(
-                                              'error.passwords_mismatch'.tr()),
+                                            'error.passwords_mismatch'.tr(),
+                                          ),
                                         const SizedBox(height: 28),
 
                                         // SIGN UP button
@@ -487,9 +492,10 @@ class _parentAccountPageState extends State<parentAccountPage>
                                             child: SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton(
-                                                onPressed: _loading ? null : _onSignUp,
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                onPressed: _loading
+                                                    ? null
+                                                    : _onSignUp,
+                                                style: ElevatedButton.styleFrom(
                                                   backgroundColor:
                                                       const Color.fromARGB(
                                                         255,
@@ -508,26 +514,33 @@ class _parentAccountPageState extends State<parentAccountPage>
                                                   shape: RoundedRectangleBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            6),
+                                                          6,
+                                                        ),
                                                   ),
                                                 ),
                                                 child: _loading
                                                     ? const SizedBox(
                                                         height: 18,
                                                         width: 18,
-                                                        child: CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          color: Color(0xFF3A2A00),
-                                                        ),
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                              color: Color(
+                                                                0xFF3A2A00,
+                                                              ),
+                                                            ),
                                                       )
                                                     : Text(
                                                         'nav.signup'.tr(),
                                                         style:
                                                             GoogleFonts.montserrat(
-                                                          fontSize: 15,
-                                                          fontWeight: FontWeight.w800,
-                                                          letterSpacing: 1.5,
-                                                        ),
+                                                              fontSize: 15,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w800,
+                                                              letterSpacing:
+                                                                  1.5,
+                                                            ),
                                                       ),
                                               ),
                                             ),
@@ -820,7 +833,11 @@ class _parentAccountPageState extends State<parentAccountPage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+          Image.asset(
+            'assets/images/sprites/logocodey.png',
+            height: 40,
+            fit: BoxFit.contain,
+          ),
           Row(
             children: [
               _HoverNavButton(

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/builder_playback_state.dart';
 import '../models/builder_project.dart';
 import '../models/builder_validation.dart';
@@ -56,6 +57,7 @@ class BuilderController extends ChangeNotifier {
   final Map<String, Uint8List> _uploadedAssetImageCache = <String, Uint8List>{};
   final Map<String, Future<void>> _assetImageLoads = <String, Future<void>>{};
   List<CustomAssetData> _savedAssetLibrary = const <CustomAssetData>[];
+  List<CustomAssetData> _favoriteAssetLibrary = const <CustomAssetData>[];
 
   bool get hasBlockingValidationIssues {
     return validation.errors.isNotEmpty || validation.warnings.isNotEmpty;
@@ -112,8 +114,44 @@ class BuilderController extends ChangeNotifier {
   CustomAssetData? get currentCustomAsset =>
       customAssetById(currentCustomAssetId);
 
-  List<CustomAssetData> get createdCustomAssets =>
-      project.customAssets.where((asset) => asset.isCreatedByUser).toList();
+  List<CustomAssetData> get createdCustomAssets {
+    final projectAssetIds = project.customAssets
+        .map((asset) => asset.assetId)
+        .whereType<String>()
+        .toSet();
+
+    return _dedupeCustomAssets([
+      ...project.customAssets.where((asset) => asset.isCreatedByUser),
+      ..._savedAssetLibrary.where(
+        (asset) =>
+            asset.isCreatedByUser && !projectAssetIds.contains(asset.assetId),
+      ),
+      ..._favoriteAssetLibrary.where(
+        (asset) =>
+            asset.isCreatedByUser && !projectAssetIds.contains(asset.assetId),
+      ),
+    ]);
+  }
+
+  List<CustomAssetData> get favoriteCustomAssets {
+    final projectAssetIds = project.customAssets
+        .map((asset) => asset.assetId)
+        .whereType<String>()
+        .toSet();
+
+    return _dedupeCustomAssets([
+      ...project.customAssets.where(
+        (asset) =>
+            asset.assetId != null &&
+            _favoriteAssetLibrary.any(
+              (favorite) => favorite.assetId == asset.assetId,
+            ),
+      ),
+      ..._favoriteAssetLibrary.where(
+        (asset) => !projectAssetIds.contains(asset.assetId),
+      ),
+    ]);
+  }
 
   List<CustomAssetData> get savedCustomAssets {
     final projectAssetIds = project.customAssets
@@ -241,33 +279,84 @@ class BuilderController extends ChangeNotifier {
 
     _savedAssetLibrary = data
         .whereType<Map>()
-        .map((assetJson) {
-          final assetId = (assetJson['_id'] ?? assetJson['id'])?.toString();
-          if (assetId == null || assetId.isEmpty) {
-            return null;
-          }
-
-          return CustomAssetData(
-            id: 'saved-$assetId',
-            assetId: assetId,
-            name: assetJson['name']?.toString() ?? 'Untitled asset',
-            type: CustomAssetTypeExtension.fromString(
-              assetJson['type']?.toString(),
-            ),
-            mimeType: assetJson['mimeType']?.toString() ?? 'image/png',
-            isCreatedByUser: false,
-            isPublic: assetJson['isPublic'] == true,
-          );
-        })
+        .map(
+          (assetJson) => _customAssetFromApiJson(
+            assetJson,
+            idPrefix: 'saved',
+            fallbackCreatedByUser: true,
+          ),
+        )
         .whereType<CustomAssetData>()
         .toList();
+    _favoriteAssetLibrary = await _loadFavoriteAssetLibrary();
 
     unawaited(loadMissingSavedAssetImages());
     notifyListeners();
   }
 
   Future<void> loadMissingSavedAssetImages() async {
-    await Future.wait(_savedAssetLibrary.map(ensureAssetImageLoaded));
+    await Future.wait([
+      ..._savedAssetLibrary.map(ensureAssetImageLoaded),
+      ..._favoriteAssetLibrary.map(ensureAssetImageLoaded),
+    ]);
+  }
+
+  Future<List<CustomAssetData>> _loadFavoriteAssetLibrary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favoriteAssetIds =
+        prefs
+            .getStringList(
+              'dashboard.discoverFavorites.${session.user.id}.assets',
+            )
+            ?.toSet() ??
+        <String>{};
+    if (favoriteAssetIds.isEmpty) {
+      return const <CustomAssetData>[];
+    }
+
+    final response = await ApiService.getPublishedBuilderAssets(
+      authToken: session.token,
+    );
+    final data = response['data'];
+    if (response['success'] != true || data is! List) {
+      return const <CustomAssetData>[];
+    }
+
+    return data
+        .whereType<Map>()
+        .map(
+          (assetJson) => _customAssetFromApiJson(
+            assetJson,
+            idPrefix: 'favorite',
+            fallbackCreatedByUser: false,
+          ),
+        )
+        .whereType<CustomAssetData>()
+        .where((asset) => favoriteAssetIds.contains(asset.assetId))
+        .toList();
+  }
+
+  CustomAssetData? _customAssetFromApiJson(
+    Map<dynamic, dynamic> assetJson, {
+    required String idPrefix,
+    required bool fallbackCreatedByUser,
+  }) {
+    final assetId = (assetJson['_id'] ?? assetJson['id'])?.toString();
+    if (assetId == null || assetId.isEmpty) {
+      return null;
+    }
+
+    return CustomAssetData(
+      id: '$idPrefix-$assetId',
+      assetId: assetId,
+      name: assetJson['name']?.toString() ?? 'Untitled asset',
+      type: CustomAssetTypeExtension.fromString(assetJson['type']?.toString()),
+      mimeType: assetJson['mimeType']?.toString() ?? 'image/png',
+      isCreatedByUser:
+          assetJson['ownerId']?.toString() == session.user.id ||
+          fallbackCreatedByUser,
+      isPublic: assetJson['isPublic'] == true,
+    );
   }
 
   Future<void> ensureAssetImageLoaded(CustomAssetData asset) {

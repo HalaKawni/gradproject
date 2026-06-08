@@ -32,6 +32,7 @@ class _LoginPageState extends State<LoginPage>
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String? _errorText;
+  ScaffoldMessengerState? _scaffoldMessenger;
   StreamSubscription<GoogleSignInAuthenticationEvent>?
   _googleSignInSubscription;
 
@@ -52,6 +53,12 @@ class _LoginPageState extends State<LoginPage>
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
   }
 
   Future<void> _setUpGoogleSignIn() async {
@@ -164,6 +171,7 @@ class _LoginPageState extends State<LoginPage>
         ? AdminRouteData(session: session)
         : DashboardRouteData(session: session);
 
+    _scaffoldMessenger?.removeCurrentSnackBar();
     Navigator.of(context).pushNamedAndRemoveUntil(
       routeName,
       (route) => false,
@@ -181,9 +189,10 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    final messenger = _scaffoldMessenger ?? ScaffoldMessenger.maybeOf(context);
+    messenger
+      ?..removeCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -674,7 +683,11 @@ class _LoginPageState extends State<LoginPage>
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            child: Image.asset(
+              'assets/images/sprites/logocodey.png',
+              height: 40,
+              fit: BoxFit.contain,
+            ),
           ),
           Row(
             children: [

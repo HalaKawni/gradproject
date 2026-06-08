@@ -23,6 +23,7 @@ import 'package:client/features/builder/top_view/solver/top_view_solver.dart';
 import 'package:flame/game.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TopViewBuilderPage extends StatefulWidget {
   final AuthSession session;
@@ -95,6 +96,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
       <String, Future<void>>{};
   final List<CustomAssetData> _customAssets = <CustomAssetData>[];
   List<CustomAssetData> _savedAssetLibrary = const <CustomAssetData>[];
+  List<CustomAssetData> _favoriteAssetLibrary = const <CustomAssetData>[];
   final List<_CodeBlock> _allowedBlocks = <_CodeBlock>[];
   late final TextEditingController _titleController;
   late final TextEditingController _instructionController;
@@ -1707,21 +1709,59 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     return null;
   }
 
-  List<CustomAssetData> get _createdCustomAssets =>
-      _customAssets.where((asset) => asset.isCreatedByUser).toList();
-
-  List<CustomAssetData> get _savedCustomAssets {
+  List<CustomAssetData> get _createdCustomAssets {
     final projectAssetIds = _customAssets
         .map((asset) => asset.assetId)
         .whereType<String>()
         .toSet();
 
-    return [
-      ..._customAssets.where((asset) => !asset.isCreatedByUser),
+    return _dedupeCustomAssets([
+      ..._customAssets.where((asset) => asset.isCreatedByUser),
       ..._savedAssetLibrary.where(
+        (asset) =>
+            asset.isCreatedByUser && !projectAssetIds.contains(asset.assetId),
+      ),
+      ..._favoriteAssetLibrary.where(
+        (asset) =>
+            asset.isCreatedByUser && !projectAssetIds.contains(asset.assetId),
+      ),
+    ]);
+  }
+
+  List<CustomAssetData> get _favoriteCustomAssets {
+    final projectAssetIds = _customAssets
+        .map((asset) => asset.assetId)
+        .whereType<String>()
+        .toSet();
+
+    return _dedupeCustomAssets([
+      ..._customAssets.where(
+        (asset) =>
+            asset.assetId != null &&
+            _favoriteAssetLibrary.any(
+              (favorite) => favorite.assetId == asset.assetId,
+            ),
+      ),
+      ..._favoriteAssetLibrary.where(
         (asset) => !projectAssetIds.contains(asset.assetId),
       ),
-    ];
+    ]);
+  }
+
+  List<CustomAssetData> _dedupeCustomAssets(List<CustomAssetData> assets) {
+    final byUploadedId = <String, CustomAssetData>{};
+    final withoutUploadedId = <CustomAssetData>[];
+
+    for (final asset in assets) {
+      final uploadedAssetId = asset.assetId;
+      if (uploadedAssetId == null || uploadedAssetId.isEmpty) {
+        withoutUploadedId.add(asset);
+        continue;
+      }
+      byUploadedId.putIfAbsent(uploadedAssetId, () => asset);
+    }
+
+    return [...byUploadedId.values, ...withoutUploadedId];
   }
 
   Uint8List? _assetImageBytes(CustomAssetData asset) {
@@ -1781,25 +1821,16 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
     final assets = <CustomAssetData>[];
     for (final rawAsset in (response['data'] as List).whereType<Map>()) {
-      final assetId = (rawAsset['_id'] ?? rawAsset['id'])?.toString();
-      if (assetId == null || assetId.isEmpty) {
-        continue;
-      }
-
-      assets.add(
-        CustomAssetData(
-          id: 'saved-$assetId',
-          assetId: assetId,
-          name: rawAsset['name']?.toString() ?? 'Untitled asset',
-          type: CustomAssetTypeExtension.fromString(
-            rawAsset['type']?.toString(),
-          ),
-          mimeType: rawAsset['mimeType']?.toString() ?? 'image/png',
-          isCreatedByUser: false,
-          isPublic: rawAsset['isPublic'] == true,
-        ),
+      final asset = _customAssetFromApiJson(
+        rawAsset,
+        idPrefix: 'saved',
+        fallbackCreatedByUser: true,
       );
+      if (asset != null) {
+        assets.add(asset);
+      }
     }
+    final favoriteAssets = await _loadFavoriteAssetLibrary();
 
     if (!mounted) {
       return;
@@ -1807,10 +1838,69 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
 
     setState(() {
       _savedAssetLibrary = assets;
+      _favoriteAssetLibrary = favoriteAssets;
     });
-    for (final asset in assets) {
+    for (final asset in [...assets, ...favoriteAssets]) {
       unawaited(_ensureAssetImageLoaded(asset));
     }
+  }
+
+  Future<List<CustomAssetData>> _loadFavoriteAssetLibrary() async {
+    final prefs = await SharedPreferences.getInstance();
+    final favoriteAssetIds =
+        prefs
+            .getStringList(
+              'dashboard.discoverFavorites.${widget.session.user.id}.assets',
+            )
+            ?.toSet() ??
+        <String>{};
+    if (favoriteAssetIds.isEmpty) {
+      return const <CustomAssetData>[];
+    }
+
+    final response = await ApiService.getPublishedBuilderAssets(
+      authToken: widget.session.token,
+    );
+    final data = response['data'];
+    if (response['success'] != true || data is! List) {
+      return const <CustomAssetData>[];
+    }
+
+    return data
+        .whereType<Map>()
+        .map(
+          (assetJson) => _customAssetFromApiJson(
+            assetJson,
+            idPrefix: 'favorite',
+            fallbackCreatedByUser: false,
+          ),
+        )
+        .whereType<CustomAssetData>()
+        .where((asset) => favoriteAssetIds.contains(asset.assetId))
+        .toList();
+  }
+
+  CustomAssetData? _customAssetFromApiJson(
+    Map<dynamic, dynamic> assetJson, {
+    required String idPrefix,
+    required bool fallbackCreatedByUser,
+  }) {
+    final assetId = (assetJson['_id'] ?? assetJson['id'])?.toString();
+    if (assetId == null || assetId.isEmpty) {
+      return null;
+    }
+
+    return CustomAssetData(
+      id: '$idPrefix-$assetId',
+      assetId: assetId,
+      name: assetJson['name']?.toString() ?? 'Untitled asset',
+      type: CustomAssetTypeExtension.fromString(assetJson['type']?.toString()),
+      mimeType: assetJson['mimeType']?.toString() ?? 'image/png',
+      isCreatedByUser:
+          assetJson['ownerId']?.toString() == widget.session.user.id ||
+          fallbackCreatedByUser,
+      isPublic: assetJson['isPublic'] == true,
+    );
   }
 
   void _addCustomAssetToLevel(CustomAssetData asset, {Uint8List? bytes}) {
@@ -3915,7 +4005,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
               _buildAssetChoiceTile(
                 icon: Icons.collections_bookmark_rounded,
                 title: 'Browse collections',
-                subtitle: 'Use your creations or saved assets.',
+                subtitle: 'Use your favorites, creations, or saved assets.',
                 onTap: () {
                   Navigator.of(dialogContext).pop();
                   _showCollectionPickerDialog();
@@ -3969,7 +4059,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                 children: [
                   const TabBar(
                     tabs: [
-                      Tab(text: 'Saved'),
+                      Tab(text: 'Favorites'),
                       Tab(text: 'Creations'),
                     ],
                   ),
@@ -3978,7 +4068,7 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
                     child: TabBarView(
                       children: [
                         _buildCollectionAssetList(
-                          _savedCustomAssets,
+                          _favoriteCustomAssets,
                           dialogContext,
                         ),
                         _buildCollectionAssetList(

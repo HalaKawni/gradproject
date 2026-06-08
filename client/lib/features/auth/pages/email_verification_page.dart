@@ -100,8 +100,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
       }
 
       setState(() {
-        _message =
-            result['success']?.toString() ?? 'Verification email sent.';
+        _message = result['success']?.toString() ?? 'Verification email sent.';
       });
     } catch (e) {
       if (!mounted) {
@@ -119,6 +118,7 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
   }
 
   void _goToLogin() {
+    ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
@@ -130,18 +130,18 @@ class _EmailVerificationPageState extends State<EmailVerificationPage> {
     final title = widget.pending
         ? 'Check your email'
         : _verified
-            ? 'Email verified'
-            : 'Email verification';
+        ? 'Email verified'
+        : 'Email verification';
     final icon = widget.pending
         ? Icons.mark_email_unread_outlined
         : _verified
-            ? Icons.verified_outlined
-            : Icons.error_outline;
+        ? Icons.verified_outlined
+        : Icons.error_outline;
     final iconColor = widget.pending
         ? const Color(0xFF3288BD)
         : _verified
-            ? const Color(0xFF2E7D32)
-            : const Color(0xFFC62828);
+        ? const Color(0xFF2E7D32)
+        : const Color(0xFFC62828);
 
     return Scaffold(
       backgroundColor: const Color.fromRGBO(216, 233, 241, 1),

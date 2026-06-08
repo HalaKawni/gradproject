@@ -3144,7 +3144,7 @@ class _BuilderPageState extends State<BuilderPage> {
               _buildAssetChoiceTile(
                 icon: Icons.collections_bookmark_rounded,
                 title: 'Browse collections',
-                subtitle: 'Use your creations or saved assets.',
+                subtitle: 'Use your favorites, creations, or saved assets.',
                 onTap: () {
                   Navigator.of(dialogContext).pop();
                   _showCollectionPickerDialog();
@@ -3198,7 +3198,7 @@ class _BuilderPageState extends State<BuilderPage> {
                 children: [
                   const TabBar(
                     tabs: [
-                      Tab(text: 'Saved'),
+                      Tab(text: 'Favorites'),
                       Tab(text: 'Creations'),
                     ],
                   ),
@@ -3207,7 +3207,7 @@ class _BuilderPageState extends State<BuilderPage> {
                     child: TabBarView(
                       children: [
                         _buildCollectionAssetList(
-                          controller.savedCustomAssets,
+                          controller.favoriteCustomAssets,
                           dialogContext,
                         ),
                         _buildCollectionAssetList(
