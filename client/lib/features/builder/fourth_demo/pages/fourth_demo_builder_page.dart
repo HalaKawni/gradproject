@@ -90,6 +90,9 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   bool _hasSavedCourseProgress = false;
   Map<String, String> _creatorSolutionBySpriteId = <String, String>{};
 
+  final PageController _mobilePageController = PageController();
+  int _mobilePage = 0;
+
   String get _activeCodeSpriteId {
     return _codeSpriteId ??= controller.project.selectedSpriteId;
   }
@@ -144,6 +147,7 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
       ..dispose();
     stageFocusNode.dispose();
     codeFocusNode.dispose();
+    _mobilePageController.dispose();
     super.dispose();
   }
 
@@ -405,8 +409,42 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     return line.startsWith(' ') || line.startsWith('\t');
   }
 
+  Widget _buildMobileTab(String label, int index) {
+    final selected = _mobilePage == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _mobilePageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? const Color(0xFF6DB84A) : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? Colors.white : Colors.white60,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     final language = AppLanguage.of(context);
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -501,50 +539,111 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
             : Column(
                 children: [
                   Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 34,
-                          child: widget.playMode
-                              ? _InstructionPreviewPanel(
-                                  sections: instructionSections,
-                                )
-                              : InstructionEditorPanel(
-                                  sections: instructionSections,
-                                  onAddSection: _addInstructionSection,
-                                  onRemoveSection: _removeInstructionSection,
-                                  onReorderSections:
-                                      _reorderInstructionSections,
-                                  onTitleChanged: _updateInstructionTitle,
-                                  onContentChanged: _updateInstructionContent,
-                                  onAddItem: _addInstructionItem,
-                                  onItemChanged: _updateInstructionItem,
-                                  onRemoveItem: _removeInstructionItem,
+                    child: isMobile
+                        ? Column(
+                            children: [
+                              Container(
+                                color: const Color(0xFF2c2c2e),
+                                child: Row(
+                                  children: [
+                                    _buildMobileTab('Instructions', 0),
+                                    _buildMobileTab('Code', 1),
+                                    _buildMobileTab('Game', 2),
+                                  ],
                                 ),
-                        ),
-                        Expanded(
-                          flex: 46,
-                          child: _CodeColumn(
-                            controller: controller,
-                            codeController: codeController,
-                            codeFocusNode: codeFocusNode,
-                            onRun: _runCode,
-                            readOnly: false,
+                              ),
+                              Expanded(
+                                child: PageView(
+                                  controller: _mobilePageController,
+                                  onPageChanged: (i) =>
+                                      setState(() => _mobilePage = i),
+                                  children: [
+                                    widget.playMode
+                                        ? _InstructionPreviewPanel(
+                                            sections: instructionSections,
+                                          )
+                                        : InstructionEditorPanel(
+                                            sections: instructionSections,
+                                            onAddSection:
+                                                _addInstructionSection,
+                                            onRemoveSection:
+                                                _removeInstructionSection,
+                                            onReorderSections:
+                                                _reorderInstructionSections,
+                                            onTitleChanged:
+                                                _updateInstructionTitle,
+                                            onContentChanged:
+                                                _updateInstructionContent,
+                                            onAddItem: _addInstructionItem,
+                                            onItemChanged:
+                                                _updateInstructionItem,
+                                            onRemoveItem: _removeInstructionItem,
+                                          ),
+                                    _CodeColumn(
+                                      controller: controller,
+                                      codeController: codeController,
+                                      codeFocusNode: codeFocusNode,
+                                      onRun: _runCode,
+                                      readOnly: false,
+                                    ),
+                                    _StageColumn(
+                                      controller: controller,
+                                      game: game,
+                                      focusNode: stageFocusNode,
+                                      onSelectSprite: _selectSprite,
+                                      readOnly: false,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 34,
+                                child: widget.playMode
+                                    ? _InstructionPreviewPanel(
+                                        sections: instructionSections,
+                                      )
+                                    : InstructionEditorPanel(
+                                        sections: instructionSections,
+                                        onAddSection: _addInstructionSection,
+                                        onRemoveSection:
+                                            _removeInstructionSection,
+                                        onReorderSections:
+                                            _reorderInstructionSections,
+                                        onTitleChanged: _updateInstructionTitle,
+                                        onContentChanged:
+                                            _updateInstructionContent,
+                                        onAddItem: _addInstructionItem,
+                                        onItemChanged: _updateInstructionItem,
+                                        onRemoveItem: _removeInstructionItem,
+                                      ),
+                              ),
+                              Expanded(
+                                flex: 46,
+                                child: _CodeColumn(
+                                  controller: controller,
+                                  codeController: codeController,
+                                  codeFocusNode: codeFocusNode,
+                                  onRun: _runCode,
+                                  readOnly: false,
+                                ),
+                              ),
+                              Expanded(
+                                flex: 44,
+                                child: _StageColumn(
+                                  controller: controller,
+                                  game: game,
+                                  focusNode: stageFocusNode,
+                                  onSelectSprite: _selectSprite,
+                                  readOnly: false,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        Expanded(
-                          flex: 44,
-                          child: _StageColumn(
-                            controller: controller,
-                            game: game,
-                            focusNode: stageFocusNode,
-                            onSelectSprite: _selectSprite,
-                            readOnly: false,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
                 ],
               ),

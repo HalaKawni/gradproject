@@ -98,23 +98,36 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     return Scaffold(
       backgroundColor: const Color(0xFFADE8F4),
       body: Column(
         children: [
           _buildTopNavbar(),
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(32, 28, 24, 28),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildLeftPanel(),
-                  const SizedBox(width: 58),
-                  Expanded(child: _buildLessonsGrid()),
-                ],
-              ),
-            ),
+            child: isMobile
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLeftPanel(isMobile: true),
+                        const SizedBox(height: 24),
+                        _buildLessonsGrid(),
+                      ],
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.fromLTRB(32, 28, 24, 28),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLeftPanel(),
+                        const SizedBox(width: 58),
+                        Expanded(child: _buildLessonsGrid()),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
@@ -183,10 +196,10 @@ class _CourseDetailPageState extends State<CourseDetailPage> {
     );
   }
 
-  Widget _buildLeftPanel() {
+  Widget _buildLeftPanel({bool isMobile = false}) {
     final total = _lessons.length;
     return Container(
-      width: 400,
+      width: isMobile ? double.infinity : 400,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         color: const Color(0xFFCDF0F8),

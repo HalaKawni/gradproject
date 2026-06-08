@@ -90,6 +90,9 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
   Timer? _titleSaveDebounce;
   String? _lastAutoSavedTitle;
 
+  final PageController _mobilePageController = PageController();
+  int _mobilePage = 0;
+
   @override
   void initState() {
     super.initState();
@@ -131,6 +134,7 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
     _titleSaveDebounce?.cancel();
     _titleController.removeListener(_handleTitleChanged);
     _titleController.dispose();
+    _mobilePageController.dispose();
     super.dispose();
   }
 
@@ -1908,8 +1912,42 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
     return next;
   }
 
+  Widget _buildMobileTab(String label, int index) {
+    final selected = _mobilePage == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _mobilePageController.animateToPage(
+          index,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeInOut,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? const Color(0xFF6DB84A) : Colors.transparent,
+                width: 3,
+              ),
+            ),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected ? Colors.white : Colors.white60,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     return Directionality(
       textDirection: TextDirection.ltr,
       child: Scaffold(
@@ -1940,69 +1978,148 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
                           : null,
                     ),
                     Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 34,
-                            child: InstructionEditorPanel(
-                              sections: instructionSections,
-                              onAddSection: _addInstructionSection,
-                              onRemoveSection: _removeInstructionSection,
-                              onReorderSections: _reorderInstructionSections,
-                              onTitleChanged: _updateInstructionTitle,
-                              onContentChanged: _updateInstructionContent,
-                              onAddItem: _addInstructionItem,
-                              onItemChanged: _updateInstructionItem,
-                              onRemoveItem: _removeInstructionItem,
+                      child: isMobile
+                          ? Column(
+                              children: [
+                                Container(
+                                  color: const Color(0xFF2c2c2e),
+                                  child: Row(
+                                    children: [
+                                      _buildMobileTab('Instructions', 0),
+                                      _buildMobileTab('Code', 1),
+                                      _buildMobileTab('Game', 2),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: PageView(
+                                    controller: _mobilePageController,
+                                    onPageChanged: (i) =>
+                                        setState(() => _mobilePage = i),
+                                    children: [
+                                      InstructionEditorPanel(
+                                        sections: instructionSections,
+                                        onAddSection: _addInstructionSection,
+                                        onRemoveSection:
+                                            _removeInstructionSection,
+                                        onReorderSections:
+                                            _reorderInstructionSections,
+                                        onTitleChanged: _updateInstructionTitle,
+                                        onContentChanged:
+                                            _updateInstructionContent,
+                                        onAddItem: _addInstructionItem,
+                                        onItemChanged: _updateInstructionItem,
+                                        onRemoveItem: _removeInstructionItem,
+                                      ),
+                                      WorkspacePanel(
+                                        blocks: workspaceBlocks,
+                                        selectedCategory: selectedCategory,
+                                        isDraggingWorkspaceBlock:
+                                            isDraggingWorkspaceBlock,
+                                        onCategoryPressed: _toggleCategory,
+                                        onAcceptTemplate: _addBlock,
+                                        onDetachBlock: _detachFromParent,
+                                        onMoveBlockStack: _moveBlockStack,
+                                        onSnapBlockStack: _snapBlockStack,
+                                        onDeleteBlockStack: _deleteBlockStack,
+                                        onUpdateBlockInput: _updateBlockInput,
+                                        onWorkspaceDragStateChanged:
+                                            _setWorkspaceDragState,
+                                      ),
+                                      StagePanel(
+                                        sprites: stageSprites,
+                                        widgets: stageWidgets,
+                                        sounds: stageSounds,
+                                        settings: gameSettings,
+                                        selectedSpriteId: selectedSpriteId,
+                                        assetTab: assetTab,
+                                        stageTool: stageTool,
+                                        onSelectSprite: _selectSprite,
+                                        onUpdateSprite: _updateSprite,
+                                        onAddSprite: _addSprite,
+                                        onDeleteSprite: _deleteSprite,
+                                        onDuplicateSprite: _duplicateSprite,
+                                        onSetAssetTab: _setAssetTab,
+                                        onSetStageTool: _setStageTool,
+                                        onAddWidget: _addStageWidget,
+                                        onUpdateWidget: _updateStageWidget,
+                                        onDeleteWidget: _deleteStageWidget,
+                                        onDuplicateWidget:
+                                            _duplicateStageWidget,
+                                        onAddSound: _addSound,
+                                        onUpdateSound: _updateSound,
+                                        onDeleteSound: _deleteSound,
+                                        onUpdateSettings: _updateSettings,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              children: [
+                                Expanded(
+                                  flex: 34,
+                                  child: InstructionEditorPanel(
+                                    sections: instructionSections,
+                                    onAddSection: _addInstructionSection,
+                                    onRemoveSection: _removeInstructionSection,
+                                    onReorderSections:
+                                        _reorderInstructionSections,
+                                    onTitleChanged: _updateInstructionTitle,
+                                    onContentChanged: _updateInstructionContent,
+                                    onAddItem: _addInstructionItem,
+                                    onItemChanged: _updateInstructionItem,
+                                    onRemoveItem: _removeInstructionItem,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 46,
+                                  child: WorkspacePanel(
+                                    blocks: workspaceBlocks,
+                                    selectedCategory: selectedCategory,
+                                    isDraggingWorkspaceBlock:
+                                        isDraggingWorkspaceBlock,
+                                    onCategoryPressed: _toggleCategory,
+                                    onAcceptTemplate: _addBlock,
+                                    onDetachBlock: _detachFromParent,
+                                    onMoveBlockStack: _moveBlockStack,
+                                    onSnapBlockStack: _snapBlockStack,
+                                    onDeleteBlockStack: _deleteBlockStack,
+                                    onUpdateBlockInput: _updateBlockInput,
+                                    onWorkspaceDragStateChanged:
+                                        _setWorkspaceDragState,
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 44,
+                                  child: StagePanel(
+                                    sprites: stageSprites,
+                                    widgets: stageWidgets,
+                                    sounds: stageSounds,
+                                    settings: gameSettings,
+                                    selectedSpriteId: selectedSpriteId,
+                                    assetTab: assetTab,
+                                    stageTool: stageTool,
+                                    onSelectSprite: _selectSprite,
+                                    onUpdateSprite: _updateSprite,
+                                    onAddSprite: _addSprite,
+                                    onDeleteSprite: _deleteSprite,
+                                    onDuplicateSprite: _duplicateSprite,
+                                    onSetAssetTab: _setAssetTab,
+                                    onSetStageTool: _setStageTool,
+                                    onAddWidget: _addStageWidget,
+                                    onUpdateWidget: _updateStageWidget,
+                                    onDeleteWidget: _deleteStageWidget,
+                                    onDuplicateWidget: _duplicateStageWidget,
+                                    onAddSound: _addSound,
+                                    onUpdateSound: _updateSound,
+                                    onDeleteSound: _deleteSound,
+                                    onUpdateSettings: _updateSettings,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          Expanded(
-                            flex: 46,
-                            child: WorkspacePanel(
-                              blocks: workspaceBlocks,
-                              selectedCategory: selectedCategory,
-                              isDraggingWorkspaceBlock:
-                                  isDraggingWorkspaceBlock,
-                              onCategoryPressed: _toggleCategory,
-                              onAcceptTemplate: _addBlock,
-                              onDetachBlock: _detachFromParent,
-                              onMoveBlockStack: _moveBlockStack,
-                              onSnapBlockStack: _snapBlockStack,
-                              onDeleteBlockStack: _deleteBlockStack,
-                              onUpdateBlockInput: _updateBlockInput,
-                              onWorkspaceDragStateChanged:
-                                  _setWorkspaceDragState,
-                            ),
-                          ),
-                          Expanded(
-                            flex: 44,
-                            child: StagePanel(
-                              sprites: stageSprites,
-                              widgets: stageWidgets,
-                              sounds: stageSounds,
-                              settings: gameSettings,
-                              selectedSpriteId: selectedSpriteId,
-                              assetTab: assetTab,
-                              stageTool: stageTool,
-                              onSelectSprite: _selectSprite,
-                              onUpdateSprite: _updateSprite,
-                              onAddSprite: _addSprite,
-                              onDeleteSprite: _deleteSprite,
-                              onDuplicateSprite: _duplicateSprite,
-                              onSetAssetTab: _setAssetTab,
-                              onSetStageTool: _setStageTool,
-                              onAddWidget: _addStageWidget,
-                              onUpdateWidget: _updateStageWidget,
-                              onDeleteWidget: _deleteStageWidget,
-                              onDuplicateWidget: _duplicateStageWidget,
-                              onAddSound: _addSound,
-                              onUpdateSound: _updateSound,
-                              onDeleteSound: _deleteSound,
-                              onUpdateSettings: _updateSettings,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),

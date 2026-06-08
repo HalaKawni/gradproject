@@ -1,7 +1,5 @@
 class ApiConstants {
-static const String baseUrl = 'http://127.0.0.1:3000/api';
-  // Use 127.0.0.1 for Windows desktop
-  // Use your actual IP (e.g. 192.168.1.5) for a real phone
+  static const String baseUrl = 'http://192.168.1.13:3000/api';
 
   // Auth
   static const String register = '$baseUrl/user/registration';

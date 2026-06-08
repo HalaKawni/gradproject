@@ -3,11 +3,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  // Change this depending on your environment:
-  // Android emulator: http://10.0.2.2:3000
-  // iOS simulator / web: http://localhost:3000
-  // Physical device: http://YOUR_LOCAL_IP:3000
-  static const String baseUrl = 'http://localhost:3000';
+  static const String baseUrl = 'http://192.168.1.13:3000';
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',

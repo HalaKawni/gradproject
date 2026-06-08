@@ -1,8 +1,6 @@
 class ApiConstants {
   static const String baseUrl =
-      'http://localhost:3000/api'; // 👆 Use 10.0.2.2 for Android emulator
-  // Use 127.0.0.1 for Windows desktop
-  // Use your actual IP (e.g. 192.168.1.5) for a real phone
+      'http://192.168.1.13:3000/api'; // PC's local WiFi IP for real device testing
 
   // Auth
   static const String register = '$baseUrl/user/registration';

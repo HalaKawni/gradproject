@@ -439,11 +439,14 @@ class _DigitalLessonPageState extends State<DigitalLessonPage> {
                   color: const Color(0xFF333333),
                   fontSize: 16, fontWeight: FontWeight.w900)),
           const SizedBox(width: 8),
-          Text(lessonTitle,
-              style: GoogleFonts.nunito(
-                  color: const Color(0xFF333333),
-                  fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(width: 500),
+          Flexible(
+            child: Text(lessonTitle,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.nunito(
+                    color: const Color(0xFF333333),
+                    fontSize: 15, fontWeight: FontWeight.w600)),
+          ),
+          const Spacer(),
           Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,

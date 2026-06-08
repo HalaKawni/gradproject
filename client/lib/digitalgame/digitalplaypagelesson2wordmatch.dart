@@ -262,18 +262,23 @@ class _DigitalPlayPageLesson2WordMatchState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-                    const SizedBox(width: 24),
-                    Text(
-                      'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
-                      style: GoogleFonts.montserrat(
-                        color: Colors.white70,
-                        fontSize: 13, fontWeight: FontWeight.w600,
+                Flexible(
+                  child: Row(
+                    children: [
+                      Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+                      const SizedBox(width: 24),
+                      Flexible(
+                        child: Text(
+                          'DIGITAL LITERACY: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.montserrat(
+                            color: Colors.white70,
+                            fontSize: 13, fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 Row(
                   children: [

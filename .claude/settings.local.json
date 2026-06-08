@@ -27,7 +27,26 @@
       "Read(//c/Users/magic/Downloads/**)",
       "Bash(node --check \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\server\\\\controller\\\\ai.controller.js\")",
       "Bash(node --check \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\server\\\\routers\\\\ai.router.js\")",
-      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter.bat devices *)"
+      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter.bat devices *)",
+      "Bash(node index.js)",
+      "Bash(npm install *)",
+      "Bash(ipconfig)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\lib\\\\digitalgame\" -Recurse -Filter \"*.dart\")",
+      "Bash(adb -s adb-R52N70FWMJA-pB8aiw._adb-tls-connect._tcp shell input keyevent 82)",
+      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter devices *)",
+      "Bash(\"C:/Users/magic/Downloads/sdkflutter/flutter/bin/flutter\" run *)",
+      "Bash(echo \"Started PID: $!\")",
+      "Bash(echo \"r\")",
+      "Bash(kill -0 3282)",
+      "Bash(dir \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\lib\\\\mycourses\" /s)",
+      "Bash(curl -s \"http://127.0.0.1:51548/jqdWKIHAhOc=/\")",
+      "Bash(kill 3282 3283)",
+      "Bash(echo \"Restarted PID: $!\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\lib\" -Recurse -Directory)",
+      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter --version)",
+      "Bash(Get-ChildItem \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\assets\\\\game_builder\" -Recurse -Directory)",
+      "Bash(Sort-Object)",
+      "Bash(xargs grep -l \"MY CREATIONS\\\\|DISCOVER\\\\|discover\")"
     ]
   }
 }
