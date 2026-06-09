@@ -50,7 +50,9 @@
       "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter run *)",
       "Bash(flutter devices *)",
       "Bash(flutter run *)",
-      "Bash(flutter doctor *)"
+      "Bash(flutter doctor *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\magic\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-magic-Downloads-gradproj\\\\19a26fd2-cde1-4230-aa90-80f49008aceb\\\\tasks\\\\b1uli3yge.output\" -Tail 20)",
+      "Bash(flutter build *)"
     ]
   }
 }

@@ -132,7 +132,7 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                         builder: (context) {
                           final isMobile = MediaQuery.of(context).size.width < 650;
                           final cardWidth = isMobile
-                              ? (MediaQuery.of(context).size.width - 64).clamp(140.0, 240.0)
+                              ? (MediaQuery.of(context).size.width - 48).clamp(200.0, 300.0)
                               : 240.0;
                           final cards = [
                             _PlayingCard(
@@ -341,12 +341,18 @@ class _PlayingCardState extends State<_PlayingCard> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const SizedBox(height: 24),
-              Text(
-                widget.answer,
-                style: GoogleFonts.amaticSc(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2C3E50),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    widget.answer,
+                    style: GoogleFonts.amaticSc(
+                      fontSize: 38,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF2C3E50),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 4),

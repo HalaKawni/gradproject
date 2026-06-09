@@ -1496,44 +1496,33 @@ class _DashboardPageState extends State<DashboardPage> {
                     letterSpacing: 1,
                   ),
                 ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$totalStars stars',
-                        style: GoogleFonts.nunito(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Icon(
-                        Icons.sports_score,
-                        color: Colors.white70,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$totalScore pts',
-                        style: GoogleFonts.nunito(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 2,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.star, color: Colors.amber, size: 13),
+                          const SizedBox(width: 3),
+                          Text('$totalStars stars',
+                              style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ]),
+                        Row(mainAxisSize: MainAxisSize.min, children: [
+                          const Icon(Icons.sports_score, color: Colors.white70, size: 13),
+                          const SizedBox(width: 3),
+                          Text('$totalScore pts',
+                              style: GoogleFonts.nunito(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white)),
+                        ]),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1576,14 +1565,18 @@ class _DashboardPageState extends State<DashboardPage> {
                           children: [
                             Text(
                               name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.nunito(
-                                fontSize: 14,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: const Color(0xFF333333),
                               ),
                             ),
                             Text(
                               '$levelCount activities completed',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.nunito(
                                 fontSize: 11,
                                 color: const Color(0xFF888888),
@@ -1698,55 +1691,81 @@ class _DashboardPageState extends State<DashboardPage> {
           // ── FILTER PILLS ROW ──
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
-            child: Row(
-              children: [
-                _buildFilterGroup('dashboard.level'.tr(), [
-                  _FilterPill(
-                    label: 'common.all'.tr(),
-                    isSelected: true,
-                    onTap: () => setState(
-                      () => _showFilterExpanded = !_showFilterExpanded,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 500;
+                final groups = [
+                  _buildFilterGroup('dashboard.level'.tr(), [
+                    _FilterPill(
+                      label: 'common.all'.tr(),
+                      isSelected: true,
+                      onTap: () => setState(
+                        () => _showFilterExpanded = !_showFilterExpanded,
+                      ),
                     ),
-                  ),
-                ]),
-                const SizedBox(width: 24),
-                _buildFilterGroup('dashboard.category'.tr(), [
-                  _FilterPill(
-                    label: 'dashboard.main_courses'.tr(),
-                    isSelected: _selectedCategories.contains('Main Courses'),
-                    onTap: () => setState(
-                      () => _showFilterExpanded = !_showFilterExpanded,
+                  ]),
+                  _buildFilterGroup('dashboard.category'.tr(), [
+                    _FilterPill(
+                      label: 'dashboard.main_courses'.tr(),
+                      isSelected: _selectedCategories.contains('Main Courses'),
+                      onTap: () => setState(
+                        () => _showFilterExpanded = !_showFilterExpanded,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  _FilterPill(
-                    label: 'dashboard.mini_courses'.tr(),
-                    isSelected: _selectedCategories.contains('Mini Courses'),
-                    onTap: () => setState(
-                      () => _showFilterExpanded = !_showFilterExpanded,
+                    const SizedBox(width: 8),
+                    _FilterPill(
+                      label: 'dashboard.mini_courses'.tr(),
+                      isSelected: _selectedCategories.contains('Mini Courses'),
+                      onTap: () => setState(
+                        () => _showFilterExpanded = !_showFilterExpanded,
+                      ),
                     ),
-                  ),
-                ]),
-                const SizedBox(width: 24),
-                _buildFilterGroup('dashboard.topic'.tr(), [
-                  _FilterPill(
-                    label: 'common.all'.tr(),
-                    isSelected: true,
-                    onTap: () => setState(
-                      () => _showFilterExpanded = !_showFilterExpanded,
+                  ]),
+                  _buildFilterGroup('dashboard.topic'.tr(), [
+                    _FilterPill(
+                      label: 'common.all'.tr(),
+                      isSelected: true,
+                      onTap: () => setState(
+                        () => _showFilterExpanded = !_showFilterExpanded,
+                      ),
                     ),
-                  ),
-                ]),
-                const Spacer(),
-                if (_showFilterExpanded)
-                  GestureDetector(
-                    onTap: () => setState(() => _showFilterExpanded = false),
-                    child: const Icon(
-                      Icons.keyboard_arrow_up,
-                      color: Color(0xFF888888),
-                    ),
-                  ),
-              ],
+                  ]),
+                ];
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 12,
+                        children: groups,
+                      ),
+                      if (_showFilterExpanded) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () => setState(() => _showFilterExpanded = false),
+                          child: const Icon(Icons.keyboard_arrow_up, color: Color(0xFF888888)),
+                        ),
+                      ],
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    groups[0],
+                    const SizedBox(width: 24),
+                    groups[1],
+                    const SizedBox(width: 24),
+                    groups[2],
+                    const Spacer(),
+                    if (_showFilterExpanded)
+                      GestureDetector(
+                        onTap: () => setState(() => _showFilterExpanded = false),
+                        child: const Icon(Icons.keyboard_arrow_up, color: Color(0xFF888888)),
+                      ),
+                  ],
+                );
+              },
             ),
           ),
 
@@ -1755,10 +1774,32 @@ class _DashboardPageState extends State<DashboardPage> {
             const Divider(height: 1, color: Color(0xFFEEEEEE)),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCheckboxColumn(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isMobile = constraints.maxWidth < 500;
+                  final applyButton = ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _showLevelError = _selectedLevels.isEmpty;
+                        _showCategoryError = _selectedCategories.isEmpty;
+                        _showTopicError = _selectedTopics.isEmpty;
+                        if (!_showLevelError && !_showCategoryError && !_showTopicError) {
+                          _showFilterExpanded = false;
+                        }
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 252, 183, 199),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: Text(
+                      'common.apply'.tr(),
+                      style: GoogleFonts.montserrat(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                    ),
+                  );
+                  final levelCol = _buildCheckboxColumn(
                     title: 'dashboard.level'.tr(),
                     items: ['Novice', 'Beginner', 'Intermediate', 'Advanced'],
                     displayLabels: [
@@ -1770,21 +1811,12 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedLevels,
                     showError: _showLevelError,
                     onToggle: (val) => setState(() {
-                      if (_selectedLevels.contains(val)) {
-                        _selectedLevels.remove(val);
-                      } else {
-                        _selectedLevels.add(val);
-                      }
+                      if (_selectedLevels.contains(val)) { _selectedLevels.remove(val); } else { _selectedLevels.add(val); }
                     }),
-                  ),
-                  const SizedBox(width: 60),
-                  _buildCheckboxColumn(
+                  );
+                  final categoryCol = _buildCheckboxColumn(
                     title: 'dashboard.category'.tr(),
-                    items: [
-                      'Main Courses',
-                      'Mini Courses',
-                      'Seasonal Activities',
-                    ],
+                    items: ['Main Courses', 'Mini Courses', 'Seasonal Activities'],
                     displayLabels: [
                       'dashboard.main_courses'.tr(),
                       'dashboard.mini_courses'.tr(),
@@ -1793,15 +1825,10 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedCategories,
                     showError: _showCategoryError,
                     onToggle: (val) => setState(() {
-                      if (_selectedCategories.contains(val)) {
-                        _selectedCategories.remove(val);
-                      } else {
-                        _selectedCategories.add(val);
-                      }
+                      if (_selectedCategories.contains(val)) { _selectedCategories.remove(val); } else { _selectedCategories.add(val); }
                     }),
-                  ),
-                  const SizedBox(width: 60),
-                  _buildCheckboxColumn(
+                  );
+                  final topicCol = _buildCheckboxColumn(
                     title: 'dashboard.topic'.tr(),
                     items: ['Coding', 'Digital Literacy', 'CS Topics'],
                     displayLabels: [
@@ -1812,49 +1839,36 @@ class _DashboardPageState extends State<DashboardPage> {
                     selected: _selectedTopics,
                     showError: _showTopicError,
                     onToggle: (val) => setState(() {
-                      if (_selectedTopics.contains(val)) {
-                        _selectedTopics.remove(val);
-                      } else {
-                        _selectedTopics.add(val);
-                      }
+                      if (_selectedTopics.contains(val)) { _selectedTopics.remove(val); } else { _selectedTopics.add(val); }
                     }),
-                  ),
-                  const Spacer(),
-                  // ── APPLY BUTTON ──
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _showLevelError = _selectedLevels.isEmpty;
-                        _showCategoryError = _selectedCategories.isEmpty;
-                        _showTopicError = _selectedTopics.isEmpty;
-                        if (!_showLevelError &&
-                            !_showCategoryError &&
-                            !_showTopicError) {
-                          _showFilterExpanded = false;
-                        }
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 252, 183, 199),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                    ),
-                    child: Text(
-                      'common.apply'.tr(),
-                      style: GoogleFonts.montserrat(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-                ],
+                  );
+                  if (isMobile) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        levelCol,
+                        const SizedBox(height: 20),
+                        categoryCol,
+                        const SizedBox(height: 20),
+                        topicCol,
+                        const SizedBox(height: 20),
+                        applyButton,
+                      ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      levelCol,
+                      const SizedBox(width: 60),
+                      categoryCol,
+                      const SizedBox(width: 60),
+                      topicCol,
+                      const Spacer(),
+                      applyButton,
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -2146,19 +2160,30 @@ class _DashboardPageState extends State<DashboardPage> {
           const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: courses
-                  .where((course) {
-                    return _selectedLevels.contains(course.level) &&
-                        _selectedTopics.contains(course.topic);
-                  })
-                  .map(
-                    (course) =>
-                        _CourseCard(session: widget.session, course: course),
-                  )
-                  .toList(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = constraints.maxWidth < 300
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth < 500
+                        ? (constraints.maxWidth - 16) / 2
+                        : 220.0);
+                return Wrap(
+                  spacing: 16,
+                  runSpacing: 16,
+                  children: courses
+                      .where((course) {
+                        return _selectedLevels.contains(course.level) &&
+                            _selectedTopics.contains(course.topic);
+                      })
+                      .map(
+                        (course) => SizedBox(
+                          width: cardWidth,
+                          child: _CourseCard(session: widget.session, course: course),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
             ),
           ),
         ],
@@ -2267,10 +2292,8 @@ class _DashboardPageState extends State<DashboardPage> {
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final cardWidth = (constraints.maxWidth / 4 - 12).clamp(
-            220.0,
-            _creationCardWidth,
-          );
+          final cols = constraints.maxWidth < 400 ? 1 : (constraints.maxWidth < 600 ? 2 : 4);
+          final cardWidth = (constraints.maxWidth / cols - 16).clamp(140.0, _creationCardWidth);
           return Wrap(
             spacing: 16,
             runSpacing: 16,
@@ -2320,7 +2343,8 @@ class _DashboardPageState extends State<DashboardPage> {
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final cardWidth = (constraints.maxWidth / 5 - 13).clamp(170.0, 220.0);
+          final cols = constraints.maxWidth < 400 ? 2 : (constraints.maxWidth < 600 ? 3 : 5);
+          final cardWidth = (constraints.maxWidth / cols - 14).clamp(120.0, 220.0);
           return Wrap(
             spacing: 16,
             runSpacing: 16,
@@ -2421,10 +2445,8 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth / 4 - 12).clamp(
-                    220.0,
-                    _creationCardWidth,
-                  );
+                  final favCols = constraints.maxWidth < 400 ? 1 : (constraints.maxWidth < 600 ? 2 : 4);
+                  final cardWidth = (constraints.maxWidth / favCols - 16).clamp(140.0, _creationCardWidth);
                   return Wrap(
                     spacing: 16,
                     runSpacing: 16,
@@ -2459,10 +2481,8 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth / 5 - 13).clamp(
-                    170.0,
-                    220.0,
-                  );
+                  final favAssetCols = constraints.maxWidth < 400 ? 2 : (constraints.maxWidth < 600 ? 3 : 5);
+                  final cardWidth = (constraints.maxWidth / favAssetCols - 14).clamp(120.0, 220.0);
                   return Wrap(
                     spacing: 16,
                     runSpacing: 16,
@@ -2531,12 +2551,16 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'dashboard.my_creations'.tr(),
-                style: GoogleFonts.montserrat(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFF2C3E50),
+              Expanded(
+                child: Text(
+                  'dashboard.my_creations'.tr(),
+                  style: GoogleFonts.montserrat(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: const Color(0xFF2C3E50),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               TextButton.icon(
@@ -2561,54 +2585,54 @@ class _DashboardPageState extends State<DashboardPage> {
 
         Container(
           color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(28, 14, 28, 0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              _DashboardDiscoverTabButton(
-                label: 'CHALLENGES',
-                isSelected:
-                    _myCreationContentTab == _MyCreationContentTab.challenges,
-                onTap: () => setState(() {
-                  _myCreationContentTab = _MyCreationContentTab.challenges;
-                }),
-              ),
-              const SizedBox(width: 6),
-              _DashboardDiscoverTabButton(
-                label: 'ASSETS',
-                isSelected:
-                    _myCreationContentTab == _MyCreationContentTab.assets,
-                onTap: () => setState(() {
-                  _myCreationContentTab = _MyCreationContentTab.assets;
-                }),
-              ),
-              const Spacer(),
-              Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isMobile = constraints.maxWidth < 500;
+              final tabs = Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _DashboardDiscoverTabButton(
+                    label: 'CHALLENGES',
+                    isSelected: _myCreationContentTab == _MyCreationContentTab.challenges,
+                    onTap: () => setState(() { _myCreationContentTab = _MyCreationContentTab.challenges; }),
+                  ),
+                  const SizedBox(width: 6),
+                  _DashboardDiscoverTabButton(
+                    label: 'ASSETS',
+                    isSelected: _myCreationContentTab == _MyCreationContentTab.assets,
+                    onTap: () => setState(() { _myCreationContentTab = _MyCreationContentTab.assets; }),
+                  ),
+                ],
+              );
+              final createBtn = Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: ElevatedButton.icon(
                   onPressed: () => _showCreateCourseDialog(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF6DB84A),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: Text(
-                    'Create',
-                    style: GoogleFonts.montserrat(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: Text('Create', style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
-              ),
-            ],
+              );
+              if (isMobile) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [tabs, const Spacer(), createBtn]),
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [tabs, const Spacer(), createBtn],
+              );
+            },
           ),
         ),
 
@@ -2656,10 +2680,8 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: const EdgeInsets.all(24),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final levelWidth = (constraints.maxWidth / 4 - 15).clamp(
-                220.0,
-                _creationCardWidth,
-              );
+              final cols = constraints.maxWidth < 400 ? 1 : (constraints.maxWidth < 600 ? 2 : 4);
+              final levelWidth = (constraints.maxWidth / cols - 20).clamp(140.0, _creationCardWidth);
               return Wrap(
                 spacing: 20,
                 runSpacing: 20,
@@ -3397,27 +3419,29 @@ class _CreationBuilderPickerDialog extends StatelessWidget {
                   ],
                 ),
               ),
-              Padding(
-                padding: EdgeInsets.all(isMobile ? 14 : 20),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final cardWidth = isMobile
-                        ? constraints.maxWidth
-                        : (constraints.maxWidth - 24) / 2;
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(isMobile ? 14 : 20),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cardWidth = isMobile
+                          ? constraints.maxWidth
+                          : (constraints.maxWidth - 24) / 2;
 
-                    return Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: _options
-                          .map(
-                            (option) => _CreationBuilderChoiceCard(
-                              data: option,
-                              width: cardWidth,
-                            ),
-                          )
-                          .toList(),
-                    );
-                  },
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: _options
+                            .map(
+                              (option) => _CreationBuilderChoiceCard(
+                                data: option,
+                                width: cardWidth,
+                              ),
+                            )
+                            .toList(),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -3479,7 +3503,7 @@ class _CreationBuilderChoiceCardState
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           width: widget.width,
-          constraints: const BoxConstraints(minHeight: 128),
+          constraints: const BoxConstraints(minHeight: 96),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -3588,17 +3612,16 @@ class _DashboardDiscoverTabButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-        child: SizedBox(
-          width: 150,
+        child: Container(
           height: 42,
-          child: Center(
-            child: Text(
-              label,
-              style: GoogleFonts.montserrat(
-                color: isSelected ? Colors.white : const Color(0xFF8EA231),
-                fontSize: 15,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
-              ),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.montserrat(
+              color: isSelected ? Colors.white : const Color(0xFF8EA231),
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
         ),
@@ -4377,7 +4400,21 @@ class _CreationSettingsShell extends StatelessWidget {
             Padding(padding: const EdgeInsets.all(18), child: child),
             Container(
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-              child: Row(children: actions),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth < 360) {
+                    return Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        ...actions.where((w) => w is! Spacer),
+                      ],
+                    );
+                  }
+                  return Row(children: actions);
+                },
+              ),
             ),
           ],
         ),
@@ -4717,7 +4754,6 @@ class _CourseCardState extends State<_CourseCard> {
         onTap: () => _showCourseDialog(context),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 220,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
@@ -4801,7 +4837,7 @@ class _CourseCardState extends State<_CourseCard> {
                 children: [
                   ClipRRect(
                     child: SizedBox(
-                      width: 220,
+                      width: double.infinity,
                       height: 140,
                       child: widget.course.imageBase64 == null
                           ? Image.asset(
@@ -5279,203 +5315,194 @@ class _CourseDialogState extends State<_CourseDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
     return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 40,
+        vertical: isMobile ? 24 : 40,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: SizedBox(
-        width: 700,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ── HEADER ──
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5A623),
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(12),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 700),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── HEADER ──
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5A623),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${widget.course.title}: ${widget.course.subtitle}',
+                        style: GoogleFonts.nunito(
+                          fontSize: isMobile ? 15 : 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF4CAF50),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 18),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  RichText(
-                    text: TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${widget.course.title}: ',
-                          style: GoogleFonts.nunito(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                          ),
-                        ),
-                        TextSpan(
-                          text: widget.course.subtitle,
-                          style: GoogleFonts.nunito(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF4CAF50),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
 
-            // ── BODY ──
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── LEFT: screenshot + arrows ──
-                  Column(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.asset(
-                          _screenshots[_imageIndex],
-                          width: 260,
-                          height: 180,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
+              // ── BODY ──
+              Padding(
+                padding: EdgeInsets.all(isMobile ? 16 : 24),
+                child: isMobile
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _ArrowBtn(
-                            icon: Icons.chevron_left,
-                            onTap: () => setState(() {
-                              _imageIndex =
-                                  (_imageIndex - 1 + _screenshots.length) %
-                                  _screenshots.length;
-                            }),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.asset(
+                              _screenshots[_imageIndex],
+                              width: double.infinity,
+                              height: 160,
+                              fit: BoxFit.cover,
+                            ),
                           ),
-                          const SizedBox(width: 12),
-                          _ArrowBtn(
-                            icon: Icons.chevron_right,
-                            onTap: () => setState(() {
-                              _imageIndex =
-                                  (_imageIndex + 1) % _screenshots.length;
-                            }),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 24),
-
-                  // ── RIGHT: status + description ──
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Status badge
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3CD),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(color: const Color(0xFFFFD700)),
-                          ),
-                          child: Row(
+                          const SizedBox(height: 10),
+                          Row(
                             children: [
-                              const Icon(
-                                Icons.star_border,
-                                color: Color(0xFFFFB300),
-                                size: 20,
+                              _ArrowBtn(
+                                icon: Icons.chevron_left,
+                                onTap: () => setState(() {
+                                  _imageIndex = (_imageIndex - 1 + _screenshots.length) % _screenshots.length;
+                                }),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'dashboard.not_started'.tr(),
-                                style: GoogleFonts.nunito(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF7A6000),
-                                ),
+                              const SizedBox(width: 12),
+                              _ArrowBtn(
+                                icon: Icons.chevron_right,
+                                onTap: () => setState(() {
+                                  _imageIndex = (_imageIndex + 1) % _screenshots.length;
+                                }),
                               ),
                             ],
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        // Description
-                        Text(
-                          widget.course.description,
-                          style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            color: const Color(0xFF444444),
-                            height: 1.6,
+                          const SizedBox(height: 14),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3CD),
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: const Color(0xFFFFD700)),
+                            ),
+                            child: Row(children: [
+                              const Icon(Icons.star_border, color: Color(0xFFFFB300), size: 18),
+                              const SizedBox(width: 6),
+                              Text('dashboard.not_started'.tr(),
+                                  style: GoogleFonts.nunito(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF7A6000))),
+                            ]),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ── FOOTER ──
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(12),
-                ),
-              ),
-              child: ElevatedButton(
-                onPressed: _isOpeningCourse ? null : _startCoding,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6DB84A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isOpeningCourse
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.course.description,
+                            style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF444444), height: 1.6),
+                          ),
+                        ],
                       )
-                    : Text(
-                        'dashboard.start_coding'.tr(),
-                        style: GoogleFonts.montserrat(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.5,
-                        ),
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Column(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.asset(_screenshots[_imageIndex], width: 260, height: 180, fit: BoxFit.cover),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(children: [
+                                _ArrowBtn(
+                                  icon: Icons.chevron_left,
+                                  onTap: () => setState(() {
+                                    _imageIndex = (_imageIndex - 1 + _screenshots.length) % _screenshots.length;
+                                  }),
+                                ),
+                                const SizedBox(width: 12),
+                                _ArrowBtn(
+                                  icon: Icons.chevron_right,
+                                  onTap: () => setState(() {
+                                    _imageIndex = (_imageIndex + 1) % _screenshots.length;
+                                  }),
+                                ),
+                              ]),
+                            ],
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF3CD),
+                                    borderRadius: BorderRadius.circular(30),
+                                    border: Border.all(color: const Color(0xFFFFD700)),
+                                  ),
+                                  child: Row(children: [
+                                    const Icon(Icons.star_border, color: Color(0xFFFFB300), size: 20),
+                                    const SizedBox(width: 8),
+                                    Text('dashboard.not_started'.tr(),
+                                        style: GoogleFonts.nunito(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF7A6000))),
+                                  ]),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(widget.course.description,
+                                    style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF444444), height: 1.6)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
               ),
-            ),
-          ],
+
+              // ── FOOTER ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+                ),
+                child: ElevatedButton(
+                  onPressed: _isOpeningCourse ? null : _startCoding,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6DB84A),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: _isOpeningCourse
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text('dashboard.start_coding'.tr(),
+                          style: GoogleFonts.montserrat(fontSize: 15, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -5790,7 +5817,7 @@ class _CreationCardState extends State<_CreationCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          width: _DashboardPageState._creationCardWidth,
+          width: double.infinity,
           height: _DashboardPageState._levelCardHeight,
           decoration: BoxDecoration(
             color: Colors.white,

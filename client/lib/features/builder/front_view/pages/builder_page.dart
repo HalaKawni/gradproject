@@ -545,6 +545,7 @@ class _BuilderPageState extends State<BuilderPage> {
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
     final project = controller.project;
+    final isMobile = MediaQuery.of(context).size.width < 600;
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -588,45 +589,85 @@ class _BuilderPageState extends State<BuilderPage> {
         ),
         body: controller.isLoading
             ? const Center(child: CircularProgressIndicator())
-            : Stack(
-                children: [
-                  Container(
-                    color: const Color(0xFFEAF6FF),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: _leftPanelWidth,
-                          padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.92),
-                            border: Border(
-                              right: BorderSide(
-                                color: Colors.blueGrey.shade100,
+            : isMobile
+                ? _buildMobileBody(project)
+                : Stack(
+                    children: [
+                      Container(
+                        color: const Color(0xFFEAF6FF),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: _leftPanelWidth,
+                              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.92),
+                                border: Border(
+                                  right: BorderSide(
+                                    color: Colors.blueGrey.shade100,
+                                  ),
+                                ),
+                              ),
+                              child: _buildLeftPanel(),
+                            ),
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Center(
+                                  child: _buildFixedGameWindow(project),
+                                ),
                               ),
                             ),
-                          ),
-                          child: _buildLeftPanel(),
+                          ],
                         ),
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Center(
-                              child: _buildFixedGameWindow(project),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 18,
+                        child: Center(child: _buildTrashBin()),
+                      ),
+                    ],
                   ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 18,
-                    child: Center(child: _buildTrashBin()),
-                  ),
-                ],
-              ),
       ),
+    );
+  }
+
+  Widget _buildMobileBody(BuilderProject project) {
+    return Stack(
+      children: [
+        Column(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Container(
+                color: const Color(0xFFEAF6FF),
+                padding: const EdgeInsets.all(10),
+                child: Center(child: _buildFixedGameWindow(project)),
+              ),
+            ),
+            Expanded(
+              flex: 4,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  border: Border(
+                    top: BorderSide(color: Colors.blueGrey.shade100),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 12, 16),
+                child: _buildLeftPanel(),
+              ),
+            ),
+          ],
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 18,
+          child: Center(child: _buildTrashBin()),
+        ),
+      ],
     );
   }
 

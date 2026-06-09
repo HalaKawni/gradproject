@@ -138,14 +138,30 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     return Scaffold(
       backgroundColor: const Color(0xFFF0F0ED),
+      drawer: isMobile
+          ? Drawer(
+              child: _DiscoverSidebar(
+                onCoursesTap: () {
+                  Navigator.pop(context);
+                  _openCourses();
+                },
+                onMyCreationsTap: () {
+                  Navigator.pop(context);
+                  _openMyCreations();
+                },
+              ),
+            )
+          : null,
       body: Row(
         children: [
-          _DiscoverSidebar(
-            onCoursesTap: _openCourses,
-            onMyCreationsTap: _openMyCreations,
-          ),
+          if (!isMobile)
+            _DiscoverSidebar(
+              onCoursesTap: _openCourses,
+              onMyCreationsTap: _openMyCreations,
+            ),
           Expanded(
             child: Column(
               children: [
@@ -176,38 +192,47 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   Widget _buildTopNavbar() {
-    return Container(
-      color: const Color.fromARGB(255, 252, 183, 199),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'nameofweb',
-            style: GoogleFonts.montserrat(
-              color: const Color.fromARGB(255, 202, 97, 128),
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4A7DBF),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white24, width: 2),
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 252, 183, 199),
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            if (isMobile)
+              Builder(
+                builder: (ctx) => GestureDetector(
+                  onTap: () => Scaffold.of(ctx).openDrawer(),
+                  child: const Icon(Icons.menu, color: Colors.white, size: 24),
                 ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
               ),
-              const SizedBox(width: 16),
-              const Icon(Icons.menu, color: Colors.white, size: 24),
-            ],
-          ),
-        ],
+            Text(
+              'nameofweb',
+              style: GoogleFonts.montserrat(
+                color: const Color.fromARGB(255, 202, 97, 128),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A7DBF),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white24, width: 2),
+                  ),
+                  child: const Icon(Icons.person, color: Colors.white, size: 20),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -252,15 +277,18 @@ class _DiscoverPageState extends State<DiscoverPage> {
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
       child: Row(
         children: [
-          Text(
-            isChallenges ? 'Discover Challenges' : 'My Creations',
-            style: GoogleFonts.nunito(
-              color: const Color(0xFF243A1B),
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
+          Expanded(
+            child: Text(
+              isChallenges ? 'Discover Challenges' : 'My Creations',
+              style: GoogleFonts.nunito(
+                color: const Color(0xFF243A1B),
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
           if (isChallenges)
             IconButton(
               tooltip: 'Refresh',
@@ -417,24 +445,27 @@ class _DiscoverBannerPlaceholder extends StatelessWidget {
         children: [
           CustomPaint(painter: _BannerTexturePainter()),
           Center(
-            child: Container(
-              width: 560,
-              height: 136,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.24),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.36),
-                  width: 2,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                height: 136,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.24),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.36),
+                    width: 2,
+                  ),
                 ),
-              ),
-              child: Center(
-                child: Text(
-                  'Banner image placeholder',
-                  style: GoogleFonts.nunito(
-                    color: const Color(0xFF3C551D),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
+                child: Center(
+                  child: Text(
+                    'Banner image placeholder',
+                    style: GoogleFonts.nunito(
+                      color: const Color(0xFF3C551D),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -465,17 +496,16 @@ class _DiscoverTabButton extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-        child: SizedBox(
-          width: 190,
+        child: Container(
           height: 56,
-          child: Center(
-            child: Text(
-              label,
-              style: GoogleFonts.montserrat(
-                color: isSelected ? const Color(0xFF8EA231) : Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
-              ),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.montserrat(
+              color: isSelected ? const Color(0xFF8EA231) : Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
