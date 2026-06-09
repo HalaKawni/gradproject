@@ -6,6 +6,9 @@ import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/saved_builder_project.dart';
@@ -40,15 +43,55 @@ class _MyGamesPageState extends State<MyGamesPage> {
   static const double _cardWidth = 240;
   static const double _cardHeight = 250;
 
+  static const _tips = [
+    HelpTip(
+      icon: Icons.add_circle_rounded,
+      color: Color(0xFF328CBD),
+      title: 'Tap "Create New Game" to Start',
+      description:
+          'Hit the Create New Game button at the top to begin building. Choose your preferred game style first.',
+    ),
+    HelpTip(
+      icon: Icons.view_carousel_rounded,
+      color: Color(0xFF7C4DFF),
+      title: 'Slides — Easiest for Beginners',
+      description:
+          'Slides style is the best starting point. Build interactive story-style games with simple drag-and-drop blocks.',
+    ),
+    HelpTip(
+      icon: Icons.videogame_asset_rounded,
+      color: Color(0xFF43A047),
+      title: 'Top View & Front View — Platformers',
+      description:
+          'Want to make a running or jumping game? Try Front View (side-scroller) or Top View (overhead map) styles.',
+    ),
+    HelpTip(
+      icon: Icons.code_rounded,
+      color: Color(0xFFE8B400),
+      title: 'Scratch — Full Code Control',
+      description:
+          'If you know some coding, Scratch style lets you use block-based programming to control every detail of your game.',
+    ),
+  ];
+
   bool isLoading = true;
   String? errorMessage;
   List<SavedBuilderProject> projects = const [];
   final Set<String> deletingProjectIds = <String>{};
+  int _hintIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _loadProjects();
+    _initHintIndex();
+  }
+
+  Future<void> _initHintIndex() async {
+    final h0 = await OnboardingService.isHintDismissed('mygames_create');
+    final h1 = await OnboardingService.isHintDismissed('mygames_style');
+    if (!mounted) return;
+    setState(() => _hintIndex = h0 ? (h1 ? 2 : 1) : 0);
   }
 
   Future<void> _loadProjects() async {
@@ -430,7 +473,34 @@ class _MyGamesPageState extends State<MyGamesPage> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      floatingActionButton: HelpButton(
+        pageTitle: 'My Games',
+        tips: _tips,
+      ),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_hintIndex == 0)
+            HintCard(
+              key: ValueKey('mygames_create_$_hintIndex'),
+              hintKey: 'mygames_create',
+              icon: Icons.add_circle_rounded,
+              color: Color(0xFF328CBD),
+              title: 'Create your first game',
+              message: 'Tap "Create New Game" above. Slides style is easiest for beginners — no coding needed!',
+              onDismissed: () => setState(() => _hintIndex = 1),
+            ),
+          if (_hintIndex == 1)
+            HintCard(
+              key: ValueKey('mygames_style_$_hintIndex'),
+              hintKey: 'mygames_style',
+              icon: Icons.view_carousel_rounded,
+              color: Color(0xFF7C4DFF),
+              title: 'Pick the right game style',
+              message: 'Slides = story-style (easiest), Front/Top View = platformer games, Scratch = full code control.',
+              onDismissed: () => setState(() => _hintIndex = 2),
+            ),
+          Expanded(child: RefreshIndicator(
         onRefresh: _loadProjects,
         child: Builder(
           builder: (context) {
@@ -510,7 +580,9 @@ class _MyGamesPageState extends State<MyGamesPage> {
             );
           },
         ),
-      ),
+      )),
+      ],
+    ),
     );
   }
 

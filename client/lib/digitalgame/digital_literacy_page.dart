@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 import 'digital_lesson_page.dart';
 import '../services/api_service.dart';
 
@@ -15,8 +18,40 @@ class DigitalLiteracyPage extends StatefulWidget {
 class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
   int _completedLessons = 0;
   bool _isLoading = true;
+  int _hintIndex = 0;
 
   static const String _gameId = 'digital-literacy';
+
+  static const _tips = [
+    HelpTip(
+      icon: Icons.play_circle_rounded,
+      color: Color(0xFF4DD0C4),
+      title: 'Tap a Lesson Card to Start',
+      description:
+          'Each card is a lesson. Tap it to watch a short video and learn about digital literacy concepts.',
+    ),
+    HelpTip(
+      icon: Icons.lock_open_rounded,
+      color: Color(0xFF43A047),
+      title: 'Lessons Unlock in Order',
+      description:
+          'Complete each lesson before the next one unlocks. Finish all lessons to complete the Digital Literacy course!',
+    ),
+    HelpTip(
+      icon: Icons.quiz_rounded,
+      color: Color(0xFF7C4DFF),
+      title: 'Answer Questions After Each Lesson',
+      description:
+          'After the video, you will answer quiz questions and play a word search. Answer correctly to earn your score.',
+    ),
+    HelpTip(
+      icon: Icons.devices_rounded,
+      color: Color(0xFF328CBD),
+      title: 'About This Course',
+      description:
+          'Digital Literacy teaches you how to use technology safely and responsibly — from digital citizenship to online collaboration.',
+    ),
+  ];
 
   final List<_LessonData> _lessons = [
     _LessonData(
@@ -43,6 +78,14 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
   void initState() {
     super.initState();
     _loadProgress();
+    _initHintIndex();
+  }
+
+  Future<void> _initHintIndex() async {
+    final h0 = await OnboardingService.isHintDismissed('digital_order');
+    final h1 = await OnboardingService.isHintDismissed('digital_quiz');
+    if (!mounted) return;
+    setState(() => _hintIndex = h0 ? (h1 ? 2 : 1) : 0);
   }
 
   Future<void> _loadProgress() async {
@@ -143,9 +186,33 @@ class _DigitalLiteracyPageState extends State<DigitalLiteracyPage> {
     final isMobile = MediaQuery.of(context).size.width < 900;
     return Scaffold(
       backgroundColor: const Color(0xFFADE8F4),
+      floatingActionButton: const HelpButton(
+        pageTitle: 'Digital Literacy',
+        tips: _tips,
+      ),
       body: Column(
         children: [
           _buildTopNavbar(),
+          if (_hintIndex == 0)
+            HintCard(
+              key: ValueKey('digital_order_$_hintIndex'),
+              hintKey: 'digital_order',
+              icon: Icons.play_lesson_rounded,
+              color: Color(0xFF4DD0C4),
+              title: 'Lessons unlock in order',
+              message: 'Tap a lesson card to start. Complete it to unlock the next one and earn your score!',
+              onDismissed: () => setState(() => _hintIndex = 1),
+            ),
+          if (_hintIndex == 1)
+            HintCard(
+              key: ValueKey('digital_quiz_$_hintIndex'),
+              hintKey: 'digital_quiz',
+              icon: Icons.quiz_rounded,
+              color: Color(0xFF7C4DFF),
+              title: 'Quiz after every lesson',
+              message: 'After the video you\'ll answer questions and play a word search — answer correctly to earn your stars!',
+              onDismissed: () => setState(() => _hintIndex = 2),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF4DD0C4)))

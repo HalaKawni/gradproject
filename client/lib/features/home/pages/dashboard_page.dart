@@ -13,7 +13,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/utils/web_redirect.dart';
 import 'world_map_page.dart';
-import '../widgets/unlock_dialog.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:client/features/home/services/game_api_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
@@ -24,6 +23,9 @@ import 'package:client/utils/responsive.dart';
 import 'package:client/mycourses/course_detail_page.dart';
 import 'package:client/mycourses/create_course_page.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 
 class DashboardPage extends StatefulWidget {
   final AuthSession session;
@@ -51,7 +53,51 @@ class _DashboardPageState extends State<DashboardPage> {
   static const double _levelCardHeight = 250;
   static const double _myCreationLevelCoverAspectRatio = 240 / 104;
 
+  static const _dashboardTips = [
+    HelpTip(
+      icon: Icons.auto_stories_rounded,
+      color: Color(0xFF43A047),
+      title: 'New Student? Start with Beginner Courses',
+      description:
+          "Open the Courses tab and filter by 'Beginner' level. These lessons are designed for students who have never coded before.",
+    ),
+    HelpTip(
+      icon: Icons.tune_rounded,
+      color: Color(0xFFE8B400),
+      title: 'Use Filters to Find Your Perfect Course',
+      description:
+          'Filter by level, topic, or category to quickly find challenges and courses that match exactly what you want to learn.',
+    ),
+    HelpTip(
+      icon: Icons.explore_rounded,
+      color: Color(0xFF7C4DFF),
+      title: 'Discover Content from Other Students',
+      description:
+          'Switch to the Discover tab to browse games, challenges, and assets published by other students in the community.',
+    ),
+    HelpTip(
+      icon: Icons.sports_esports_rounded,
+      color: Color(0xFF328CBD),
+      title: 'Create Your Own Game in My Creations',
+      description:
+          'Go to the My Creations tab to design and build your own games. Pick a style — slides, top view, side view, or scratch!',
+    ),
+    HelpTip(
+      icon: Icons.people_alt_rounded,
+      color: Color(0xFF00ACC1),
+      title: 'Join a Classroom with Your Teacher\'s Code',
+      description:
+          "Have a classroom code from your teacher? Tap the Classroom option in the sidebar and enter the code to join.",
+    ),
+  ];
+
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _heroBannerKey = GlobalKey();
+  final _filterKey = GlobalKey();
+  final _coursesKey = GlobalKey();
+  final _discoverBannerKey = GlobalKey();
+  int _hintsVersion = 0;
+  int _courseHintIndex = 0;
   _DashboardSection _activeSection = _DashboardSection.courses;
   _DiscoverContentTab _discoverContentTab = _DiscoverContentTab.challenges;
   _MyCreationContentTab _myCreationContentTab =
@@ -105,13 +151,31 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadPublishedGames();
     _loadPublishedAssets();
     _loadMyStats();
+    _initCourseHintIndex();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      showDialog(context: context, builder: (_) => const UnlockDialog());
+      if (!mounted) return;
       _showEmailVerificationNoticeIfNeeded();
     });
+  }
+
+  Future<void> _initCourseHintIndex() async {
+    final b = await OnboardingService.isHintDismissed('dashboard_beginner');
+    final f = await OnboardingService.isHintDismissed('dashboard_filter');
+    final c = await OnboardingService.isHintDismissed('dashboard_courses');
+    if (!mounted) return;
+    setState(() {
+      _courseHintIndex = b ? (f ? (c ? 3 : 2) : 1) : 0;
+    });
+  }
+
+  Future<void> _replayHints() async {
+    await OnboardingService.resetAllHints();
+    if (mounted) {
+      setState(() {
+        _hintsVersion++;
+        _courseHintIndex = 0;
+      });
+    }
   }
 
   void _showEmailVerificationNoticeIfNeeded() {
@@ -784,6 +848,12 @@ class _DashboardPageState extends State<DashboardPage> {
             Expanded(child: content),
           ],
         ),
+        floatingActionButton: HelpButton(
+          pageTitle: 'Dashboard',
+          showReplayTour: true,
+          tips: _dashboardTips,
+          onReplayHints: _replayHints,
+        ),
       );
     }
 
@@ -804,6 +874,12 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ),
           ],
+        ),
+        floatingActionButton: HelpButton(
+          pageTitle: 'Dashboard',
+          showReplayTour: true,
+          tips: _dashboardTips,
+          onReplayHints: _replayHints,
         ),
       ),
     );
@@ -914,8 +990,45 @@ class _DashboardPageState extends State<DashboardPage> {
 
     return Column(
       children: [
-        _buildHeroBanner(),
+        KeyedSubtree(key: _heroBannerKey, child: _buildHeroBanner()),
         _buildShareWithParentBanner(),
+        const SizedBox(height: 16),
+        if (_courseHintIndex == 0)
+          HintCard(
+            key: ValueKey('dashboard_beginner_$_hintsVersion'),
+            hintKey: 'dashboard_beginner',
+            targetKey: _heroBannerKey,
+            arrowDirection: ArrowDirection.up,
+            icon: Icons.auto_stories_rounded,
+            color: Color(0xFF43A047),
+            title: 'New student? Start here!',
+            message: 'Open the filter below and select "Beginner" level to find courses made just for first-time coders.',
+            onDismissed: () => setState(() => _courseHintIndex = 1),
+          ),
+        if (_courseHintIndex == 1)
+          HintCard(
+            key: ValueKey('dashboard_filter_$_hintsVersion'),
+            hintKey: 'dashboard_filter',
+            targetKey: _filterKey,
+            arrowDirection: ArrowDirection.down,
+            icon: Icons.tune_rounded,
+            color: Color(0xFFE8B400),
+            title: 'Use filters to find the right course',
+            message: 'Filter by level, topic, or category to quickly narrow down exactly what you want to learn.',
+            onDismissed: () => setState(() => _courseHintIndex = 2),
+          ),
+        if (_courseHintIndex == 2)
+          HintCard(
+            key: ValueKey('dashboard_courses_$_hintsVersion'),
+            hintKey: 'dashboard_courses',
+            targetKey: _coursesKey,
+            arrowDirection: ArrowDirection.down,
+            icon: Icons.school_rounded,
+            color: Color(0xFF328CBD),
+            title: 'All your courses are here',
+            message: 'Tap any course card to see its lessons and start learning. More courses unlock as you progress!',
+            onDismissed: () => setState(() => _courseHintIndex = 3),
+          ),
         _buildFilterSection(),
         const SizedBox(height: 16),
         _buildMyScoresSection(),
@@ -1631,6 +1744,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildFilterSection() {
     return Container(
+      key: _filterKey,
       margin: const EdgeInsets.fromLTRB(24, 24, 24, 0),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2115,6 +2229,7 @@ class _DashboardPageState extends State<DashboardPage> {
     ];
 
     return Container(
+      key: _coursesKey,
       margin: const EdgeInsets.symmetric(horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -2196,6 +2311,17 @@ class _DashboardPageState extends State<DashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildDiscoverBannerAndTabs(),
+        const SizedBox(height: 12),
+        HintCard(
+          key: ValueKey('dashboard_discover_$_hintsVersion'),
+          hintKey: 'dashboard_discover',
+          targetKey: _discoverBannerKey,
+          arrowDirection: ArrowDirection.up,
+          icon: Icons.explore_rounded,
+          color: Color(0xFF7C4DFF),
+          title: 'Browse content from other students',
+          message: 'Challenges are games to play, Assets are items to use in your own games, Favorites are things you saved.',
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 24, 24, 8),
           child: Text(
@@ -2223,6 +2349,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildDiscoverBannerAndTabs() {
     return Stack(
+      key: _discoverBannerKey,
       children: [
         SizedBox(
           height: 220,
@@ -2581,6 +2708,15 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 8),
+        HintCard(
+          key: ValueKey('dashboard_creations_$_hintsVersion'),
+          hintKey: 'dashboard_creations',
+          icon: Icons.sports_esports_rounded,
+          color: Color(0xFF328CBD),
+          title: 'Ready to build your own game?',
+          message: 'Tap "Create New Game" and pick a style — Slides is easiest for beginners, Scratch gives full code control.',
         ),
 
         Container(

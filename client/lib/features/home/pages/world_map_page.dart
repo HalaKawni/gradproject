@@ -1,17 +1,94 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 import 'level_map_page.dart';
 
-class WorldMapPage extends StatelessWidget {
+class WorldMapPage extends StatefulWidget {
   const WorldMapPage({super.key});
+  @override
+  State<WorldMapPage> createState() => _WorldMapPageState();
+}
+
+class _WorldMapPageState extends State<WorldMapPage> {
+  int _hintIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _initHintIndex();
+  }
+
+  Future<void> _initHintIndex() async {
+    final h0 = await OnboardingService.isHintDismissed('worldmap_unlock');
+    final h1 = await OnboardingService.isHintDismissed('worldmap_stars');
+    if (!mounted) return;
+    setState(() => _hintIndex = h0 ? (h1 ? 2 : 1) : 0);
+  }
+
+  static const _tips = [
+    HelpTip(
+      icon: Icons.lock_open_rounded,
+      color: Color(0xFF4CAF50),
+      title: 'Complete Levels to Unlock More',
+      description:
+          'Finish all challenges in a topic to unlock the next one. Each topic builds on the skills you learned before.',
+    ),
+    HelpTip(
+      icon: Icons.map_rounded,
+      color: Color(0xFF328CBD),
+      title: 'Pick Any Unlocked Topic',
+      description:
+          'Tap on a glowing topic bubble to start its levels. Locked topics appear darker — finish earlier topics first!',
+    ),
+    HelpTip(
+      icon: Icons.emoji_events_rounded,
+      color: Color(0xFFE8B400),
+      title: 'Earn Stars on Every Level',
+      description:
+          'Each level gives you up to 3 stars based on your score. Try to get all 3 stars to become a coding master!',
+    ),
+    HelpTip(
+      icon: Icons.school_rounded,
+      color: Color(0xFF7C4DFF),
+      title: 'Topics Get Harder as You Progress',
+      description:
+          'Start with Sequencing, then tackle Loops, Conditions, and more advanced concepts as you level up.',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF2D1B00),
+      floatingActionButton: const HelpButton(
+        pageTitle: 'World Map',
+        tips: _tips,
+      ),
       body: Column(
         children: [
           _buildTopBar(context),
+          if (_hintIndex == 0)
+            HintCard(
+              key: ValueKey('worldmap_unlock_$_hintIndex'),
+              hintKey: 'worldmap_unlock',
+              icon: Icons.lock_open_rounded,
+              color: Color(0xFF4CAF50),
+              title: 'Complete topics in order to unlock more',
+              message: 'Tap any glowing topic bubble to start. Finish it to unlock the next one!',
+              onDismissed: () => setState(() => _hintIndex = 1),
+            ),
+          if (_hintIndex == 1)
+            HintCard(
+              key: ValueKey('worldmap_stars_$_hintIndex'),
+              hintKey: 'worldmap_stars',
+              icon: Icons.emoji_events_rounded,
+              color: Color(0xFFE8B400),
+              title: 'Earn stars to show your mastery',
+              message: 'Each level gives up to 3 stars based on your score. Try to get all 3 to unlock bonus content!',
+              onDismissed: () => setState(() => _hintIndex = 2),
+            ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(32, 16, 32, 16),

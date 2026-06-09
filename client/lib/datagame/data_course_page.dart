@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 import 'data_lesson_page.dart';
 import 'data_learn_page_lesson2.dart';
 import '../services/api_service.dart';
@@ -16,8 +19,40 @@ class DataCoursePage extends StatefulWidget {
 class _DataCoursePageState extends State<DataCoursePage> {
   int _completedLessons = 0;
   bool _isLoading = true;
+  int _hintIndex = 0;
 
   static const String _gameId = 'data-everywhere';
+
+  static const _tips = [
+    HelpTip(
+      icon: Icons.bar_chart_rounded,
+      color: Color(0xFF58C4DD),
+      title: 'Learn About Data & Charts',
+      description:
+          'This course teaches you how data is collected, organized, and visualized using charts, graphs, and tables.',
+    ),
+    HelpTip(
+      icon: Icons.play_circle_rounded,
+      color: Color(0xFF43A047),
+      title: 'Watch Each Lesson Video',
+      description:
+          'Tap a lesson card to watch the video. Each video explains a key data concept in a fun and easy way.',
+    ),
+    HelpTip(
+      icon: Icons.quiz_rounded,
+      color: Color(0xFF7C4DFF),
+      title: 'Complete the Quiz After Watching',
+      description:
+          'After each video you will answer quiz questions to test your understanding. Get them right to unlock the next lesson!',
+    ),
+    HelpTip(
+      icon: Icons.lock_open_rounded,
+      color: Color(0xFFE8B400),
+      title: 'Finish All Lessons to Complete',
+      description:
+          'Complete every lesson in order to finish the Data Course. Each lesson unlocks the next one as you progress.',
+    ),
+  ];
 
   final List<_LessonData> _lessons = [
     _LessonData(
@@ -38,6 +73,14 @@ class _DataCoursePageState extends State<DataCoursePage> {
   void initState() {
     super.initState();
     _loadProgress();
+    _initHintIndex();
+  }
+
+  Future<void> _initHintIndex() async {
+    final h0 = await OnboardingService.isHintDismissed('data_order');
+    final h1 = await OnboardingService.isHintDismissed('data_charts');
+    if (!mounted) return;
+    setState(() => _hintIndex = h0 ? (h1 ? 2 : 1) : 0);
   }
 
   Future<void> _loadProgress() async {
@@ -132,9 +175,33 @@ class _DataCoursePageState extends State<DataCoursePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFADE8F4),
+      floatingActionButton: const HelpButton(
+        pageTitle: 'Data Course',
+        tips: _tips,
+      ),
       body: Column(
         children: [
           _buildTopNavbar(),
+          if (_hintIndex == 0)
+            HintCard(
+              key: ValueKey('data_order_$_hintIndex'),
+              hintKey: 'data_order',
+              icon: Icons.bar_chart_rounded,
+              color: Color(0xFF58C4DD),
+              title: 'Learn about data step by step',
+              message: 'Watch each lesson video, then answer the quiz to unlock the next lesson.',
+              onDismissed: () => setState(() => _hintIndex = 1),
+            ),
+          if (_hintIndex == 1)
+            HintCard(
+              key: ValueKey('data_charts_$_hintIndex'),
+              hintKey: 'data_charts',
+              icon: Icons.pie_chart_rounded,
+              color: Color(0xFF43A047),
+              title: 'Discover charts and graphs',
+              message: 'You\'ll learn to read bar charts, pie charts, and tables — key skills for understanding data in real life!',
+              onDismissed: () => setState(() => _hintIndex = 2),
+            ),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator(color: Color(0xFF4DD0C4)))

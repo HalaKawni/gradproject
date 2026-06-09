@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:client/services/api_service.dart';
+import 'package:client/shared/widgets/help_button.dart';
+import 'package:client/shared/widgets/hint_card.dart';
+import 'package:client/core/services/onboarding_service.dart';
 
 part 'classroom_page_widgets.dart';
 
@@ -58,6 +61,7 @@ class _ClassroomPageState extends State<ClassroomPage>
   bool _overviewLoading    = false;
   String _selectedGame     = _gameIds[0];
   int    _desktopSection   = 0;
+  int    _hintIndex        = 0;
 
   @override
   void initState() {
@@ -65,6 +69,14 @@ class _ClassroomPageState extends State<ClassroomPage>
     _tab = TabController(length: 4, vsync: this)
       ..addListener(() { if (!_tab.indexIsChanging) _onTab(_tab.index); });
     _init();
+    _initHintIndex();
+  }
+
+  Future<void> _initHintIndex() async {
+    final h0 = await OnboardingService.isHintDismissed('classroom_join');
+    final h1 = await OnboardingService.isHintDismissed('classroom_tabs');
+    if (!mounted) return;
+    setState(() => _hintIndex = h0 ? (h1 ? 2 : 1) : 0);
   }
 
   @override
@@ -141,11 +153,72 @@ class _ClassroomPageState extends State<ClassroomPage>
 
   // ── root build ───────────────────────────────────────────────────────────
 
+  static const _classroomTips = [
+    HelpTip(
+      icon: Icons.key_rounded,
+      color: Color(0xFF6C5CE7),
+      title: 'Join with Your Classroom Code',
+      description:
+          "Ask your teacher for the classroom code, then enter it here to instantly join and access all assigned lessons.",
+    ),
+    HelpTip(
+      icon: Icons.assignment_rounded,
+      color: Color(0xFF10C8A8),
+      title: 'View Assigned Lessons',
+      description:
+          'Once you join a classroom, your teacher can assign specific lessons and games for you to complete.',
+    ),
+    HelpTip(
+      icon: Icons.games_rounded,
+      color: Color(0xFFFF6B6B),
+      title: 'Play Assigned Games',
+      description:
+          'Your classroom gives you access to Digital Literacy, Data Course, AI Course, and CodeMonkey Jr games assigned by your teacher.',
+    ),
+    HelpTip(
+      icon: Icons.leaderboard_rounded,
+      color: Color(0xFFFFB938),
+      title: 'Track Your Progress',
+      description:
+          'Complete lessons and games to earn points. Your teacher can see your progress and give you feedback.',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: _kBg,
-    body: LayoutBuilder(builder: (_, c) =>
-        c.maxWidth >= _kBreakpoint ? _buildDesktop() : _buildMobile()),
+    body: Column(
+      children: [
+        if (_hintIndex == 0)
+          HintCard(
+            key: ValueKey('classroom_join_$_hintIndex'),
+            hintKey: 'classroom_join',
+            icon: Icons.key_rounded,
+            color: Color(0xFF6C5CE7),
+            title: 'How to join your classroom',
+            message: "Ask a friend for a classroom code, then enter it here to join and access shared lessons.",
+            onDismissed: () => setState(() => _hintIndex = 1),
+          ),
+        if (_hintIndex == 1)
+          HintCard(
+            key: ValueKey('classroom_tabs_$_hintIndex'),
+            hintKey: 'classroom_tabs',
+            icon: Icons.tab_rounded,
+            color: Color(0xFF10C8A8),
+            title: 'Explore the classroom tabs',
+            message: 'Switch between Overview, Members, Leaderboard, and Activity to see all classroom info.',
+            onDismissed: () => setState(() => _hintIndex = 2),
+          ),
+        Expanded(
+          child: LayoutBuilder(builder: (_, c) =>
+              c.maxWidth >= _kBreakpoint ? _buildDesktop() : _buildMobile()),
+        ),
+      ],
+    ),
+    floatingActionButton: const HelpButton(
+      pageTitle: 'Classroom',
+      tips: _classroomTips,
+    ),
   );
 
   // ══════════════════════════════════════════════════════════════════════════
