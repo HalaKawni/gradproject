@@ -202,28 +202,32 @@ class _ParentDashboardPageState extends State<ParentDashboardPage> {
 
   // ── NAVBAR ──────────────────────────────────────────────────────────────
   Widget _buildNavbar() {
-    return Container(
-      color:   _kNavbarBg,
-      height:  52,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          Row(children: [
-            GestureDetector(
-              onTap: () => setState(() => _showProfileMenu = !_showProfileMenu),
-              child: Container(
-                width:      36,
-                height:     36,
-                decoration: const BoxDecoration(color: Color(0xFF4A7DBF), shape: BoxShape.circle),
-                child:      const Icon(Icons.person, color: Colors.white, size: 20),
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color:   _kNavbarBg,
+        height:  52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            Row(children: [
+              GestureDetector(
+                onTap: () => setState(() => _showProfileMenu = !_showProfileMenu),
+                child: Container(
+                  width:      36,
+                  height:     36,
+                  decoration: const BoxDecoration(color: Color(0xFF4A7DBF), shape: BoxShape.circle),
+                  child:      const Icon(Icons.person, color: Colors.white, size: 20),
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            const Icon(Icons.menu, color: Colors.white54, size: 24),
-          ]),
-        ],
+              const SizedBox(width: 16),
+              const Icon(Icons.menu, color: Colors.white54, size: 24),
+            ]),
+          ],
+        ),
       ),
     );
   }

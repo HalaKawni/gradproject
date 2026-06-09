@@ -46,7 +46,11 @@
       "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter --version)",
       "Bash(Get-ChildItem \"c:\\\\Users\\\\magic\\\\Downloads\\\\gradproj\\\\client\\\\assets\\\\game_builder\" -Recurse -Directory)",
       "Bash(Sort-Object)",
-      "Bash(xargs grep -l \"MY CREATIONS\\\\|DISCOVER\\\\|discover\")"
+      "Bash(xargs grep -l \"MY CREATIONS\\\\|DISCOVER\\\\|discover\")",
+      "Bash(C:\\\\Users\\\\magic\\\\Downloads\\\\sdkflutter\\\\flutter\\\\bin\\\\flutter run *)",
+      "Bash(flutter devices *)",
+      "Bash(flutter run *)",
+      "Bash(flutter doctor *)"
     ]
   }
 }

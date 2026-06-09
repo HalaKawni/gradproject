@@ -128,16 +128,18 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                       const SizedBox(height: 36),
 
                       // ── HOME / CLASSROOM CARDS ──
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      Builder(
+                        builder: (context) {
+                          final isMobile = MediaQuery.of(context).size.width < 650;
+                          final cardWidth = isMobile
+                              ? (MediaQuery.of(context).size.width - 64).clamp(140.0, 240.0)
+                              : 240.0;
+                          final cards = [
                             _PlayingCard(
                               answer: 'where.home'.tr(),
                               subtitle: 'where.home_subtitle'.tr(),
                               imagePath: 'assets/images/home.png',
+                              cardWidth: cardWidth,
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -147,18 +149,38 @@ class _WherePlayingPageState extends State<WherePlayingPage>
                                 );
                               },
                             ),
-                            const SizedBox(width: 24),
                             _PlayingCard(
                               answer: 'where.classroom'.tr(),
                               subtitle: 'where.classroom_subtitle'.tr(),
                               imagePath: 'assets/images/classroom2.jpg',
+                              cardWidth: cardWidth,
                               onTap: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(builder: (_) => const ClassroomSetupPage()),
                               ),
                             ),
-                          ],
-                        ),
+                          ];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: isMobile
+                                ? Column(
+                                    children: [
+                                      cards[0],
+                                      const SizedBox(height: 20),
+                                      cards[1],
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      cards[0],
+                                      const SizedBox(width: 24),
+                                      cards[1],
+                                    ],
+                                  ),
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 36),
@@ -224,28 +246,34 @@ class _WherePlayingPageState extends State<WherePlayingPage>
   }
 
   Widget _buildNavbar(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          Row(
-            children: [
-              _HoverNavButton(
-                label: 'nav.login'.tr(),
-                onPressed: () => Navigator.pop(context),
-              ),
-              _HoverNavButton(
-                label: 'nav.signup'.tr(),
-                onPressed: () {},
-                filled: true,
-              ),
-            ],
-          ),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            Row(
+              children: [
+                _HoverNavButton(
+                  label: 'nav.login'.tr(),
+                  onPressed: () => Navigator.pop(context),
+                  isMobile: isMobile,
+                ),
+                _HoverNavButton(
+                  label: 'nav.signup'.tr(),
+                  onPressed: () {},
+                  filled: true,
+                  isMobile: isMobile,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -257,12 +285,14 @@ class _PlayingCard extends StatefulWidget {
   final String subtitle;
   final String imagePath;
   final VoidCallback onTap;
+  final double cardWidth;
 
   const _PlayingCard({
     required this.answer,
     required this.subtitle,
     required this.imagePath,
     required this.onTap,
+    this.cardWidth = 240,
   });
 
   @override
@@ -281,7 +311,7 @@ class _PlayingCardState extends State<_PlayingCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 240,
+          width: widget.cardWidth,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
@@ -343,7 +373,7 @@ class _PlayingCardState extends State<_PlayingCard> {
                 ),
                 child: Image.asset(
                   widget.imagePath,
-                  width: 240,
+                  width: widget.cardWidth,
                   height: 180,
                   fit: BoxFit.cover,
                 ),
@@ -396,11 +426,13 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
+  final bool isMobile;
 
   const _HoverNavButton({
     required this.label,
     required this.onPressed,
     this.filled = false,
+    this.isMobile = false,
   });
 
   @override
@@ -421,7 +453,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: widget.isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -432,7 +464,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
             widget.label,
             style: GoogleFonts.montserrat(
               color: isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: widget.isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),

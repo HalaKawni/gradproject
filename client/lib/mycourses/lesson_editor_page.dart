@@ -377,71 +377,75 @@ class _LessonEditorPageState extends State<LessonEditorPage> {
 
   // ── NAV BAR ──────────────────────────────────────────────────
   Widget _buildNavbar() {
-    return Container(
-      color: const Color.fromARGB(255, 252, 183, 199),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () {
-              if (_selectedTemplate != null) {
-                setState(() => _selectedTemplate = null);
-              } else {
-                Navigator.of(context).pop();
-              }
-            },
-            child: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            _selectedTemplate == null
-                ? 'Lesson ${widget.lessonNumber}: ${widget.lessonTitle}'
-                : '${widget.lessonTitle} — ${_selectedTemplate!.name}',
-            style: GoogleFonts.montserrat(
-              color: const Color.fromARGB(255, 202, 97, 128),
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const Spacer(),
-          if (_selectedTemplate != null)
-            ElevatedButton.icon(
-              onPressed: () {
-                _saveCurrentSlide();
-                final valid = _slides.where((s) => s.isNotEmpty).toList();
-                if (valid.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Please design at least one slide.'),
-                    backgroundColor: Colors.orange,
-                    duration: Duration(seconds: 2),
-                  ));
-                  return;
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 252, 183, 199),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () {
+                if (_selectedTemplate != null) {
+                  setState(() => _selectedTemplate = null);
+                } else {
+                  Navigator.of(context).pop();
                 }
-                Navigator.of(context).pop(valid);
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6DB84A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              _selectedTemplate == null
+                  ? 'Lesson ${widget.lessonNumber}: ${widget.lessonTitle}'
+                  : '${widget.lessonTitle} — ${_selectedTemplate!.name}',
+              style: GoogleFonts.montserrat(
+                color: const Color.fromARGB(255, 202, 97, 128),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
               ),
-              icon: const Icon(Icons.save_rounded, size: 18),
-              label: Text('Save',
-                  style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
             ),
-          const SizedBox(width: 16),
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4A7DBF),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white24, width: 2),
+            const Spacer(),
+            if (_selectedTemplate != null)
+              ElevatedButton.icon(
+                onPressed: () {
+                  _saveCurrentSlide();
+                  final valid = _slides.where((s) => s.isNotEmpty).toList();
+                  if (valid.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Please design at least one slide.'),
+                      backgroundColor: Colors.orange,
+                      duration: Duration(seconds: 2),
+                    ));
+                    return;
+                  }
+                  Navigator.of(context).pop(valid);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6DB84A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.save_rounded, size: 18),
+                label: Text('Save',
+                    style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13)),
+              ),
+            const SizedBox(width: 16),
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF4A7DBF),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white24, width: 2),
+              ),
+              child: const Icon(Icons.person, color: Colors.white, size: 20),
             ),
-            child: const Icon(Icons.person, color: Colors.white, size: 20),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

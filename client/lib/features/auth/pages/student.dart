@@ -387,28 +387,34 @@ class _StudentSignupPageState extends State<StudentSignupPage>
   }
 
   Widget _buildNavbar(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          Row(
-            children: [
-              _HoverNavButton(
-                label: 'nav.login'.tr(),
-                onPressed: () => Navigator.pop(context),
-              ),
-              _HoverNavButton(
-                label: 'nav.signup'.tr(),
-                onPressed: () {},
-                filled: true,
-              ),
-            ],
-          ),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            Row(
+              children: [
+                _HoverNavButton(
+                  label: 'nav.login'.tr(),
+                  onPressed: () => Navigator.pop(context),
+                  isMobile: isMobile,
+                ),
+                _HoverNavButton(
+                  label: 'nav.signup'.tr(),
+                  onPressed: () {},
+                  filled: true,
+                  isMobile: isMobile,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -556,11 +562,13 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
+  final bool isMobile;
 
   const _HoverNavButton({
     required this.label,
     required this.onPressed,
     this.filled = false,
+    this.isMobile = false,
   });
 
   @override
@@ -581,7 +589,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: widget.isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -592,7 +600,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
             widget.label,
             style: GoogleFonts.montserrat(
               color: isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: widget.isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),

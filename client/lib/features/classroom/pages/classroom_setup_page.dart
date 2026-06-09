@@ -147,18 +147,23 @@ class _ClassroomSetupPageState extends State<ClassroomSetupPage>
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'Set Up Your Classroom',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.amaticSc(
-                          color: Colors.white,
-                          fontSize: 52,
-                          fontWeight: FontWeight.w700,
-                          height: 1.1,
-                          shadows: const [
-                            Shadow(offset: Offset(3, 3), color: Color(0x33000000), blurRadius: 0),
-                          ],
-                        ),
+                      Builder(
+                        builder: (context) {
+                          final isMobile = MediaQuery.of(context).size.width < 650;
+                          return Text(
+                            'Set Up Your Classroom',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.amaticSc(
+                              color: Colors.white,
+                              fontSize: isMobile ? 38 : 52,
+                              fontWeight: FontWeight.w700,
+                              height: 1.1,
+                              shadows: const [
+                                Shadow(offset: Offset(3, 3), color: Color(0x33000000), blurRadius: 0),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 10),
                       Text(
@@ -173,29 +178,51 @@ class _ClassroomSetupPageState extends State<ClassroomSetupPage>
                       const SizedBox(height: 28),
 
                       // ── CARDS ──
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      Builder(
+                        builder: (context) {
+                          final isMobile = MediaQuery.of(context).size.width < 650;
+                          final cardWidth = isMobile
+                              ? (MediaQuery.of(context).size.width - 64).clamp(120.0, 200.0)
+                              : 200.0;
+                          final cards = [
                             _OptionCard(
                               label: 'Join',
                               subtitle: 'I have a code from a friend',
                               icon: Icons.login_rounded,
                               isSelected: _mode == 'join',
+                              cardWidth: cardWidth,
                               onTap: _onJoinTap,
                             ),
-                            const SizedBox(width: 24),
                             _OptionCard(
                               label: 'Create',
                               subtitle: 'Start a new classroom',
                               icon: Icons.add_circle_outline_rounded,
                               isSelected: _mode == 'create',
+                              cardWidth: cardWidth,
                               onTap: _onCreateTap,
                             ),
-                          ],
-                        ),
+                          ];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: isMobile
+                                ? Column(
+                                    children: [
+                                      cards[0],
+                                      const SizedBox(height: 16),
+                                      cards[1],
+                                    ],
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      cards[0],
+                                      const SizedBox(width: 24),
+                                      cards[1],
+                                    ],
+                                  ),
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 28),
@@ -206,8 +233,8 @@ class _ClassroomSetupPageState extends State<ClassroomSetupPage>
                           padding: const EdgeInsets.symmetric(horizontal: 32),
                           child: Column(
                             children: [
-                              SizedBox(
-                                width: 340,
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 340),
                                 child: TextField(
                                   controller: _codeController,
                                   textCapitalization: TextCapitalization.characters,
@@ -391,20 +418,24 @@ class _ClassroomSetupPageState extends State<ClassroomSetupPage>
   }
 
   Widget _buildNavbar() {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/images/sprites/logocodey.png',
-              height: 40, fit: BoxFit.contain),
-          Row(children: [
-            _HoverNavButton(label: 'Log In', onPressed: () => Navigator.pop(context)),
-            _HoverNavButton(label: 'Sign Up', onPressed: () {}, filled: true),
-          ]),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/sprites/logocodey.png',
+                height: 40, fit: BoxFit.contain),
+            Row(children: [
+              _HoverNavButton(label: 'Log In', onPressed: () => Navigator.pop(context), isMobile: isMobile),
+              _HoverNavButton(label: 'Sign Up', onPressed: () {}, filled: true, isMobile: isMobile),
+            ]),
+          ],
+        ),
       ),
     );
   }
@@ -416,6 +447,7 @@ class _OptionCard extends StatefulWidget {
   final IconData icon;
   final bool isSelected;
   final VoidCallback onTap;
+  final double cardWidth;
 
   const _OptionCard({
     required this.label,
@@ -423,6 +455,7 @@ class _OptionCard extends StatefulWidget {
     required this.icon,
     required this.isSelected,
     required this.onTap,
+    this.cardWidth = 200,
   });
 
   @override
@@ -441,7 +474,7 @@ class _OptionCardState extends State<_OptionCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          width: 200,
+          width: widget.cardWidth,
           padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -529,7 +562,8 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
-  const _HoverNavButton({required this.label, required this.onPressed, this.filled = false});
+  final bool isMobile;
+  const _HoverNavButton({required this.label, required this.onPressed, this.filled = false, this.isMobile = false});
 
   @override
   State<_HoverNavButton> createState() => _HoverNavButtonState();
@@ -549,7 +583,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: widget.isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -560,7 +594,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
             widget.label,
             style: GoogleFonts.montserrat(
               color: isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: widget.isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),

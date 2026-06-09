@@ -302,24 +302,28 @@ class _DataPlayPageLesson2State extends State<DataPlayPageLesson2> {
   }
 
   Widget _buildNavbar(int lessonNumber, String lessonTitle) {
-    return Container(
-      color: const Color.fromARGB(255, 252, 183, 199), height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(children: [
-            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-            const SizedBox(width: 24),
-            Text('DATA IS EVERYWHERE: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
-                style: GoogleFonts.montserrat(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
-          ]),
-          Row(children: [
-            Image.asset('assets/images/sprites/avatar00.png', width: 36, height: 36),
-            const SizedBox(width: 16),
-            Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
-          ]),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 252, 183, 199), height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(children: [
+              Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+              const SizedBox(width: 24),
+              Text('DATA IS EVERYWHERE: MINI COURSE: #$lessonNumber ${lessonTitle.toUpperCase()}',
+                  style: GoogleFonts.montserrat(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+            ]),
+            Row(children: [
+              Image.asset('assets/images/sprites/avatar00.png', width: 36, height: 36),
+              const SizedBox(width: 16),
+              Image.asset('assets/images/sprites/btn_menu.png', width: 24, height: 24),
+            ]),
+          ],
+        ),
       ),
     );
   }

@@ -27,34 +27,37 @@ class CodemonkeyJrPage extends StatelessWidget {
 
   // ── NAVBAR (reuse your existing style) ──
   Widget _buildNavbar(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          ),
-          Row(
-            children: [
-              _NavBtn(label: 'COURSES', onTap: () {}),
-              const SizedBox(width: 28),
-              _NavBtn(label: 'PLANS', onTap: () {}),
-              const SizedBox(width: 28),
-              _NavBtn(label: 'RESOURCES', onTap: () {}),
-            ],
-          ),
-          Row(
-            children: [
-              _HoverNavButton(label: 'LOG IN', onPressed: () {}),
-              _HoverNavButton(
-                  label: 'SIGN UP', onPressed: () {}, filled: true),
-            ],
-          ),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            ),
+            Row(
+              children: [
+                _NavBtn(label: 'COURSES', onTap: () {}),
+                const SizedBox(width: 28),
+                _NavBtn(label: 'PLANS', onTap: () {}),
+                const SizedBox(width: 28),
+                _NavBtn(label: 'RESOURCES', onTap: () {}),
+              ],
+            ),
+            Row(
+              children: [
+                _HoverNavButton(label: 'LOG IN', onPressed: () {}, isMobile: isMobile),
+                _HoverNavButton(label: 'SIGN UP', onPressed: () {}, filled: true, isMobile: isMobile),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -632,8 +635,9 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
+  final bool isMobile;
   const _HoverNavButton(
-      {required this.label, required this.onPressed, this.filled = false});
+      {required this.label, required this.onPressed, this.filled = false, this.isMobile = false});
 
   @override
   State<_HoverNavButton> createState() => _HoverNavButtonState();
@@ -652,7 +656,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: widget.isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -664,7 +668,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
             style: GoogleFonts.montserrat(
               color:
                   isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: widget.isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),

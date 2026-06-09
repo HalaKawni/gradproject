@@ -510,30 +510,34 @@ class _MyAccountPageState extends State<MyAccountPage>
 
   // ── NAVBAR ────────────────────────────────────────────────────────────────
   Widget _buildNavbar(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.chevron_left, color: Colors.white, size: 20),
-                Text('nav.back'.tr(),
-                    style: GoogleFonts.montserrat(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700)),
-              ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.chevron_left, color: Colors.white, size: 20),
+                  Text('nav.back'.tr(),
+                      style: GoogleFonts.montserrat(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700)),
+                ],
+              ),
             ),
-          ),
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          const SizedBox(width: 80),
-        ],
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            const SizedBox(width: 80),
+          ],
+        ),
       ),
     );
   }

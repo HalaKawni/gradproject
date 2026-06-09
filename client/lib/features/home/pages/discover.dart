@@ -153,13 +153,17 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _loadPublishedGames,
-                    child: CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      slivers: [
-                        SliverToBoxAdapter(child: _buildBannerAndTabs()),
-                        SliverToBoxAdapter(child: _buildTabBodyHeader()),
-                        _buildCurrentTabContent(),
-                      ],
+                    child: MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: CustomScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        slivers: [
+                          SliverToBoxAdapter(child: _buildBannerAndTabs()),
+                          SliverToBoxAdapter(child: _buildTabBodyHeader()),
+                          _buildCurrentTabContent(),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -213,12 +217,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       children: [
         SizedBox(
           height: 250,
-          child: Column(
-            children: [
-              Expanded(child: _DiscoverBannerPlaceholder()),
-              const SizedBox(height: 34),
-            ],
-          ),
+          child: _DiscoverBannerPlaceholder(),
         ),
         Positioned(
           left: 18,

@@ -764,9 +764,14 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   Widget build(BuildContext context) {
     final isMobile = Responsive.isMobile(context);
+    Widget scrollContent = SingleChildScrollView(
+      key: ValueKey(_activeSection),
+      padding: EdgeInsets.zero,
+      child: _buildMainSection(),
+    );
     final content = _activeSection == _DashboardSection.myCreations
         ? _buildMyCreationsView()
-        : SingleChildScrollView(child: _buildMainSection());
+        : scrollContent;
 
     if (isMobile) {
       return Scaffold(
@@ -782,20 +787,24 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF0F0ED),
-      body: Column(
-        children: [
-          _buildTopNavbar(),
-          Expanded(
-            child: Row(
-              children: [
-                _buildSidebar(),
-                Expanded(child: content),
-              ],
+    return MediaQuery(
+      data: MediaQuery.of(context).copyWith(padding: EdgeInsets.zero),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF0F0ED),
+        body: Column(
+          children: [
+            _buildTopNavbar(),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSidebar(),
+                  Expanded(child: content),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -951,7 +960,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildHeroBanner() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 600;
+        final isMobile = constraints.maxWidth < 700;
 
         if (isMobile) {
           return Container(
@@ -2192,16 +2201,11 @@ class _DashboardPageState extends State<DashboardPage> {
       children: [
         SizedBox(
           height: 220,
-          child: Column(
-            children: [
-              Expanded(child: _DashboardDiscoverBannerPlaceholder()),
-              const SizedBox(height: 42),
-            ],
-          ),
+          child: _DashboardDiscoverBannerPlaceholder(),
         ),
         Positioned(
           left: 10,
-          bottom: 42,
+          bottom: 0,
           child: Row(
             children: [
               _DashboardDiscoverTabButton(
@@ -3688,32 +3692,11 @@ class _DashboardDiscoverBannerPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Crop the source artwork slightly so the top white strip stays out of view.
-    const double imageZoom = 1.14;
-
-    // x: -1 left, 0 center, 1 right
-    // y: -1 top, 0 center, 1 bottom
-    const Alignment imagePosition = Alignment(0.0, -0.48);
-
-    return ClipRect(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return OverflowBox(
-            alignment: imagePosition,
-            minWidth: constraints.maxWidth * imageZoom,
-            maxWidth: constraints.maxWidth * imageZoom,
-            minHeight: constraints.maxHeight * imageZoom,
-            maxHeight: constraints.maxHeight * imageZoom,
-            child: Image.asset(
-              'assets/images/discovery banner.png',
-              width: constraints.maxWidth * imageZoom,
-              height: constraints.maxHeight * imageZoom,
-              fit: BoxFit.cover,
-              alignment: imagePosition,
-            ),
-          );
-        },
-      ),
+    return Image.asset(
+      'assets/images/discovery banner.png',
+      width: double.infinity,
+      fit: BoxFit.cover,
+      alignment: const Alignment(0.0, -0.2),
     );
   }
 }

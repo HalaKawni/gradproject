@@ -118,274 +118,238 @@ class _HomeAgePageState extends State<HomeAgePage>
                       const SizedBox(height: 8),
 
                       // ── TITLE ──
-                      Text(
-                        'age.title'.tr(),
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.amaticSc(
-                          color: Colors.white,
-                          fontSize: 58,
-                          fontWeight: FontWeight.w700,
-                          shadows: const [
-                            Shadow(
-                              offset: Offset(3, 3),
-                              color: Color(0x33000000),
-                              blurRadius: 0,
+                      Builder(
+                        builder: (context) {
+                          final isMobile = MediaQuery.of(context).size.width < 650;
+                          return Text(
+                            'age.title'.tr(),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.amaticSc(
+                              color: Colors.white,
+                              fontSize: isMobile ? 42 : 58,
+                              fontWeight: FontWeight.w700,
+                              shadows: const [
+                                Shadow(
+                                  offset: Offset(3, 3),
+                                  color: Color(0x33000000),
+                                  blurRadius: 0,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 40),
 
-                      // ── MONKEY + INPUT ROW ──
-                      SizedBox(
-                        height: 400,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            // ── LEFT: vertical line + monkey ──
-                            SizedBox(
-                              width: 260,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                alignment: Alignment.bottomCenter,
-                                children: [
-                                  // vertical dashed line
-                                  Positioned(
-                                    left: 128,
-                                    top: 0,
-                                    bottom: 0,
-                                    child: Container(
-                                      width: 1.5,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.transparent,
-                                      ),
-                                      child: CustomPaint(
-                                        painter: _DashedLinePainter(),
-                                      ),
-                                    ),
-                                  ),
-                                  // monkey — animates height
-                                  Positioned(
-                                    bottom: 0,
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 400,
-                                      ),
-                                      curve: Curves.easeOut,
-                                      height: _monkeyHeight,
-                                      child: Image.asset(
-                                        'assets/images/age.png',
-                                        fit: BoxFit.contain,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                      // ── MONKEY + INPUT ──
+                      Builder(
+                        builder: (context) {
+                          final isMobile = MediaQuery.of(context).size.width < 650;
 
-                            const SizedBox(width: 40),
-
-                            // ── RIGHT: age input + next ──
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          final monkeyWidget = SizedBox(
+                            width: isMobile ? 160 : 260,
+                            height: isMobile ? 220 : 400,
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              alignment: Alignment.bottomCenter,
                               children: [
-                                // Age input with up/down arrows
-                                Container(
-                                  width: 140,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: const Color(0xFFCCCCCC),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _ageController,
-                                          keyboardType: TextInputType.number,
-                                          style: GoogleFonts.nunito(
-                                            fontSize: 16,
-                                            color: const Color(0xFF333333),
-                                          ),
-                                          decoration: InputDecoration(
-                                            hintText: 'age.hint'.tr(),
-                                            hintStyle: GoogleFonts.nunito(
-                                              fontSize: 14,
-                                              color: const Color(0xFF999999),
-                                            ),
-                                            border: InputBorder.none,
-                                            contentPadding:
-                                                const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 14,
-                                                ),
-                                          ),
-                                          onChanged: (val) {
-                                            setState(() {
-                                              _age = int.tryParse(val) ?? 0;
-                                              _showError = false;
-                                            });
-                                          },
-                                        ),
-                                      ),
-                                      // up/down buttons
-                                      Column(
-                                        children: [
-                                          GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                if (_age < 18) {
-                                                  _age++;
-                                                  _ageController.text = _age
-                                                      .toString();
-                                                  _showError = false;
-                                                }
-                                              });
-                                            },
-                                            child: Container(
-                                              width: 28,
-                                              height: 24,
-                                              decoration: const BoxDecoration(
-                                                border: Border(
-                                                  left: BorderSide(
-                                                    color: Color(0xFFCCCCCC),
-                                                  ),
-                                                  bottom: BorderSide(
-                                                    color: Color(0xFFCCCCCC),
-                                                  ),
-                                                ),
-                                              ),
-                                              child: const Icon(
-                                                Icons.keyboard_arrow_up,
-                                                size: 16,
-                                                color: Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ),
-                                          GestureDetector(
-                                            onTap: () {
-                                              setState(() {
-                                                if (_age > 1) {
-                                                  _age--;
-                                                  _ageController.text = _age
-                                                      .toString();
-                                                  _showError = false;
-                                                }
-                                              });
-                                            },
-                                            child: Container(
-                                              width: 28,
-                                              height: 24,
-                                              decoration: const BoxDecoration(
-                                                border: Border(
-                                                  left: BorderSide(
-                                                    color: Color(0xFFCCCCCC),
-                                                  ),
-                                                ),
-                                              ),
-                                              child: const Icon(
-                                                Icons.keyboard_arrow_down,
-                                                size: 16,
-                                                color: Color(0xFF666666),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                Positioned(
+                                  left: isMobile ? 78 : 128,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 1.5,
+                                    color: Colors.transparent,
+                                    child: CustomPaint(painter: _DashedLinePainter()),
                                   ),
                                 ),
-
-                                if (_showError) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'error.required'.tr(),
-                                    style: GoogleFonts.nunito(
-                                      color: const Color(0xFFE53935),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-
-                                const SizedBox(height: 12),
-
-                                // NEXT button
-                                Container(
-                                  width: 140,
-                                  decoration: BoxDecoration(
-                                    color: const Color.fromARGB(
-                                      255,
-                                      195,
-                                      158,
-                                      222,
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(bottom: 4),
-                                    child: ElevatedButton(
-                                      onPressed: () {
-                                        if (_ageController.text.isEmpty ||
-                                            _age <= 0) {
-                                          setState(() => _showError = true);
-                                        } else if (_age > 12) {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  const StudentAccountPage(),
-                                            ),
-                                          );
-                                        } else {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) => const SorryPage(),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color.fromARGB(
-                                          255,
-                                          220,
-                                          202,
-                                          233,
-                                        ),
-                                        foregroundColor: const Color(
-                                          0xFF3A2A00,
-                                        ),
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            6,
-                                          ),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'common.next'.tr(),
-                                        style: GoogleFonts.montserrat(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 1.2,
-                                        ),
-                                      ),
+                                Positioned(
+                                  bottom: 0,
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 400),
+                                    curve: Curves.easeOut,
+                                    height: isMobile ? _monkeyHeight * 0.6 : _monkeyHeight,
+                                    child: Image.asset(
+                                      'assets/images/age.png',
+                                      fit: BoxFit.contain,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          );
+
+                          final inputWidget = Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 140,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFCCCCCC)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _ageController,
+                                        keyboardType: TextInputType.number,
+                                        style: GoogleFonts.nunito(
+                                          fontSize: 16,
+                                          color: const Color(0xFF333333),
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: 'age.hint'.tr(),
+                                          hintStyle: GoogleFonts.nunito(
+                                            fontSize: 14,
+                                            color: const Color(0xFF999999),
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 14,
+                                          ),
+                                        ),
+                                        onChanged: (val) {
+                                          setState(() {
+                                            _age = int.tryParse(val) ?? 0;
+                                            _showError = false;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                    Column(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              if (_age < 18) {
+                                                _age++;
+                                                _ageController.text = _age.toString();
+                                                _showError = false;
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            width: 28,
+                                            height: 24,
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                left: BorderSide(color: Color(0xFFCCCCCC)),
+                                                bottom: BorderSide(color: Color(0xFFCCCCCC)),
+                                              ),
+                                            ),
+                                            child: const Icon(Icons.keyboard_arrow_up, size: 16, color: Color(0xFF666666)),
+                                          ),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              if (_age > 1) {
+                                                _age--;
+                                                _ageController.text = _age.toString();
+                                                _showError = false;
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            width: 28,
+                                            height: 24,
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                left: BorderSide(color: Color(0xFFCCCCCC)),
+                                              ),
+                                            ),
+                                            child: const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF666666)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (_showError) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'error.required'.tr(),
+                                  style: GoogleFonts.nunito(
+                                    color: const Color(0xFFE53935),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              Container(
+                                width: 140,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(255, 195, 158, 222),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      if (_ageController.text.isEmpty || _age <= 0) {
+                                        setState(() => _showError = true);
+                                      } else if (_age > 12) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const StudentAccountPage()),
+                                        );
+                                      } else {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const SorryPage()),
+                                        );
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color.fromARGB(255, 220, 202, 233),
+                                      foregroundColor: const Color(0xFF3A2A00),
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
+                                    child: Text(
+                                      'common.next'.tr(),
+                                      style: GoogleFonts.montserrat(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1.2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+
+                          if (isMobile) {
+                            return Column(
+                              children: [
+                                monkeyWidget,
+                                const SizedBox(height: 20),
+                                inputWidget,
+                              ],
+                            );
+                          }
+                          return SizedBox(
+                            height: 400,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                monkeyWidget,
+                                const SizedBox(width: 40),
+                                inputWidget,
+                              ],
+                            ),
+                          );
+                        },
                       ),
 
                       const SizedBox(height: 40),
@@ -423,28 +387,34 @@ class _HomeAgePageState extends State<HomeAgePage>
   }
 
   Widget _buildNavbar(BuildContext context) {
-    return Container(
-      color: const Color.fromARGB(255, 50, 136, 189),
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
-          Row(
-            children: [
-              _HoverNavButton(
-                label: 'nav.login'.tr(),
-                onPressed: () => Navigator.pop(context),
-              ),
-              _HoverNavButton(
-                label: 'nav.signup'.tr(),
-                onPressed: () {},
-                filled: true,
-              ),
-            ],
-          ),
-        ],
+    final isMobile = MediaQuery.of(context).size.width < 650;
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        color: const Color.fromARGB(255, 50, 136, 189),
+        height: 52,
+        padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Image.asset('assets/images/sprites/logocodey.png', height: 40, fit: BoxFit.contain),
+            Row(
+              children: [
+                _HoverNavButton(
+                  label: 'nav.login'.tr(),
+                  onPressed: () => Navigator.pop(context),
+                  isMobile: isMobile,
+                ),
+                _HoverNavButton(
+                  label: 'nav.signup'.tr(),
+                  onPressed: () {},
+                  filled: true,
+                  isMobile: isMobile,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -512,11 +482,13 @@ class _HoverNavButton extends StatefulWidget {
   final String label;
   final VoidCallback onPressed;
   final bool filled;
+  final bool isMobile;
 
   const _HoverNavButton({
     required this.label,
     required this.onPressed,
     this.filled = false,
+    this.isMobile = false,
   });
 
   @override
@@ -537,7 +509,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: widget.isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -548,7 +520,7 @@ class _HoverNavButtonState extends State<_HoverNavButton> {
             widget.label,
             style: GoogleFonts.montserrat(
               color: isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: widget.isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),

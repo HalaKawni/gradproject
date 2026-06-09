@@ -70,10 +70,9 @@ class WelcomePage extends StatelessWidget {
           children: [
             _buildNavbar(context),
             // ── original hero (unchanged) ──
-            _buildHero(),
+            _buildHero(isMobile),
             _buildCatchSection(),
-            _buildFeatureCards(),
-            _buildStatsBar(),
+            _buildFeatureCards(isMobile),
             // ── new sections below ──
             _buildAboutSection(isMobile),
             _buildWave(toBlue: true),
@@ -108,6 +107,13 @@ class WelcomePage extends StatelessWidget {
   // ── NAVBAR ────────────────────────────────────────────────────────────────────
   Widget _buildNavbar(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 900;
+    return SafeArea(
+      bottom: false,
+      child: _buildNavbarContent(context, isMobile),
+    );
+  }
+
+  Widget _buildNavbarContent(BuildContext context, bool isMobile) {
     return Container(
       color: const Color.fromARGB(255, 50, 136, 189),
       height: 52,
@@ -171,12 +177,12 @@ class WelcomePage extends StatelessWidget {
   }
 
   // ── HERO (original, unchanged) ──────────────────────────────────────────────
-  Widget _buildHero() {
+  Widget _buildHero(bool isMobile) {
     return ClipPath(
       clipper: _BottomCurveClipper(),
       child: SizedBox(
         width: double.infinity,
-        height: 600,
+        height: isMobile ? 480 : 600,
         child: Stack(
           clipBehavior: Clip.none,
           children: [
@@ -202,20 +208,23 @@ class WelcomePage extends StatelessWidget {
               right: 32,
               child: Column(
                 children: [
-                  Text(
-                    'home.title'.tr(),
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.amaticSc(
-                      color: const Color.fromARGB(255, 255, 255, 255),
-                      fontSize: 90,
-                      fontWeight: FontWeight.w600,
-                      shadows: const [
-                        Shadow(
-                          offset: Offset(3, 3),
-                          color: Color.fromARGB(255, 50, 136, 189),
-                          blurRadius: 0,
-                        ),
-                      ],
+                  FittedBox(
+                    fit: BoxFit.fitWidth,
+                    child: Text(
+                      'home.title'.tr(),
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.amaticSc(
+                        color: const Color.fromARGB(255, 255, 255, 255),
+                        fontSize: isMobile ? 56 : 90,
+                        fontWeight: FontWeight.w600,
+                        shadows: const [
+                          Shadow(
+                            offset: Offset(3, 3),
+                            color: Color.fromARGB(255, 50, 136, 189),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -293,7 +302,7 @@ class WelcomePage extends StatelessWidget {
           Text(
             'home.catch_bananas'.tr(),
             style: GoogleFonts.pacifico(
-              color: const Color(0xFFD4A017),
+              color: _darkTeal,
               fontSize: 32,
             ),
           ),
@@ -303,98 +312,56 @@ class WelcomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureCards() {
+  Widget _buildFeatureCards(bool isMobile) {
     final features = [
       ('🎮', 'home.feature1_title'.tr(), 'home.feature1_desc'.tr()),
       ('🏆', 'home.feature2_title'.tr(), 'home.feature2_desc'.tr()),
       ('👩‍🏫', 'home.feature3_title'.tr(), 'home.feature3_desc'.tr()),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
-      child: Row(
-        children: features
-            .map(
-              (f) => Expanded(
-                child: Container(
-                  margin: const EdgeInsets.only(right: 16),
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE0DDD5)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(f.$1, style: const TextStyle(fontSize: 40)),
-                      const SizedBox(height: 12),
-                      Text(
-                        f.$2,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.pacifico(
-                          color: const Color(0xFF3B2008),
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        f.$3,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.nunito(
-                          color: const Color(0xFF777777),
-                          fontSize: 13,
-                          height: 1.6,
-                        ),
-                      ),
-                    ],
-                  ),
+    Widget card(dynamic f) => Container(
+          margin: EdgeInsets.only(
+            right: isMobile ? 0 : 16,
+            bottom: isMobile ? 16 : 0,
+          ),
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE0DDD5)),
+          ),
+          child: Column(
+            children: [
+              Text(f.$1, style: const TextStyle(fontSize: 40)),
+              const SizedBox(height: 12),
+              Text(
+                f.$2,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.pacifico(color: _darkTeal, fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                f.$3,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.nunito(
+                  color: const Color(0xFF777777),
+                  fontSize: 13,
+                  height: 1.6,
                 ),
               ),
-            )
-            .toList(),
-      ),
-    );
-  }
+            ],
+          ),
+        );
 
-  Widget _buildStatsBar() {
-    final stats = [
-      ('70M+', 'stats.games_played'.tr()),
-      ('5M+', 'stats.students'.tr()),
-      ('150+', 'stats.countries'.tr()),
-      ('500K+', 'stats.teachers'.tr()),
-    ];
-
-    return Container(
-      color: const Color(0xFF3B2008),
-      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 32),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: stats
-            .map(
-              (s) => Column(
-                children: [
-                  Text(
-                    s.$1,
-                    style: GoogleFonts.pacifico(
-                      color: const Color.fromARGB(255, 164, 219, 168),
-                      fontSize: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s.$2,
-                    style: GoogleFonts.nunito(
-                      color: const Color(0xFFE8D8B0),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            )
-            .toList(),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 0, 32, 52),
+      child: isMobile
+          ? Column(children: features.map(card).toList())
+          : Row(
+              children: features
+                  .map((f) => Expanded(child: card(f)))
+                  .toList(),
+            ),
     );
   }
 
@@ -1575,6 +1542,7 @@ class _HoverButtonState extends State<_HoverButton> {
   bool _hovered = false;
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 900;
     final isYellow = widget.filled || _hovered;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -1584,7 +1552,7 @@ class _HoverButtonState extends State<_HoverButton> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 10 : 20),
           decoration: BoxDecoration(
             color: isYellow
                 ? const Color.fromARGB(255, 220, 202, 233)
@@ -1596,7 +1564,7 @@ class _HoverButtonState extends State<_HoverButton> {
             widget.label,
             style: GoogleFonts.montserrat(
               color: isYellow ? const Color(0xFF3A2A00) : Colors.white,
-              fontSize: 14,
+              fontSize: isMobile ? 11 : 14,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1670,39 +1638,48 @@ class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
             ),
           ),
         ],
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: _hovered
-                ? const Color.fromARGB(255, 220, 202, 233)
-                : Colors.transparent,
-            borderRadius: BorderRadius.zero,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _selected,
-                style: GoogleFonts.montserrat(
-                  color: _hovered
-                      ? const Color(0xFF3A2A00)
-                      : const Color(0xFFE8D8B0),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Icon(
-                Icons.keyboard_arrow_down,
-                color: _hovered
-                    ? const Color(0xFF3A2A00)
-                    : const Color(0xFFE8D8B0),
-                size: 16,
-              ),
-            ],
-          ),
-        ),
+        child: Builder(builder: (context) {
+          final isMobile = MediaQuery.of(context).size.width < 900;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            height: 52,
+            padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 20),
+            decoration: BoxDecoration(
+              color: _hovered
+                  ? const Color.fromARGB(255, 220, 202, 233)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.zero,
+            ),
+            child: isMobile
+                ? Icon(
+                    Icons.language,
+                    color: _hovered ? const Color(0xFF3A2A00) : Colors.white,
+                    size: 22,
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _selected,
+                        style: GoogleFonts.montserrat(
+                          color: _hovered
+                              ? const Color(0xFF3A2A00)
+                              : const Color(0xFFE8D8B0),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        color: _hovered
+                            ? const Color(0xFF3A2A00)
+                            : const Color(0xFFE8D8B0),
+                        size: 16,
+                      ),
+                    ],
+                  ),
+          );
+        }),
       ),
     );
   }
