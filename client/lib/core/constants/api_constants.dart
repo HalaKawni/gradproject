@@ -1,12 +1,13 @@
+import 'api_config.dart';
+
 class ApiConstants {
-  static const String baseUrl =
-      'http://192.168.1.13:3000/api'; // PC's local WiFi IP for real device testing
+  static String get baseUrl => ApiConfig.apiBaseUrl;
 
   // Auth
-  static const String register = '$baseUrl/user/registration';
-  static const String login = '$baseUrl/user/login';
-  static const String profile = '$baseUrl/user/profile';
-  static const String resendVerification = '$baseUrl/user/resend-verification';
+  static String get register => '$baseUrl/user/registration';
+  static String get login => '$baseUrl/user/login';
+  static String get profile => '$baseUrl/user/profile';
+  static String get resendVerification => '$baseUrl/user/resend-verification';
   static String verifyEmail(String token) =>
       '$baseUrl/user/verify-email?token=${Uri.encodeQueryComponent(token)}';
 

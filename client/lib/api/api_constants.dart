@@ -1,10 +1,12 @@
+import '../core/constants/api_config.dart';
+
 class ApiConstants {
-  static const String baseUrl = 'http://192.168.1.13:3000/api';
+  static String get baseUrl => ApiConfig.apiBaseUrl;
 
   // Auth
-  static const String register = '$baseUrl/user/registration';
-  static const String login = '$baseUrl/user/login';
-  static const String profile = '$baseUrl/user/profile';
+  static String get register => '$baseUrl/user/registration';
+  static String get login => '$baseUrl/user/login';
+  static String get profile => '$baseUrl/user/profile';
 
   // Game
   static String gameProgress(String gameId) => '$baseUrl/game/$gameId/progress';
@@ -13,16 +15,16 @@ class ApiConstants {
   static String resetProgress(String gameId) => '$baseUrl/game/$gameId/progress';
 
   // Parent-child linking
-  static const String generateLinkCode = '$baseUrl/user/generate-link-code';
-  static const String getLinkCode = '$baseUrl/user/link-code';
-  static const String linkChild = '$baseUrl/user/link-child';
+  static String get generateLinkCode => '$baseUrl/user/generate-link-code';
+  static String get getLinkCode => '$baseUrl/user/link-code';
+  static String get linkChild => '$baseUrl/user/link-child';
   static String unlinkChild(String childId) => '$baseUrl/user/unlink-child/$childId';
-  static const String linkedChildren = '$baseUrl/user/linked-children';
+  static String get linkedChildren => '$baseUrl/user/linked-children';
 
   // Classroom
-  static const String joinClassroom = '$baseUrl/classroom/join';
-  static const String myClassroom = '$baseUrl/classroom/my-classroom';
-  static const String classroomMembers = '$baseUrl/classroom/members';
-  static const String classroomActivity = '$baseUrl/classroom/activity';
+  static String get joinClassroom => '$baseUrl/classroom/join';
+  static String get myClassroom => '$baseUrl/classroom/my-classroom';
+  static String get classroomMembers => '$baseUrl/classroom/members';
+  static String get classroomActivity => '$baseUrl/classroom/activity';
   static String classroomLeaderboard(String gameId) => '$baseUrl/classroom/leaderboard/$gameId';
 }

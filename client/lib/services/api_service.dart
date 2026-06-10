@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/constants/api_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.13:3000/api';
+  static String get baseUrl => ApiConfig.apiBaseUrl;
 
   // ── Token management ──────────────────────────────────────
   static Future<void> saveToken(String token) async {

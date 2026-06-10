@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import '../constants/api_config.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://192.168.1.13:3000';
+  static String get baseUrl => ApiConfig.origin;
 
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',

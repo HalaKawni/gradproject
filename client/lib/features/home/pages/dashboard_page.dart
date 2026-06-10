@@ -3276,52 +3276,55 @@ class _DashboardPageState extends State<DashboardPage> {
                 children: [
                   ...courses.map((course) {
                     final lessons = (course['lessons'] as List? ?? []);
-                    return _CreationCard(
-                      title: course['title'] as String? ?? 'Untitled',
-                      description: course['description'] as String? ?? '',
-                      lessonCount: lessons.length,
-                      imageBase64: course['courseImageBase64'] as String?,
-                      isPublished: course['isPublished'] as bool? ?? false,
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => CourseDetailPage(
-                              course: course,
-                              session: widget.session,
-                              onRefresh: () => setState(() {
-                                _coursesFuture =
-                                    LegacyApiService.ApiService.getCourses(
-                                      authToken: widget.session.token,
-                                    );
-                              }),
+                    return SizedBox(
+                      width: levelWidth,
+                      child: _CreationCard(
+                        title: course['title'] as String? ?? 'Untitled',
+                        description: course['description'] as String? ?? '',
+                        lessonCount: lessons.length,
+                        imageBase64: course['courseImageBase64'] as String?,
+                        isPublished: course['isPublished'] as bool? ?? false,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CourseDetailPage(
+                                course: course,
+                                session: widget.session,
+                                onRefresh: () => setState(() {
+                                  _coursesFuture =
+                                      LegacyApiService.ApiService.getCourses(
+                                        authToken: widget.session.token,
+                                      );
+                                }),
+                              ),
                             ),
-                          ),
-                        );
-                        if (mounted) {
-                          setState(() {
-                            _coursesFuture =
-                                LegacyApiService.ApiService.getCourses(
-                                  authToken: widget.session.token,
-                                );
-                          });
-                        }
-                      },
-                      onDelete: () async {
-                        final id = course['_id'] as String?;
-                        if (id == null) return;
-                        await LegacyApiService.ApiService.deleteCourse(
-                          id,
-                          authToken: widget.session.token,
-                        );
-                        if (mounted) {
-                          setState(() {
-                            _coursesFuture =
-                                LegacyApiService.ApiService.getCourses(
-                                  authToken: widget.session.token,
-                                );
-                          });
-                        }
-                      },
+                          );
+                          if (mounted) {
+                            setState(() {
+                              _coursesFuture =
+                                  LegacyApiService.ApiService.getCourses(
+                                    authToken: widget.session.token,
+                                  );
+                            });
+                          }
+                        },
+                        onDelete: () async {
+                          final id = course['_id'] as String?;
+                          if (id == null) return;
+                          await LegacyApiService.ApiService.deleteCourse(
+                            id,
+                            authToken: widget.session.token,
+                          );
+                          if (mounted) {
+                            setState(() {
+                              _coursesFuture =
+                                  LegacyApiService.ApiService.getCourses(
+                                    authToken: widget.session.token,
+                                  );
+                            });
+                          }
+                        },
+                      ),
                     );
                   }),
                   ..._myLevelCourses.map(
