@@ -50,6 +50,12 @@ const userSchema = new Schema({
     emailVerificationExpires: {
         type: Date
     },
+    passwordResetToken: {
+        type: String
+    },
+    passwordResetExpires: {
+        type: Date
+    },
     photoUrl: {
         type: String
     },

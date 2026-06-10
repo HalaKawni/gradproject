@@ -8,6 +8,8 @@ class ApiConstants {
   static String get login => '$baseUrl/user/login';
   static String get profile => '$baseUrl/user/profile';
   static String get resendVerification => '$baseUrl/user/resend-verification';
+  static String get forgotPassword => '$baseUrl/user/forgot-password';
+  static String get resetPassword => '$baseUrl/user/reset-password';
   static String verifyEmail(String token) =>
       '$baseUrl/user/verify-email?token=${Uri.encodeQueryComponent(token)}';
 

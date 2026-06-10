@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
+import 'package:client/features/home/services/course_resume_service.dart';
 import 'package:flutter/material.dart';
 
 class CourseLevelNavBanner extends StatefulWidget {
@@ -299,6 +302,14 @@ void openCourseBuilderLevel({
           courseProgressCourseId: courseId,
           courseProgressLevelId: level.id,
         );
+
+  unawaited(
+    CourseResumeService.savePublicCourse(
+      userId: session.user.id,
+      courseLookupId: courseId,
+      levelId: level.id,
+    ),
+  );
 
   if (replace) {
     Navigator.of(context).pushReplacementNamed(routeName, arguments: arguments);

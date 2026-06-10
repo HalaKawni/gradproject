@@ -5,6 +5,8 @@ const authMiddleware = require("../middleware/auth.middleware");
 router.post('/registration',UserController.register);
 router.post('/login', UserController.login);
 router.post('/resend-verification', UserController.resendVerificationEmail);
+router.post('/forgot-password', UserController.requestPasswordReset);
+router.post('/reset-password', UserController.resetPassword);
 router.post('/login/google', UserController.googleLogin);
 router.get('/profile', authMiddleware, UserController.getProfile);
 router.put('/profile/avatar', authMiddleware, UserController.updateProfileAvatar);

@@ -1,5 +1,11 @@
 const UserService = require("../services/user.services");
 
+const isStrongPassword = (value) =>
+    typeof value === 'string' &&
+    value.length >= 8 &&
+    /[A-Za-z]/.test(value) &&
+    /\d/.test(value);
+
 const buildAuthUserResponse = (user) => ({
     id: user._id,
     name: user.name,
@@ -107,6 +113,31 @@ exports.resendVerificationEmail = async (req, res) => {
         res.status(400).json({
             status: false,
             error: err.message || "Failed to resend verification email"
+        });
+    }
+};
+
+exports.requestPasswordReset = async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({
+                status: false,
+                error: "Email is required"
+            });
+        }
+
+        await UserService.requestPasswordReset(email);
+
+        res.json({
+            status: true,
+            success: "If an account exists for that email, a reset link has been sent."
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Failed to send reset email"
         });
     }
 };
@@ -248,6 +279,38 @@ exports.changePassword = async (req, res, next) => {
         res.status(400).json({
             status: false,
             error: err.message || "Failed to change password"
+        });
+    }
+};
+
+exports.resetPassword = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({
+                status: false,
+                error: "Reset token and new password are required"
+            });
+        }
+
+        if (!isStrongPassword(newPassword)) {
+            return res.status(400).json({
+                status: false,
+                error: "New password must be at least 8 characters and include letters and numbers"
+            });
+        }
+
+        await UserService.resetPassword(token, newPassword);
+
+        res.json({
+            status: true,
+            success: "Password reset successfully. You can now log in."
+        });
+    } catch (err) {
+        res.status(400).json({
+            status: false,
+            error: err.message || "Password reset failed"
         });
     }
 };

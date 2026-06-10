@@ -10,6 +10,7 @@ import 'package:client/datagame/data_course_page.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:client/features/home/models/legacy_public_course_catalog.dart';
+import 'package:client/features/home/services/course_resume_service.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
 import 'world_map_page.dart';
@@ -170,6 +171,12 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
       return;
     }
 
+    await CourseResumeService.saveLegacyCourse(
+      userId: widget.session.user.id,
+      courseLookupId: _courseLookupId(course),
+      legacyPageKey: course.legacyPageKey,
+    );
+
     final routeName = switch (course.legacyPageKey) {
       'code_monkey_jr' => 'code_monkey_jr_hub',
       'data_is_everywhere' => 'data_course_hub',
@@ -260,6 +267,11 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
       authToken: widget.session.token,
       courseId: _courseLookupId(course),
       eventType: 'level_play',
+    );
+    await CourseResumeService.savePublicCourse(
+      userId: widget.session.user.id,
+      courseLookupId: _courseLookupId(course),
+      levelId: level.id,
     );
     if (!mounted) {
       return;
@@ -509,6 +521,11 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
       authToken: widget.session.token,
       courseId: _courseLookupId,
       eventType: 'level_play',
+    );
+    await CourseResumeService.savePublicCourse(
+      userId: widget.session.user.id,
+      courseLookupId: _courseLookupId,
+      levelId: level.id,
     );
     if (!mounted) {
       return;

@@ -128,6 +128,43 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> requestPasswordReset({
+    required String email,
+  }) async {
+    final response = await http.post(
+      Uri.parse(ApiConstants.forgotPassword),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['status'] == true) {
+      return data;
+    } else {
+      throw Exception(data['error'] ?? 'Failed to send reset email');
+    }
+  }
+
+  static Future<Map<String, dynamic>> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse(ApiConstants.resetPassword),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token, 'newPassword': newPassword}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200 && data['status'] == true) {
+      return data;
+    } else {
+      throw Exception(data['error'] ?? 'Failed to reset password');
+    }
+  }
+
   // ── Logout ──────────────────────────────────────────────────
   static Future<void> logout() async {
     await clearToken();

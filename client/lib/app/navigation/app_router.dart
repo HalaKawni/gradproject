@@ -5,6 +5,8 @@ import 'package:client/features/admin/pages/admin_shell.dart';
 import 'package:client/devDemo/login_page_demo.dart';
 import 'package:client/devDemo/register_page_demo.dart';
 import 'package:client/features/auth/pages/email_verification_page.dart';
+import 'package:client/features/auth/pages/forgot_password_page.dart';
+import 'package:client/features/auth/pages/reset_password_page.dart';
 import 'package:client/features/builder/front_view/pages/builder_play_page.dart';
 import 'package:client/features/builder/front_view/pages/builder_page.dart';
 import 'package:client/features/builder/fourth_demo/pages/fourth_demo_builder_page.dart';
@@ -39,6 +41,17 @@ class AppRouter {
         return _pageRoute(
           settings: settings,
           builder: (_) => EmailVerificationPage(token: token),
+        );
+      case AppRoutes.forgotPassword:
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => const ForgotPasswordPage(),
+        );
+      case AppRoutes.resetPassword:
+        final token = uri?.queryParameters['token'];
+        return _pageRoute(
+          settings: settings,
+          builder: (_) => ResetPasswordPage(token: token),
         );
       case AppRoutes.home:
         final data = settings.arguments;

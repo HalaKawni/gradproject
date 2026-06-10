@@ -7,6 +7,7 @@ import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/services/api_service.dart' as LegacyApiService;
+import 'package:client/datagame/data_learn_page_lesson2.dart';
 import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:client/features/home/models/legacy_public_course_catalog.dart';
@@ -15,9 +16,11 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:client/utils/web_redirect.dart';
+import 'package:client/datagame/data_lesson_page.dart';
+import 'package:client/digitalgame/digital_lesson_page.dart';
 import 'world_map_page.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:client/features/home/services/game_api_service.dart';
+import 'package:client/features/home/services/course_resume_service.dart';
 import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
 import 'package:client/aicourse/ai_hoot_conditional.dart';
@@ -30,6 +33,7 @@ import 'package:client/shared/widgets/help_button.dart';
 import 'package:client/shared/widgets/hint_card.dart';
 import 'package:client/core/services/onboarding_service.dart';
 import 'package:client/features/home/widgets/challenge_comments_dialog.dart';
+import 'level_map_page.dart';
 
 class DashboardPage extends StatefulWidget {
   final AuthSession session;
@@ -157,6 +161,9 @@ class _DashboardPageState extends State<DashboardPage> {
   List<_PublishedBuilderAsset> _myBuilderAssets = const [];
   bool _isLoadingMyBuilderAssets = false;
   String? _myBuilderAssetsErrorMessage;
+  _WelcomeBannerState? _welcomeBannerState;
+  bool _isLoadingWelcomeBanner = true;
+  int _welcomeBannerRequestId = 0;
 
   @override
   void initState() {
@@ -289,6 +296,225 @@ class _DashboardPageState extends State<DashboardPage> {
     if (mounted) {
       setState(() => _myStats = stats);
     }
+    unawaited(_refreshWelcomeBanner());
+  }
+
+  Future<void> _refreshWelcomeBanner() async {
+    final requestId = ++_welcomeBannerRequestId;
+    final resumeEntry = await CourseResumeService.load(widget.session.user.id);
+    final courseFromResume = _courseFromResume(resumeEntry);
+    final courseFromStats = _courseFromLegacyStats();
+    final recommendedCourse = _publicCourses.isNotEmpty ? _publicCourses.first : null;
+    final selectedCourse = courseFromResume ?? courseFromStats ?? recommendedCourse;
+
+    _WelcomeBannerState? bannerState;
+    if (selectedCourse != null) {
+      final isNewUser = courseFromResume == null && courseFromStats == null;
+      bannerState = selectedCourse.isLegacyPublicCourse
+          ? await _buildLegacyWelcomeBannerState(
+              selectedCourse,
+              isNewUser: isNewUser,
+            )
+          : await _buildPublicWelcomeBannerState(
+              selectedCourse,
+              resumeEntry: courseFromResume == selectedCourse ? resumeEntry : null,
+              isNewUser: isNewUser,
+            );
+    }
+
+    if (!mounted || requestId != _welcomeBannerRequestId) {
+      return;
+    }
+
+    setState(() {
+      _welcomeBannerState = bannerState;
+      _isLoadingWelcomeBanner = false;
+    });
+  }
+
+  _CourseData? _courseFromResume(CourseResumeEntry? entry) {
+    if (entry == null || entry.courseLookupId.isEmpty) {
+      return null;
+    }
+    return _findCourseByLookupId(entry.courseLookupId);
+  }
+
+  _CourseData? _courseFromLegacyStats() {
+    final currentGame = _myStats?['currentGame'];
+    if (currentGame is! Map) {
+      return null;
+    }
+    final gameId = currentGame['gameId']?.toString() ?? '';
+    if (gameId.isEmpty) {
+      return null;
+    }
+    return _findLegacyCourseByGameId(gameId);
+  }
+
+  _CourseData? _findCourseByLookupId(String lookupId) {
+    for (final course in _publicCourses) {
+      final publicKey = course.publicCourseKey.trim();
+      if (publicKey.isNotEmpty && publicKey == lookupId) {
+        return course;
+      }
+      if (course.publicCourseId == lookupId) {
+        return course;
+      }
+    }
+    return null;
+  }
+
+  _CourseData? _findLegacyCourseByGameId(String gameId) {
+    final legacyPageKey = _legacyPageKeyByGameId[gameId];
+    if (legacyPageKey == null) {
+      return null;
+    }
+    for (final course in _publicCourses) {
+      if (course.legacyPageKey == legacyPageKey) {
+        return course;
+      }
+    }
+    return null;
+  }
+
+  Future<_WelcomeBannerState> _buildPublicWelcomeBannerState(
+    _CourseData course, {
+    required CourseResumeEntry? resumeEntry,
+    required bool isNewUser,
+  }) async {
+    final lookupId = _courseLookupIdFor(course);
+    final levels = await _loadWelcomeCourseLevels(lookupId);
+    final progress = await _loadWelcomeCourseProgress(lookupId);
+    final totalLevels = levels.length;
+    final completedLevels = progress.completedLevelIds.length;
+    final nextLevel = levels.isEmpty ? null : _nextLevelForProgress(levels, progress);
+    final resumeLevelId = resumeEntry?.levelId;
+    SavedBuilderProject? resumeLevel;
+    if (resumeLevelId != null && resumeLevelId.isNotEmpty) {
+      for (final level in levels) {
+        if (level.id == resumeLevelId) {
+          resumeLevel = level;
+          break;
+        }
+      }
+    }
+    final detailText = totalLevels == 0
+        ? 'No levels available yet'
+        : '$completedLevels of $totalLevels levels completed';
+
+    return _WelcomeBannerState(
+      course: course,
+      progress: totalLevels == 0 ? 0 : completedLevels / totalLevels,
+      detailText: detailText,
+      actionLabel: isNewUser
+          ? 'dashboard.start_coding'.tr()
+          : 'dashboard.continue_coding'.tr(),
+      resumeLevelId: resumeLevel?.id ?? nextLevel?.id,
+      isNewUser: isNewUser,
+    );
+  }
+
+  Future<_WelcomeBannerState> _buildLegacyWelcomeBannerState(
+    _CourseData course, {
+    required bool isNewUser,
+  }) async {
+    final legacyPageKey = course.legacyPageKey;
+    final gameId = _legacyGameIdByPageKey[legacyPageKey];
+    if (gameId == null) {
+      return _WelcomeBannerState(
+        course: course,
+        progress: 0,
+        detailText: 'Start learning',
+        actionLabel: isNewUser
+            ? 'dashboard.start_coding'.tr()
+            : 'dashboard.continue_coding'.tr(),
+        isNewUser: isNewUser,
+      );
+    }
+
+    final progress = await LegacyApiService.ApiService.getProgress(gameId);
+    final totalUnits = _legacyCourseUnitTotals[legacyPageKey] ?? 1;
+    final snapshot = _legacyCourseSnapshot(
+      legacyPageKey: legacyPageKey,
+      progress: progress,
+      totalUnits: totalUnits,
+    );
+
+    return _WelcomeBannerState(
+      course: course,
+      progress: snapshot.progress,
+      detailText: snapshot.detailText,
+      actionLabel: isNewUser
+          ? 'dashboard.start_coding'.tr()
+          : 'dashboard.continue_coding'.tr(),
+      legacyGameId: gameId,
+      legacyResumeUnit: snapshot.resumeUnit,
+      isNewUser: isNewUser,
+    );
+  }
+
+  Future<List<SavedBuilderProject>> _loadWelcomeCourseLevels(String courseId) async {
+    final result = await ApiService.getPublicCourseLevels(
+      authToken: widget.session.token,
+      courseId: courseId,
+    );
+    if (result['success'] != true) {
+      return const <SavedBuilderProject>[];
+    }
+    return _parseList(result['data'])
+        .map(SavedBuilderProject.fromJson)
+        .where((level) => level.id.isNotEmpty)
+        .toList()
+      ..sort(_compareDashboardLevels);
+  }
+
+  Future<_DashboardCourseProgress> _loadWelcomeCourseProgress(String courseId) async {
+    final result = await ApiService.getPublicCourseProgress(
+      authToken: widget.session.token,
+      courseId: courseId,
+    );
+    if (result['success'] != true) {
+      return const _DashboardCourseProgress();
+    }
+    final data = result['data'];
+    return _DashboardCourseProgress.fromJson(
+      data is Map ? Map<String, dynamic>.from(data) : const <String, dynamic>{},
+    );
+  }
+
+  SavedBuilderProject _nextLevelForProgress(
+    List<SavedBuilderProject> levels,
+    _DashboardCourseProgress progress,
+  ) {
+    final lastOrder = progress.lastCompletedOrderInCourse;
+    if (lastOrder <= 0 && progress.completedLevelIds.isEmpty) {
+      return levels.first;
+    }
+    if (lastOrder <= 0) {
+      return levels.firstWhere(
+        (level) => !progress.completedLevelIds.contains(level.id),
+        orElse: () => levels.last,
+      );
+    }
+
+    return levels.firstWhere(
+      (level) => level.orderInCourse > lastOrder,
+      orElse: () => levels.last,
+    );
+  }
+
+  int _compareDashboardLevels(SavedBuilderProject a, SavedBuilderProject b) {
+    final orderComparison = a.orderInCourse.compareTo(b.orderInCourse);
+    if (orderComparison != 0) {
+      return orderComparison;
+    }
+    return a.title.compareTo(b.title);
+  }
+
+  String _courseLookupIdFor(_CourseData course) {
+    return course.publicCourseKey.isNotEmpty
+        ? course.publicCourseKey
+        : course.publicCourseId;
   }
 
   String get _favoritesStoragePrefix =>
@@ -359,6 +585,420 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Future<void> _handleWelcomeBannerAction() async {
+    final bannerState = _welcomeBannerState;
+    if (bannerState == null) {
+      return;
+    }
+
+    if (bannerState.course.isLegacyPublicCourse) {
+      await _openWelcomeLegacyCourse(bannerState);
+      return;
+    }
+
+    await _openWelcomePublicCourse(bannerState);
+  }
+
+  Future<void> _openWelcomePublicCourse(_WelcomeBannerState bannerState) async {
+    final course = bannerState.course;
+    final lookupId = _courseLookupIdFor(course);
+    final levels = await _loadWelcomeCourseLevels(lookupId);
+    if (!mounted || levels.isEmpty) {
+      return;
+    }
+
+    SavedBuilderProject? level;
+    final resumeLevelId = bannerState.resumeLevelId;
+    if (resumeLevelId != null && resumeLevelId.isNotEmpty) {
+      for (final candidate in levels) {
+        if (candidate.id == resumeLevelId) {
+          level = candidate;
+          break;
+        }
+      }
+    }
+
+    level ??= levels.first;
+
+    await ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: lookupId,
+      eventType: 'level_play',
+    );
+    await CourseResumeService.savePublicCourse(
+      userId: widget.session.user.id,
+      courseLookupId: lookupId,
+      levelId: level.id,
+    );
+    if (!mounted) {
+      return;
+    }
+
+    final routeName = level.isTopView
+        ? AppRoutes.topViewBuilder
+        : level.isScratch
+        ? AppRoutes.scratchBuilder
+        : level.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
+        : AppRoutes.builderPlay;
+    final routeData = level.isTopView
+        ? TopViewBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            showRatingOnLeave: false,
+            courseProgressCourseId: lookupId,
+            courseProgressLevelId: level.id,
+          )
+        : level.isScratch
+        ? ScratchBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            showRatingOnLeave: false,
+            courseProgressCourseId: lookupId,
+            courseProgressLevelId: level.id,
+          )
+        : level.isFourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            showRatingOnLeave: false,
+            courseProgressCourseId: lookupId,
+            courseProgressLevelId: level.id,
+          )
+        : BuilderPlayRouteData(
+            session: widget.session,
+            projectId: level.id,
+            initialTitle: level.title,
+            showRatingOnLeave: false,
+            courseProgressCourseId: lookupId,
+            courseProgressLevelId: level.id,
+          );
+
+    await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+    if (!mounted) {
+      return;
+    }
+    unawaited(_refreshWelcomeBanner());
+  }
+
+  Future<void> _openWelcomeLegacyCourse(_WelcomeBannerState bannerState) async {
+    final course = bannerState.course;
+    final lookupId = _courseLookupIdFor(course);
+    await CourseResumeService.saveLegacyCourse(
+      userId: widget.session.user.id,
+      courseLookupId: lookupId,
+      legacyPageKey: course.legacyPageKey,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    switch (course.legacyPageKey) {
+      case 'code_monkey_jr':
+        final unlockedLevel = _boundedInt(
+          bannerState.legacyResumeUnit ?? 1,
+          min: 1,
+          max: _legacyCourseUnitTotals['code_monkey_jr'] ?? 15,
+        );
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LevelMapPage(
+              topic: 'Sequencing',
+              unlockedLevel: unlockedLevel,
+            ),
+          ),
+        );
+        break;
+      case 'digital_literacy':
+        await _openDigitalLiteracyResume(
+          bannerState.legacyResumeUnit ?? 1,
+        );
+        break;
+      case 'data_is_everywhere':
+        await _openDataCourseResume(
+          bannerState.legacyResumeUnit ?? 1,
+        );
+        break;
+      case 'coding_chatbots':
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CodeMonkeyScratchPage(),
+          ),
+        );
+        break;
+      default:
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => _legacyFallbackPage(course)),
+        );
+        break;
+    }
+
+    if (!mounted) {
+      return;
+    }
+    unawaited(_loadMyStats());
+    unawaited(_refreshWelcomeBanner());
+  }
+
+  Widget _legacyFallbackPage(_CourseData course) {
+    switch (course.legacyPageKey) {
+      case 'digital_literacy':
+        return const DigitalLiteracyPage();
+      case 'data_is_everywhere':
+        return const DataCoursePage();
+      case 'coding_chatbots':
+        return const CodeMonkeyScratchPage();
+      default:
+        return const WorldMapPage();
+    }
+  }
+
+  Future<void> _openDigitalLiteracyResume(int lessonNumber) async {
+    final boundedLesson = _boundedInt(
+      lessonNumber,
+      min: 1,
+      max: _legacyCourseUnitTotals['digital_literacy'] ?? 3,
+    );
+    await LegacyApiService.ApiService.saveLevelResult(
+      gameId: 'digital-literacy',
+      level: boundedLesson,
+      completed: false,
+      score: 0,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final savedSlide = prefs.getInt('lesson_slide_$boundedLesson');
+    if (!mounted) {
+      return;
+    }
+
+    Widget destination;
+    if (savedSlide != null && savedSlide >= 0) {
+      destination = DigitalLessonPage(
+        lesson: _digitalLessonMap(boundedLesson),
+        initialSlide: savedSlide,
+      );
+    } else if (savedSlide == -1) {
+      destination = DigitalLessonPage(
+        lesson: _digitalLessonMap(boundedLesson),
+        skipToPlay: true,
+      );
+    } else {
+      destination = DigitalLessonPage(lesson: _digitalLessonMap(boundedLesson));
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => destination),
+    );
+  }
+
+  Future<void> _openDataCourseResume(int lessonNumber) async {
+    final boundedLesson = _boundedInt(
+      lessonNumber,
+      min: 1,
+      max: _legacyCourseUnitTotals['data_is_everywhere'] ?? 2,
+    );
+    await LegacyApiService.ApiService.saveLevelResult(
+      gameId: 'data-everywhere',
+      level: boundedLesson,
+      completed: false,
+      score: 0,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    final savedSlide = prefs.getInt('data_lesson_slide_$boundedLesson');
+    if (!mounted) {
+      return;
+    }
+
+    Widget destination;
+    if (boundedLesson == 2) {
+      destination = DataLearnPageLesson2(lesson: _dataLessonMap(boundedLesson));
+    } else if (savedSlide != null && savedSlide >= 0) {
+      destination = DataLessonPage(
+        lesson: _dataLessonMap(boundedLesson),
+        initialSlide: savedSlide,
+      );
+    } else if (savedSlide == -1) {
+      destination = DataLessonPage(
+        lesson: _dataLessonMap(boundedLesson),
+        skipToPlay: true,
+      );
+    } else {
+      destination = DataLessonPage(lesson: _dataLessonMap(boundedLesson));
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => destination),
+    );
+  }
+
+  _LegacyCourseSnapshot _legacyCourseSnapshot({
+    required String legacyPageKey,
+    required Map<String, dynamic> progress,
+    required int totalUnits,
+  }) {
+    switch (legacyPageKey) {
+      case 'digital_literacy':
+        return _lessonBasedLegacySnapshot(
+          progress: progress,
+          totalUnits: totalUnits,
+          detailLabel: 'lessons',
+        );
+      case 'data_is_everywhere':
+        return _lessonBasedLegacySnapshot(
+          progress: progress,
+          totalUnits: totalUnits,
+          detailLabel: 'lessons',
+        );
+      case 'coding_chatbots':
+        final currentLevel = _boundedInt(
+          _readWelcomeInt(progress['currentLevel'], fallback: 1),
+          min: 1,
+          max: totalUnits,
+        );
+        final completedUnits = _boundedInt(
+          currentLevel - 1,
+          min: 0,
+          max: totalUnits,
+        );
+        return _LegacyCourseSnapshot(
+          progress: totalUnits == 0 ? 0 : completedUnits / totalUnits,
+          detailText: '$completedUnits of $totalUnits exercises completed',
+          resumeUnit: currentLevel,
+        );
+      case 'code_monkey_jr':
+      default:
+        final highestLevel = _boundedInt(
+          _readWelcomeInt(progress['highestLevelReached'], fallback: 1),
+          min: 1,
+          max: totalUnits,
+        );
+        final completedUnits = _boundedInt(highestLevel - 1, min: 0, max: totalUnits);
+        return _LegacyCourseSnapshot(
+          progress: totalUnits == 0 ? 0 : completedUnits / totalUnits,
+          detailText: '$completedUnits of $totalUnits levels completed',
+          resumeUnit: highestLevel,
+        );
+    }
+  }
+
+  _LegacyCourseSnapshot _lessonBasedLegacySnapshot({
+    required Map<String, dynamic> progress,
+    required int totalUnits,
+    required String detailLabel,
+  }) {
+    final results = (progress['levelResults'] as List<dynamic>? ?? const <dynamic>[])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    var completedUnits = 0;
+    int? inProgressUnit;
+
+    for (var lessonNumber = 1; lessonNumber <= totalUnits; lessonNumber++) {
+      Map<String, dynamic>? lessonResult;
+      Map<String, dynamic>? quizResult;
+      for (final result in results) {
+        final level = result['level'];
+        if ('$level' == '$lessonNumber') {
+          lessonResult = result;
+        }
+        if ('$level' == '${100 + lessonNumber}') {
+          quizResult = result;
+        }
+      }
+
+      final baseStars = _readWelcomeInt(lessonResult?['stars']);
+      final quizStars = _readWelcomeInt(quizResult?['stars']);
+      final effectiveStars = quizStars >= 3 ? 3 : baseStars;
+      if (effectiveStars >= 3) {
+        completedUnits++;
+      } else if (effectiveStars >= 1 && inProgressUnit == null) {
+        inProgressUnit = lessonNumber;
+      }
+    }
+
+    final nextUnit = inProgressUnit ??
+        (completedUnits < totalUnits ? completedUnits + 1 : totalUnits);
+    return _LegacyCourseSnapshot(
+      progress: totalUnits == 0 ? 0 : completedUnits / totalUnits,
+      detailText: '$completedUnits of $totalUnits $detailLabel completed',
+      resumeUnit: _boundedInt(nextUnit, min: 1, max: totalUnits),
+    );
+  }
+
+  int _readWelcomeInt(Object? value, {int fallback = 0}) {
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? fallback;
+  }
+
+  int _boundedInt(int value, {required int min, required int max}) {
+    if (value < min) {
+      return min;
+    }
+    if (value > max) {
+      return max;
+    }
+    return value;
+  }
+
+  Map<String, dynamic> _digitalLessonMap(int lessonNumber) {
+    switch (lessonNumber) {
+      case 2:
+        return {
+          'number': 2,
+          'title': 'Digital Citizenship In A Nutshell',
+          'imagePath': 'assets/images/digital2.jpg',
+        };
+      case 3:
+        return {
+          'number': 3,
+          'title': 'Digital Collaboration',
+          'imagePath': 'assets/images/digital3.jpg',
+        };
+      case 1:
+      default:
+        return {
+          'number': 1,
+          'title': 'Digital Use In A Nutshell',
+          'imagePath': 'assets/images/digital1.jpg',
+        };
+    }
+  }
+
+  Map<String, dynamic> _dataLessonMap(int lessonNumber) {
+    switch (lessonNumber) {
+      case 2:
+        return {
+          'number': 2,
+          'title': 'Organizing Data',
+          'imagePath': 'assets/images/data2.png',
+        };
+      case 1:
+      default:
+        return {
+          'number': 1,
+          'title': 'Collecting Data',
+          'imagePath': 'assets/images/data1.png',
+        };
+    }
+  }
+
   Future<void> _loadPublicCourses() async {
     setState(() {
       _isLoadingPublicCourses = true;
@@ -383,12 +1023,14 @@ class _DashboardPageState extends State<DashboardPage> {
         _publicCourses = courses;
         _isLoadingPublicCourses = false;
       });
+      unawaited(_refreshWelcomeBanner());
       return;
     }
 
     setState(() {
       _isLoadingPublicCourses = false;
     });
+    unawaited(_refreshWelcomeBanner());
   }
 
   Future<void> _loadCommunityCourses() async {
@@ -1558,6 +2200,12 @@ class _DashboardPageState extends State<DashboardPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 700;
+        final bannerState = _welcomeBannerState;
+        final actionLabel =
+            bannerState?.actionLabel ??
+            (_isLoadingWelcomeBanner
+                ? '...'
+                : 'dashboard.start_coding'.tr());
 
         if (isMobile) {
           return Container(
@@ -1590,14 +2238,34 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: const Color(0xFF3A2A00),
                         ),
                       ),
+                      if (bannerState != null) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          bannerState.course.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w900,
+                            color: const Color(0xFF3A2A00),
+                          ),
+                        ),
+                        Text(
+                          bannerState.detailText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.nunito(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF5A4C1E),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
                 ElevatedButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const WorldMapPage()),
-                  ),
+                  onPressed: _isLoadingWelcomeBanner ? null : _handleWelcomeBannerAction,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4A7DBF),
                     foregroundColor: Colors.white,
@@ -1610,7 +2278,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                   ),
                   child: Text(
-                    'dashboard.continue_coding'.tr(),
+                    actionLabel,
                     style: GoogleFonts.montserrat(
                       fontWeight: FontWeight.w800,
                       fontSize: 11,
@@ -1692,50 +2360,38 @@ class _DashboardPageState extends State<DashboardPage> {
                   bottom: 0,
                   child: Row(
                     children: [
-                      FutureBuilder<Map<String, dynamic>>(
-                        future: GameApiService.getProgress('codemonkey-jr'),
-                        builder: (context, snapshot) {
-                          final data = snapshot.data;
-                          final completed = data != null
-                              ? (data['highestLevelReached'] ?? 0) as int
-                              : 0;
-                          const total = 15;
-                          final percent = (completed / total).clamp(0.0, 1.0);
-                          final percentText = '${(percent * 100).round()}%';
-
-                          return SizedBox(
-                            width: 90,
-                            height: 90,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                SizedBox(
-                                  width: 90,
-                                  height: 90,
-                                  child: CircularProgressIndicator(
-                                    value: percent,
-                                    strokeWidth: 8,
-                                    backgroundColor: Colors.white.withValues(
-                                      alpha: 0.3,
-                                    ),
-                                    valueColor:
-                                        const AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF4DD0E1),
-                                        ),
-                                  ),
+                      SizedBox(
+                        width: 90,
+                        height: 90,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              width: 90,
+                              height: 90,
+                              child: CircularProgressIndicator(
+                                value: bannerState?.progress ?? 0,
+                                strokeWidth: 8,
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.3,
                                 ),
-                                Text(
-                                  percentText,
-                                  style: GoogleFonts.nunito(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
+                                valueColor: const AlwaysStoppedAnimation<Color>(
+                                  Color(0xFF4DD0E1),
                                 ),
-                              ],
+                              ),
                             ),
-                          );
-                        },
+                            Text(
+                              _isLoadingWelcomeBanner
+                                  ? '...'
+                                  : '${((bannerState?.progress ?? 0) * 100).round()}%',
+                              style: GoogleFonts.nunito(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(width: 20),
                       Expanded(
@@ -1744,7 +2400,9 @@ class _DashboardPageState extends State<DashboardPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'dashboard.current_course'.tr(),
+                              bannerState?.isNewUser == true
+                                  ? 'Recommended course'
+                                  : 'dashboard.current_course'.tr(),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.nunito(
@@ -1754,7 +2412,10 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                             ),
                             Text(
-                              'dashboard.codemonkey_jr'.tr(),
+                              bannerState?.course.title ??
+                                  (_isLoadingWelcomeBanner
+                                      ? 'Loading...'
+                                      : 'No course available'),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.nunito(
@@ -1764,8 +2425,11 @@ class _DashboardPageState extends State<DashboardPage> {
                               ),
                             ),
                             Text(
-                              'dashboard.sequencing_loops'.tr(),
-                              maxLines: 1,
+                              bannerState?.detailText ??
+                                  (_isLoadingWelcomeBanner
+                                      ? 'Loading your course...'
+                                      : ''),
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.nunito(
                                 fontSize: 14,
@@ -1773,40 +2437,14 @@ class _DashboardPageState extends State<DashboardPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.emoji_events,
-                                  color: Color(0xFFFFD700),
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    'dashboard.achievements'.tr(),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.nunito(
-                                      fontSize: 12,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
                           ],
                         ),
                       ),
                       const SizedBox(width: 18),
                       ElevatedButton.icon(
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const WorldMapPage(),
-                          ),
-                        ),
+                        onPressed: _isLoadingWelcomeBanner
+                            ? null
+                            : _handleWelcomeBannerAction,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color.fromARGB(
                             255,
@@ -1825,7 +2463,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         ),
                         icon: const Icon(Icons.play_circle_fill, size: 22),
                         label: Text(
-                          'dashboard.continue_coding'.tr(),
+                          actionLabel,
                           style: GoogleFonts.montserrat(
                             fontWeight: FontWeight.w800,
                             fontSize: 16,
@@ -7510,6 +8148,13 @@ class _CourseDialogState extends State<_CourseDialog> {
       return;
     }
 
+    unawaited(
+      CourseResumeService.saveLegacyCourse(
+        userId: widget.session.user.id,
+        courseLookupId: _courseLookupId,
+        legacyPageKey: widget.course.legacyPageKey,
+      ),
+    );
     ApiService.trackPublicCourseEvent(
       authToken: widget.session.token,
       courseId: _courseLookupId,
@@ -7574,6 +8219,11 @@ class _CourseDialogState extends State<_CourseDialog> {
       authToken: widget.session.token,
       courseId: _courseLookupId,
       eventType: 'level_play',
+    );
+    await CourseResumeService.savePublicCourse(
+      userId: widget.session.user.id,
+      courseLookupId: _courseLookupId,
+      levelId: level.id,
     );
     if (!mounted) {
       return;
@@ -7961,6 +8611,13 @@ class _DashboardPublicCourseLevelsPageState
           : widget.course.publicCourseId,
       eventType: 'level_play',
     );
+    await CourseResumeService.savePublicCourse(
+      userId: widget.session.user.id,
+      courseLookupId: widget.course.publicCourseKey.isNotEmpty
+          ? widget.course.publicCourseKey
+          : widget.course.publicCourseId,
+      levelId: level.id,
+    );
     if (!mounted) {
       return;
     }
@@ -8124,6 +8781,61 @@ class _DashboardCourseProgress {
     }
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
+}
+
+const Map<String, String> _legacyGameIdByPageKey = <String, String>{
+  'code_monkey_jr': 'codemonkey-jr',
+  'digital_literacy': 'digital-literacy',
+  'data_is_everywhere': 'data-everywhere',
+  'coding_chatbots': 'ai-hoot',
+};
+
+const Map<String, String> _legacyPageKeyByGameId = <String, String>{
+  'codemonkey-jr': 'code_monkey_jr',
+  'digital-literacy': 'digital_literacy',
+  'data-everywhere': 'data_is_everywhere',
+  'ai-hoot': 'coding_chatbots',
+};
+
+const Map<String, int> _legacyCourseUnitTotals = <String, int>{
+  'code_monkey_jr': 15,
+  'digital_literacy': 3,
+  'data_is_everywhere': 2,
+  'coding_chatbots': 9,
+};
+
+class _WelcomeBannerState {
+  const _WelcomeBannerState({
+    required this.course,
+    required this.progress,
+    required this.detailText,
+    required this.actionLabel,
+    required this.isNewUser,
+    this.resumeLevelId,
+    this.legacyGameId,
+    this.legacyResumeUnit,
+  });
+
+  final _CourseData course;
+  final double progress;
+  final String detailText;
+  final String actionLabel;
+  final String? resumeLevelId;
+  final String? legacyGameId;
+  final int? legacyResumeUnit;
+  final bool isNewUser;
+}
+
+class _LegacyCourseSnapshot {
+  const _LegacyCourseSnapshot({
+    required this.progress,
+    required this.detailText,
+    required this.resumeUnit,
+  });
+
+  final double progress;
+  final String detailText;
+  final int resumeUnit;
 }
 
 class _CreationCard extends StatefulWidget {

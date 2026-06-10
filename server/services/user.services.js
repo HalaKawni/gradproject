@@ -28,7 +28,7 @@ const addAuthProvider = (user, provider) => {
 
 
 
-const createEmailVerificationToken = () => {
+const createHashedToken = () => {
     const rawToken = crypto.randomBytes(32).toString("hex");
 
     const hashedToken = crypto
@@ -39,20 +39,17 @@ const createEmailVerificationToken = () => {
     return { rawToken, hashedToken };
 };
 
-const sendVerificationEmail = async (email, token) => {
-    const configuredClientUrl = process.env.CLIENT_URL || "http://localhost:8080";
-    const clientUrl = configuredClientUrl.replace(
-        /^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?/,
-        "http://localhost:8080"
-    );
+const createEmailVerificationToken = () => createHashedToken();
+
+const createPasswordResetToken = () => createHashedToken();
+
+const createEmailTransporter = async () => {
     const emailUser = process.env.EMAIL_USER;
     const emailPassword = (process.env.EMAIL_APP_PASSWORD || "").replace(/\s/g, "");
 
     if (!emailUser || !emailPassword) {
         throw new Error("Email service is not configured. Set EMAIL_USER and EMAIL_APP_PASSWORD in server/.env");
     }
-
-    const verifyUrl = `${clientUrl}/#/verify-email?token=${token}`;
 
     const transporter = nodemailer.createTransport({
         host: "smtp.gmail.com",
@@ -68,8 +65,24 @@ const sendVerificationEmail = async (email, token) => {
 
     await transporter.verify();
 
+    return { transporter, emailUser };
+};
+
+const getClientUrl = () => {
+    const configuredClientUrl = process.env.CLIENT_URL || "http://localhost:8080";
+    return configuredClientUrl.replace(
+        /^http:\/\/(localhost|127\.0\.0\.1)(?::\d+)?/,
+        "http://localhost:8080"
+    );
+};
+
+const sendVerificationEmail = async (email, token) => {
+    const clientUrl = getClientUrl();
+    const verifyUrl = `${clientUrl}/#/verify-email?token=${token}`;
+    const { transporter, emailUser } = await createEmailTransporter();
+
     await transporter.sendMail({
-        from: `"learny(grad project)" <${emailUser}>`,
+        from: `"Codey" <${emailUser}>`,
         to: email,
         subject: "Verify your email",
         html: `
@@ -77,6 +90,26 @@ const sendVerificationEmail = async (email, token) => {
             <p>Click the link below to verify your account:</p>
             <a href="${verifyUrl}">Verify Email</a>
             <p>This link expires in 1 hour.</p>
+        `
+    });
+};
+
+const sendPasswordResetEmail = async (email, token) => {
+    const clientUrl = getClientUrl();
+    const resetUrl = `${clientUrl}/#/reset-password?token=${token}`;
+    const { transporter, emailUser } = await createEmailTransporter();
+
+    await transporter.sendMail({
+        from: `"Codey" <${emailUser}>`,
+        to: email,
+        subject: "Reset your password",
+        html: `
+            <h2>Reset your password</h2>
+            <p>We received a request to reset your password.</p>
+            <p>Click the link below to choose a new password:</p>
+            <a href="${resetUrl}">Reset Password</a>
+            <p>This link expires in 1 hour and can only be used once.</p>
+            <p>If you did not request this change, you can safely ignore this email.</p>
         `
     });
 };
@@ -157,6 +190,31 @@ class UserService{
         return true;
     }
 
+    static async requestPasswordReset(email) {
+        const normalizedEmail = email.toLowerCase().trim();
+        const user = await UserModel.findOne({ email: normalizedEmail });
+
+        if (!user || !getAuthProviders(user).includes('local') || user.isSuspended) {
+            return true;
+        }
+
+        const { rawToken, hashedToken } = createPasswordResetToken();
+        user.passwordResetToken = hashedToken;
+        user.passwordResetExpires = Date.now() + 60 * 60 * 1000;
+        await user.save();
+
+        try {
+            await sendPasswordResetEmail(user.email, rawToken);
+        } catch (err) {
+            console.error("Password reset email failed:", err.message);
+            throw new Error(
+                "Could not send reset email. Check the server email settings."
+            );
+        }
+
+        return true;
+    }
+
     static async loginUser(email, password) {
         try {
             const user = await UserModel.findOne({
@@ -212,6 +270,8 @@ class UserService{
             }
 
             user.password = newPassword;
+            user.passwordResetToken = undefined;
+            user.passwordResetExpires = undefined;
             await user.save();
 
             return true;
@@ -219,6 +279,35 @@ class UserService{
         catch (err) {
             throw err;
         }
+    }
+
+    static async resetPassword(token, newPassword) {
+        const hashedToken = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
+
+        const user = await UserModel.findOne({
+            passwordResetToken: hashedToken,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            throw new Error("Reset link is invalid or expired");
+        }
+
+        if (!getAuthProviders(user).includes('local')) {
+            throw new Error("This account does not use password sign in");
+        }
+
+        user.password = newPassword;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        user.lastSignInProvider = 'local';
+
+        await user.save();
+
+        return true;
     }
 
     static async loginWithGoogle(idToken, role, ageGroup, gender) {

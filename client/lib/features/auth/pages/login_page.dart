@@ -337,7 +337,9 @@ class _LoginPageState extends State<LoginPage>
                                           Text('login.remember_me'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
                                           const Spacer(),
                                           GestureDetector(
-                                            onTap: () {},
+                                            onTap: () => Navigator.of(
+                                              context,
+                                            ).pushNamed(AppRoutes.forgotPassword),
                                             child: Text('login.forgot_password'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF1A73E8), decoration: TextDecoration.underline)),
                                           ),
                                         ],
@@ -501,7 +503,9 @@ class _LoginPageState extends State<LoginPage>
                                             Text('login.remember_me'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF555555))),
                                             const Spacer(),
                                             GestureDetector(
-                                              onTap: () {},
+                                              onTap: () => Navigator.of(
+                                                context,
+                                              ).pushNamed(AppRoutes.forgotPassword),
                                               child: Text('login.forgot_password'.tr(), style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF1A73E8), decoration: TextDecoration.underline)),
                                             ),
                                           ],
