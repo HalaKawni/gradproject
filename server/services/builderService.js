@@ -1,4 +1,5 @@
 const BuilderProject = require('../model/builderProjectModel');
+const Course = require('../model/course.model');
 const uploadedAssetService = require('./uploadedAsset.service');
 const {
   FRONT_VIEW_COLLECTABLE_ITEMS,
@@ -146,6 +147,79 @@ function stringifyValue(value) {
   return value === undefined || value === null ? '' : String(value);
 }
 
+function serializeProject(project, viewerId) {
+  if (!project) {
+    return null;
+  }
+
+  const source = typeof project.toObject === 'function' ? project.toObject() : project;
+  const comments = Array.isArray(source.comments) ? source.comments : [];
+  const ratings = Array.isArray(source.ratings) ? source.ratings : [];
+  const normalizedComments = comments
+    .map((comment) => ({
+      _id: stringifyValue(comment._id),
+      userId: stringifyValue(comment.userId),
+      userName: stringifyValue(comment.userName) || 'User',
+      message: stringifyValue(comment.message),
+      createdAt: comment.createdAt || null,
+      updatedAt: comment.updatedAt || null,
+    }))
+    .sort((left, right) => {
+      return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+    });
+  const normalizedRatings = ratings
+    .map((rating) => ({
+      userId: stringifyValue(rating.userId),
+      value: Number(rating.value) || 0,
+    }))
+    .filter((rating) => rating.value >= 1 && rating.value <= 5);
+  const ratingCount = normalizedRatings.length;
+  const ratingAverage =
+    ratingCount > 0
+      ? Number(
+          (
+            normalizedRatings.reduce((sum, rating) => sum + rating.value, 0) /
+            ratingCount
+          ).toFixed(1)
+        )
+      : 0;
+  const currentUserRating =
+    viewerId == null
+      ? null
+      : normalizedRatings.find((rating) => rating.userId === viewerId)?.value ?? null;
+
+  return {
+    ...source,
+    _id: stringifyValue(source._id),
+    ownerId: stringifyValue(source.ownerId),
+    playCount: Number(source.playCount) || 0,
+    comments: normalizedComments,
+    commentCount: normalizedComments.length,
+    ratingAverage,
+    ratingCount,
+    currentUserRating,
+    ratings: undefined,
+  };
+}
+
+function normalizeCommentMessage(message) {
+  return stringifyValue(message).trim().replace(/\s+/g, ' ');
+}
+
+function normalizeRatingValue(rating) {
+  const parsedRating = Number(rating);
+  if (!Number.isFinite(parsedRating)) {
+    return null;
+  }
+
+  const normalizedRating = Math.round(parsedRating);
+  if (normalizedRating < 1 || normalizedRating > 5) {
+    return null;
+  }
+
+  return normalizedRating;
+}
+
 async function createProject(projectData, user) {
   const owner = buildOwnerSummary(user);
   const draftData = buildDraftData(projectData, user);
@@ -279,6 +353,11 @@ async function updateProjectSettings(projectId, settingsData, user) {
     update.coverFrameOffsetY = Number(settingsData.coverFrameOffsetY);
   }
 
+  const previousProject = await BuilderProject.findOne({
+    _id: projectId,
+    ownerId: user._id.toString(),
+  }).select('courseId orderInCourse');
+
   const project = await BuilderProject.findOneAndUpdate(
     {
       _id: projectId,
@@ -298,7 +377,41 @@ async function updateProjectSettings(projectId, settingsData, user) {
     );
   }
 
+  if (project) {
+    await notifyVerifiedCourseIfLevelAssignmentChanged(
+      previousProject?.courseId,
+      project.courseId,
+      user._id
+    );
+  }
+
   return project;
+}
+
+async function notifyVerifiedCourseIfLevelAssignmentChanged(
+  previousCourseId,
+  nextCourseId,
+  userId
+) {
+  const courseIds = [previousCourseId, nextCourseId].filter(Boolean);
+  if (!courseIds.length) {
+    return;
+  }
+
+  await Course.updateMany(
+    {
+      verificationStatus: 'approved',
+      createdBy: userId,
+      courseId: { $in: courseIds },
+    },
+    {
+      $set: {
+        hasUnreadUpdateNotification: true,
+        lastUpdateNotificationAt: new Date(),
+        lastUpdateNotificationMessage: 'Verified course levels were updated',
+      },
+    }
+  );
 }
 
 function collectDraftAssetIds(draftData) {
@@ -314,34 +427,146 @@ function collectDraftAssetIds(draftData) {
 }
 
 async function getProjectById(projectId, user) {
-  return await BuilderProject.findOne({
+  const project = await BuilderProject.findOne({
     _id: projectId,
     ownerId: user._id.toString(),
   });
+  return serializeProject(project, user._id.toString());
 }
 
 async function getAllProjects(user) {
-  return await BuilderProject.find({
+  const projects = await BuilderProject.find({
     ownerId: user._id.toString(),
   }).sort({ updatedAt: -1 });
+  return projects.map((project) => serializeProject(project, user._id.toString()));
 }
 
-async function getPublishedProjects() {
-  return await BuilderProject.find({
+async function getPublishedProjects(user) {
+  const projects = await BuilderProject.find({
     status: 'published',
     ownerRole: { $ne: 'admin' },
   })
     .select(
-      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails coverImageBase64 coverFrameScale coverFrameOffsetX coverFrameOffsetY updatedAt ownerId ownerName ownerRole'
+      '_id title description status builderType difficulty courseId orderInCourse frontViewDetails coverImageBase64 coverFrameScale coverFrameOffsetX coverFrameOffsetY updatedAt ownerId ownerName ownerRole playCount comments ratings'
     )
     .sort({ updatedAt: -1 });
+  return projects.map((project) => serializeProject(project, user?._id?.toString()));
 }
 
-async function getPublishedProjectById(projectId) {
-  return await BuilderProject.findOne({
+async function getPublishedProjectById(projectId, user) {
+  const project = await BuilderProject.findOne({
     _id: projectId,
     status: 'published',
   });
+  return serializeProject(project, user?._id?.toString());
+}
+
+async function incrementProjectPlayCount(projectId, user) {
+  const project = await BuilderProject.findOneAndUpdate(
+    {
+      _id: projectId,
+      status: 'published',
+      ownerRole: { $ne: 'admin' },
+    },
+    {
+      $inc: { playCount: 1 },
+    },
+    {
+      returnDocument: 'after',
+      runValidators: true,
+    }
+  );
+
+  return serializeProject(project, user?._id?.toString());
+}
+
+async function addProjectComment(projectId, message, user) {
+  const normalizedMessage = normalizeCommentMessage(message);
+  if (!normalizedMessage) {
+    throw new Error('Comment cannot be empty.');
+  }
+
+  if (normalizedMessage.length > 500) {
+    throw new Error('Comment must be 500 characters or fewer.');
+  }
+
+  const userId = user._id.toString();
+  const project = await BuilderProject.findOneAndUpdate(
+    {
+      _id: projectId,
+      $or: [{ status: 'published' }, { ownerId: userId }],
+    },
+    {
+      $push: {
+        comments: {
+          userId,
+          userName: user.name,
+          message: normalizedMessage,
+        },
+      },
+    },
+    {
+      returnDocument: 'after',
+      runValidators: true,
+    }
+  );
+
+  return serializeProject(project, userId);
+}
+
+async function deleteProjectComment(projectId, commentId, user) {
+  const userId = user._id.toString();
+  const project = await BuilderProject.findOne({
+    _id: projectId,
+    ownerId: userId,
+    'comments._id': commentId,
+  });
+
+  if (!project) {
+    return null;
+  }
+
+  project.comments = project.comments.filter(
+    (comment) => stringifyValue(comment._id) !== stringifyValue(commentId)
+  );
+  await project.save();
+  return serializeProject(project, userId);
+}
+
+async function rateProject(projectId, rating, user) {
+  const normalizedRating = normalizeRatingValue(rating);
+  if (normalizedRating == null) {
+    throw new Error('Rating must be a whole number between 1 and 5.');
+  }
+
+  const project = await BuilderProject.findOne({
+    _id: projectId,
+    status: 'published',
+    ownerRole: { $ne: 'admin' },
+  });
+
+  if (!project) {
+    return null;
+  }
+
+  const userId = user._id.toString();
+  const existingRating = project.ratings.find(
+    (entry) => stringifyValue(entry.userId) === userId
+  );
+
+  if (existingRating) {
+    existingRating.value = normalizedRating;
+    existingRating.userName = user.name;
+  } else {
+    project.ratings.push({
+      userId,
+      userName: user.name,
+      value: normalizedRating,
+    });
+  }
+
+  await project.save();
+  return serializeProject(project, userId);
 }
 
 async function deleteProject(projectId, user) {
@@ -359,5 +584,9 @@ module.exports = {
   getAllProjects,
   getPublishedProjects,
   getPublishedProjectById,
+  incrementProjectPlayCount,
+  addProjectComment,
+  deleteProjectComment,
+  rateProject,
   deleteProject,
 };

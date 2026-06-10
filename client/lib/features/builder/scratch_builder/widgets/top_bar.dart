@@ -9,6 +9,7 @@ class TopBar extends StatelessWidget {
   final TextEditingController titleController;
   final VoidCallback onRun;
   final VoidCallback onReset;
+  final VoidCallback onBack;
   final VoidCallback onSaveDraft;
   final VoidCallback onPublish;
   final bool isSaving;
@@ -20,6 +21,7 @@ class TopBar extends StatelessWidget {
     required this.titleController,
     required this.onRun,
     required this.onReset,
+    required this.onBack,
     required this.onSaveDraft,
     required this.onPublish,
     required this.isSaving,
@@ -43,7 +45,7 @@ class TopBar extends StatelessWidget {
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: onBack,
                       icon: const GameBuilderBackIcon(),
                     ),
                     const SizedBox(width: 12),

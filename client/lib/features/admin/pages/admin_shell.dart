@@ -3,12 +3,21 @@ import 'package:client/core/localization/app_language.dart';
 import 'package:client/features/admin/pages/admin_course.dart';
 import 'package:client/features/admin/pages/admin_dashboard.dart';
 import 'package:client/features/admin/pages/admin_level.dart';
+import 'package:client/features/admin/pages/admin_notifications.dart';
 import 'package:client/features/admin/pages/admin_statistics.dart';
 import 'package:client/features/admin/pages/admin_users_detail.dart';
 import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
 
-enum AdminSection { dashboard, courses, levels, users, statistics, profile }
+enum AdminSection {
+  dashboard,
+  courses,
+  levels,
+  notifications,
+  users,
+  statistics,
+  profile,
+}
 
 class AdminShellPage extends StatefulWidget {
   final AuthSession session;
@@ -64,6 +73,8 @@ class _AdminShellPageState extends State<AdminShellPage> {
         return AdminCoursesPage(session: widget.session);
       case AdminSection.levels:
         return AdminLevelsPage(session: widget.session);
+      case AdminSection.notifications:
+        return AdminNotificationsPage(session: widget.session);
       case AdminSection.users:
         return AdminUserDetailsPage(session: widget.session);
       case AdminSection.statistics:
@@ -81,6 +92,8 @@ class _AdminShellPageState extends State<AdminShellPage> {
         return language.t('courses');
       case AdminSection.levels:
         return language.t('levels');
+      case AdminSection.notifications:
+        return 'Notifications';
       case AdminSection.users:
         return language.t('users');
       case AdminSection.statistics:
@@ -120,6 +133,11 @@ class _AdminShellPageState extends State<AdminShellPage> {
                   icon: const Icon(Icons.extension_outlined),
                   selectedIcon: const Icon(Icons.extension),
                   label: Text(language.t('levels')),
+                ),
+                const NavigationRailDestination(
+                  icon: Icon(Icons.notifications_outlined),
+                  selectedIcon: Icon(Icons.notifications),
+                  label: Text('Notifications'),
                 ),
                 NavigationRailDestination(
                   icon: const Icon(Icons.people_outline),

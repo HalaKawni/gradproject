@@ -5,6 +5,8 @@ const buildAuthUserResponse = (user) => ({
     name: user.name,
     email: user.email,
     role: user.role,
+    ageGroup: user.ageGroup || 'unknown',
+    gender: user.gender || 'unknown',
     emailVerified: user.emailVerified,
     authProvider: user.authProvider,
     authProviders: user.authProviders,
@@ -24,7 +26,7 @@ const buildAuthUserResponse = (user) => ({
 
 exports.register = async(req,res,next)=>{
     try{
-        const { name, email, password, role, classroomCode } = req.body;
+        const { name, email, password, role, classroomCode, ageGroup, gender } = req.body;
 
         if(!name || !email || !password || !role){
             return res.status(400).json({
@@ -33,7 +35,15 @@ exports.register = async(req,res,next)=>{
             });
         }
 
-        const successRes = await UserService.registerUser(name, email, password, role, classroomCode);
+        const successRes = await UserService.registerUser(
+            name,
+            email,
+            password,
+            role,
+            classroomCode,
+            ageGroup,
+            gender
+        );
         res.status(201).json({
             status: true,
             success: "User registered successfully. Please check your email to verify your account.",
@@ -103,7 +113,7 @@ exports.resendVerificationEmail = async (req, res) => {
 
 exports.googleLogin = async (req, res, next) => {
     try {
-        const { idToken, role } = req.body;
+        const { idToken, role, ageGroup, gender } = req.body;
 
         if (!idToken) {
             return res.status(400).json({
@@ -112,7 +122,7 @@ exports.googleLogin = async (req, res, next) => {
             });
         }
 
-        const successRes = await UserService.loginWithGoogle(idToken, role);
+        const successRes = await UserService.loginWithGoogle(idToken, role, ageGroup, gender);
 
         res.json({
             status: true,

@@ -1,6 +1,52 @@
 const mongoose = require('mongoose');
 const db = require('../config/db');
 
+const BuilderProjectCommentSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: String,
+      required: true,
+    },
+    userName: {
+      type: String,
+      required: true,
+    },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 500,
+    },
+  },
+  {
+    timestamps: true,
+    _id: true,
+  }
+);
+
+const BuilderProjectRatingSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: String,
+      required: true,
+    },
+    userName: {
+      type: String,
+      required: true,
+    },
+    value: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5,
+    },
+  },
+  {
+    timestamps: true,
+    _id: true,
+  }
+);
+
 const BuilderProjectSchema = new mongoose.Schema(
   {
     ownerId: {
@@ -75,6 +121,19 @@ const BuilderProjectSchema = new mongoose.Schema(
       type: String,
       enum: ['easy', 'medium', 'hard'],
       default: 'medium',
+    },
+    playCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    comments: {
+      type: [BuilderProjectCommentSchema],
+      default: [],
+    },
+    ratings: {
+      type: [BuilderProjectRatingSchema],
+      default: [],
     },
     // sourceType: {
     //   type: String,

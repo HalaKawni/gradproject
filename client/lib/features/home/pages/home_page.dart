@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../auth/pages/student_account_page.dart';
+import 'package:client/features/home/pages/gender_page.dart';
 import '../../auth/pages/sorry_page.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -164,15 +164,85 @@ class _HomeAgePageState extends State<HomeAgePage>
                                     child: CustomPaint(painter: _DashedLinePainter()),
                                   ),
                                 ),
-                                Positioned(
-                                  bottom: 0,
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 400),
-                                    curve: Curves.easeOut,
-                                    height: isMobile ? _monkeyHeight * 0.6 : _monkeyHeight,
-                                    child: Image.asset(
-                                      'assets/images/age.png',
-                                      fit: BoxFit.contain,
+
+                                if (_showError) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'error.required'.tr(),
+                                    style: GoogleFonts.nunito(
+                                      color: const Color(0xFFE53935),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+
+                                const SizedBox(height: 12),
+
+                                // NEXT button
+                                Container(
+                                  width: 140,
+                                  decoration: BoxDecoration(
+                                    color: const Color.fromARGB(
+                                      255,
+                                      195,
+                                      158,
+                                      222,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        if (_ageController.text.isEmpty ||
+                                            _age <= 0) {
+                                          setState(() => _showError = true);
+                                        } else if (_age > 12) {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  HomeGenderPage(age: _age),
+                                            ),
+                                          );
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => const SorryPage(),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color.fromARGB(
+                                          255,
+                                          220,
+                                          202,
+                                          233,
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF3A2A00,
+                                        ),
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 14,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'common.next'.tr(),
+                                        style: GoogleFonts.montserrat(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),

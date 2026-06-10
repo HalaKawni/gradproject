@@ -40,6 +40,8 @@ class AuthService {
     required String password,
     required String role,
     String? classroomCode,
+    String? ageGroup,
+    String? gender,
   }) async {
     final body = <String, dynamic>{
       'name': name,
@@ -49,6 +51,12 @@ class AuthService {
     };
     if (classroomCode != null && classroomCode.isNotEmpty) {
       body['classroomCode'] = classroomCode.toUpperCase();
+    }
+    if (ageGroup != null && ageGroup.isNotEmpty) {
+      body['ageGroup'] = ageGroup;
+    }
+    if (gender != null && gender.isNotEmpty) {
+      body['gender'] = gender;
     }
     final response = await http.post(
       Uri.parse(ApiConstants.register),

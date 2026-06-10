@@ -85,7 +85,7 @@ const sendVerificationEmail = async (email, token) => {
 
 
 class UserService{
-    static async registerUser(name, email, password, role, classroomCode) {
+    static async registerUser(name, email, password, role, classroomCode, ageGroup, gender) {
         try{
             const existingUser = await UserModel.findOne({ email });
 
@@ -103,6 +103,8 @@ class UserService{
                 authProvider: 'local',
                 authProviders: ['local'],
                 lastSignInProvider: 'local',
+                ageGroup: normalizeAgeGroup(ageGroup),
+                gender: normalizeGender(gender),
                 emailVerified: false,
                 emailVerificationToken: hashedToken,
                 emailVerificationExpires: Date.now() + 60 * 60 * 1000 // 1 hour
@@ -219,10 +221,12 @@ class UserService{
         }
     }
 
-    static async loginWithGoogle(idToken, role) {
+    static async loginWithGoogle(idToken, role, ageGroup, gender) {
         try {
             const allowedRoles = ['parent', 'child'];
             const requestedRole = allowedRoles.includes(role) ? role : null;
+            const normalizedAgeGroup = normalizeAgeGroup(ageGroup);
+            const normalizedGender = normalizeGender(gender);
             const ticket = await googleClient.verifyIdToken({
                 idToken,
                 audience: googleClientId
@@ -260,6 +264,14 @@ class UserService{
                 user.authProvider = user.authProviders.includes('local') ? 'local' : 'google';
                 user.lastSignInProvider = 'google';
                 user.emailVerified = true;
+                if (user.role === 'child') {
+                    if ((!user.ageGroup || user.ageGroup === 'unknown') && normalizedAgeGroup !== 'unknown') {
+                        user.ageGroup = normalizedAgeGroup;
+                    }
+                    if ((!user.gender || user.gender === 'unknown') && normalizedGender !== 'unknown') {
+                        user.gender = normalizedGender;
+                    }
+                }
                 user.lastLoginAt = new Date();
                 await user.save();
 
@@ -281,6 +293,8 @@ class UserService{
                 authProvider: 'google',
                 authProviders: ['google'],
                 lastSignInProvider: 'google',
+                ageGroup: requestedRole === 'child' ? normalizedAgeGroup : 'unknown',
+                gender: requestedRole === 'child' ? normalizedGender : 'unknown',
                 googleId: payload.sub,
                 emailVerified: true,
                 lastLoginAt: new Date()
@@ -426,6 +440,23 @@ class UserService{
             games,
         };
     }
+}
+
+function normalizeAgeGroup(ageGroup) {
+    const allowedAgeGroups = new Set([
+        'under_6',
+        '6_8',
+        '9_11',
+        '12_14',
+        '15_17',
+        '18_plus',
+        'unknown',
+    ]);
+    return allowedAgeGroups.has(ageGroup) ? ageGroup : 'unknown';
+}
+
+function normalizeGender(gender) {
+    return gender === 'male' || gender === 'female' ? gender : 'unknown';
 }
 
 

@@ -10,6 +10,7 @@ import 'package:client/features/builder/front_view/models/custom_asset_data.dart
 import 'package:client/features/builder/shared/level_score.dart';
 import 'package:client/features/builder/shared/solver/grid_position.dart';
 import 'package:client/features/builder/shared/widgets/course_level_nav_banner.dart';
+import 'package:client/features/builder/shared/widgets/challenge_leave_dialog.dart';
 import 'package:client/features/builder/shared/widgets/game_builder_back_icon.dart';
 import 'package:client/features/builder/shared/widgets/game_builder_level_title_field.dart';
 import 'package:client/features/builder/shared/widgets/kids_top_bar_style.dart';
@@ -31,6 +32,7 @@ class TopViewBuilderPage extends StatefulWidget {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
@@ -46,6 +48,7 @@ class TopViewBuilderPage extends StatefulWidget {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -2838,175 +2841,227 @@ class _TopViewBuilderPageState extends State<TopViewBuilderPage> {
     );
   }
 
+  Future<void> _handleLeaveRequested() async {
+    final projectId = _savedProjectId ?? widget.initialProjectId;
+    if (!widget.playMode || projectId == null || projectId.isEmpty) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    if (!widget.showRatingOnLeave || widget.courseProgressCourseId != null) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    final shouldLeave = await showChallengeLeaveDialog(
+      context: context,
+      title: (widget.initialTitle ?? _titleController.text).trim().isEmpty
+          ? AppLanguage.instance.t('builder.newLevel')
+          : (widget.initialTitle ?? _titleController.text).trim(),
+      onSubmitRating: (rating) async {
+        final result = await ApiService.rateBuilderProject(
+          authToken: widget.session.token,
+          projectId: projectId,
+          rating: rating,
+        );
+        if (result['success'] == true) {
+          return null;
+        }
+        return result['message']?.toString() ?? 'Failed to save rating.';
+      },
+    );
+
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Scaffold(
-        appBar: AppBar(
-          toolbarHeight: KidsTopBarStyle.toolbarHeight,
-          backgroundColor: KidsTopBarStyle.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          bottom: KidsTopBarStyle.appBarBottom(),
-          leading: IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const GameBuilderBackIcon(),
-          ),
-          title: widget.playMode
-              ? Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        widget.initialTitle ?? _titleController.text,
-                        style: KidsTopBarStyle.titleTextStyle,
+    return PopScope(
+      canPop: !widget.playMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !widget.playMode) {
+          return;
+        }
+        unawaited(_handleLeaveRequested());
+      },
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Scaffold(
+          appBar: AppBar(
+            toolbarHeight: KidsTopBarStyle.toolbarHeight,
+            backgroundColor: KidsTopBarStyle.background,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            bottom: KidsTopBarStyle.appBarBottom(),
+            leading: IconButton(
+              onPressed: widget.playMode
+                  ? _handleLeaveRequested
+                  : () => Navigator.of(context).maybePop(),
+              icon: const GameBuilderBackIcon(),
+            ),
+            title: widget.playMode
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          widget.initialTitle ?? _titleController.text,
+                          style: KidsTopBarStyle.titleTextStyle,
+                        ),
+                      ),
+                      CourseLevelNavBanner(
+                        session: widget.session,
+                        courseId: widget.courseProgressCourseId,
+                        currentLevelId:
+                            widget.courseProgressLevelId ?? _savedProjectId,
+                        currentLevelSolved: _hasSavedCourseProgress,
+                        topBarMode: true,
+                      ),
+                    ],
+                  )
+                : GameBuilderLevelTitleField(
+                    controller: _titleController,
+                    hintText: language.t('builder.newLevel'),
+                  ),
+            actions: widget.playMode
+                ? null
+                : [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: TextButton(
+                        onPressed: _isSavingProject ? null : _handleSavePressed,
+                        style: KidsTopBarStyle.playfulText(
+                          KidsTopBarStyle.blue,
+                        ),
+                        child: Text(language.t('builder.save')),
                       ),
                     ),
-                    CourseLevelNavBanner(
-                      session: widget.session,
-                      courseId: widget.courseProgressCourseId,
-                      currentLevelId:
-                          widget.courseProgressLevelId ?? _savedProjectId,
-                      currentLevelSolved: _hasSavedCourseProgress,
-                      topBarMode: true,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: FilledButton(
+                        onPressed: _isSavingProject
+                            ? null
+                            : _handlePublishPressed,
+                        style: KidsTopBarStyle.playfulFilled(
+                          KidsTopBarStyle.green,
+                        ),
+                        child: Text(
+                          _isSavingProject
+                              ? language.t('builder.saving')
+                              : language.t('builder.publish'),
+                        ),
+                      ),
                     ),
                   ],
-                )
-              : GameBuilderLevelTitleField(
-                  controller: _titleController,
-                  hintText: language.t('builder.newLevel'),
-                ),
-          actions: widget.playMode
-              ? null
-              : [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: TextButton(
-                      onPressed: _isSavingProject ? null : _handleSavePressed,
-                      style: KidsTopBarStyle.playfulText(KidsTopBarStyle.blue),
-                      child: Text(language.t('builder.save')),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: FilledButton(
-                      onPressed: _isSavingProject
-                          ? null
-                          : _handlePublishPressed,
-                      style: KidsTopBarStyle.playfulFilled(
-                        KidsTopBarStyle.green,
-                      ),
-                      child: Text(
-                        _isSavingProject
-                            ? language.t('builder.saving')
-                            : language.t('builder.publish'),
-                      ),
-                    ),
-                  ),
-                ],
-        ),
-        body: _isLoadingProject
-            ? const Center(child: CircularProgressIndicator())
-            : Container(
-                color: const Color(0xFFEAF6FF),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final compact = constraints.maxWidth < 1280;
-                              final tools = _buildToolsSidebar();
-                              final grid = _buildGridPanel();
-                              final editor = _buildCodeWorkspace();
+          ),
+          body: _isLoadingProject
+              ? const Center(child: CircularProgressIndicator())
+              : Container(
+                  color: const Color(0xFFEAF6FF),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final compact = constraints.maxWidth < 1280;
+                                final tools = _buildToolsSidebar();
+                                final grid = _buildGridPanel();
+                                final editor = _buildCodeWorkspace();
 
-                              if (compact) {
-                                return SingleChildScrollView(
-                                  padding: const EdgeInsets.all(20),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      if (!widget.playMode) ...[
-                                        SizedBox(height: 520, child: tools),
+                                if (compact) {
+                                  return SingleChildScrollView(
+                                    padding: const EdgeInsets.all(20),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        if (!widget.playMode) ...[
+                                          SizedBox(height: 520, child: tools),
+                                          const SizedBox(height: 20),
+                                        ],
+                                        SizedBox(height: 700, child: grid),
                                         const SizedBox(height: 20),
-                                      ],
-                                      SizedBox(height: 700, child: grid),
-                                      const SizedBox(height: 20),
-                                      SizedBox(
-                                        height: widget.playMode ? 920 : 760,
-                                        child: editor,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
-
-                              return Row(
-                                children: [
-                                  if (!widget.playMode)
-                                    Container(
-                                      width: _leftPanelWidth,
-                                      padding: const EdgeInsets.fromLTRB(
-                                        16,
-                                        16,
-                                        12,
-                                        16,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.92,
+                                        SizedBox(
+                                          height: widget.playMode ? 920 : 760,
+                                          child: editor,
                                         ),
-                                        border: Border(
-                                          right: BorderSide(
-                                            color: Colors.blueGrey.shade100,
+                                      ],
+                                    ),
+                                  );
+                                }
+
+                                return Row(
+                                  children: [
+                                    if (!widget.playMode)
+                                      Container(
+                                        width: _leftPanelWidth,
+                                        padding: const EdgeInsets.fromLTRB(
+                                          16,
+                                          16,
+                                          12,
+                                          16,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.92,
+                                          ),
+                                          border: Border(
+                                            right: BorderSide(
+                                              color: Colors.blueGrey.shade100,
+                                            ),
                                           ),
                                         ),
+                                        child: tools,
                                       ),
-                                      child: tools,
-                                    ),
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(20),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.stretch,
-                                        children: [
-                                          Expanded(flex: 13, child: grid),
-                                          const SizedBox(width: 20),
-                                          Expanded(flex: 7, child: editor),
-                                        ],
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Expanded(flex: 13, child: grid),
+                                            const SizedBox(width: 20),
+                                            Expanded(flex: 7, child: editor),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                ],
-                              );
-                            },
-                          ),
-                          if (widget.playMode)
-                            Positioned(
-                              left: 18,
-                              bottom: 18,
-                              child: _buildInstructionHelperButton(),
+                                  ],
+                                );
+                              },
                             ),
-                          if (!widget.playMode)
-                            Positioned(
-                              left: 0,
-                              right: 0,
-                              bottom: 18,
-                              child: Center(child: _buildTrash()),
-                            ),
-                        ],
+                            if (widget.playMode)
+                              Positioned(
+                                left: 18,
+                                bottom: 18,
+                                child: _buildInstructionHelperButton(),
+                              ),
+                            if (!widget.playMode)
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 18,
+                                child: Center(child: _buildTrash()),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

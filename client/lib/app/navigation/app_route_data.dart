@@ -37,6 +37,7 @@ class BuilderPlayRouteData {
     required this.session,
     required this.projectId,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.courseProgressCourseId,
     this.courseProgressLevelId,
   });
@@ -44,6 +45,7 @@ class BuilderPlayRouteData {
   final AuthSession session;
   final String projectId;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final String? courseProgressCourseId;
   final String? courseProgressLevelId;
 }
@@ -55,6 +57,7 @@ class FourthDemoBuilderRouteData {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -69,6 +72,7 @@ class FourthDemoBuilderRouteData {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
@@ -85,6 +89,7 @@ class TopViewBuilderRouteData {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -99,6 +104,7 @@ class TopViewBuilderRouteData {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
@@ -115,6 +121,7 @@ class ScratchBuilderRouteData {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -129,6 +136,7 @@ class ScratchBuilderRouteData {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
