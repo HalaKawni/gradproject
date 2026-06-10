@@ -52,6 +52,8 @@ class ApiService {
   static Future<Map<String, dynamic>> loginWithGoogle({
     required String idToken,
     String? role,
+    String? ageGroup,
+    String? gender,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/login/google');
@@ -59,6 +61,12 @@ class ApiService {
 
       if (role != null) {
         body['role'] = role;
+      }
+      if (ageGroup != null && ageGroup.isNotEmpty) {
+        body['ageGroup'] = ageGroup;
+      }
+      if (gender != null && gender.isNotEmpty) {
+        body['gender'] = gender;
       }
 
       final response = await http.post(
@@ -131,6 +139,8 @@ class ApiService {
     required String password,
     required String name,
     required String role,
+    String? ageGroup,
+    String? gender,
   }) async {
     try {
       final url = Uri.parse('$baseUrl/registration');
@@ -143,6 +153,8 @@ class ApiService {
           'email': email,
           'password': password,
           'role': role,
+          if (ageGroup != null && ageGroup.isNotEmpty) 'ageGroup': ageGroup,
+          if (gender != null && gender.isNotEmpty) 'gender': gender,
         }),
       );
 
@@ -431,6 +443,63 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> incrementBuilderProjectPlayCount({
+    required String authToken,
+    required String projectId,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/builder/projects/$projectId/play',
+      authToken: authToken,
+      defaultSuccessMessage: 'Play count updated successfully',
+      defaultErrorMessage: 'Failed to update play count',
+    );
+  }
+
+  static Future<Map<String, dynamic>> addBuilderProjectComment({
+    required String authToken,
+    required String projectId,
+    required String message,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/builder/projects/$projectId/comments',
+      authToken: authToken,
+      body: {'message': message},
+      defaultSuccessMessage: 'Comment added successfully',
+      defaultErrorMessage: 'Failed to add comment',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteBuilderProjectComment({
+    required String authToken,
+    required String projectId,
+    required String commentId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/builder/projects/$projectId/comments/$commentId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Comment deleted successfully',
+      defaultErrorMessage: 'Failed to delete comment',
+    );
+  }
+
+  static Future<Map<String, dynamic>> rateBuilderProject({
+    required String authToken,
+    required String projectId,
+    required int rating,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/builder/projects/$projectId/rating',
+      authToken: authToken,
+      body: {'rating': rating},
+      defaultSuccessMessage: 'Rating saved successfully',
+      defaultErrorMessage: 'Failed to save rating',
+    );
+  }
+
   static Future<Map<String, dynamic>> uploadBuilderAsset({
     required String authToken,
     required String name,
@@ -592,6 +661,127 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> getMyLevelCourses({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/courses/mine',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch your courses',
+    );
+  }
+
+  static Future<Map<String, dynamic>> createMyLevelCourse({
+    required String authToken,
+    required Map<String, dynamic> courseJson,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/mine',
+      authToken: authToken,
+      body: courseJson,
+      defaultSuccessMessage: 'Course created successfully',
+      defaultErrorMessage: 'Failed to create course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateMyLevelCourse({
+    required String authToken,
+    required String courseId,
+    required Map<String, dynamic> courseJson,
+  }) {
+    return _sendRequest(
+      method: 'PUT',
+      path: '/api/courses/mine/$courseId',
+      authToken: authToken,
+      body: courseJson,
+      defaultSuccessMessage: 'Course updated successfully',
+      defaultErrorMessage: 'Failed to update course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteMyLevelCourse({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/courses/mine/$courseId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Course deleted successfully',
+      defaultErrorMessage: 'Failed to delete course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> requestMyLevelCourseVerification({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/mine/$courseId/verification-request',
+      authToken: authToken,
+      defaultSuccessMessage: 'Verification request sent successfully',
+      defaultErrorMessage: 'Failed to request verification',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getCommunityCourses({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/courses/community',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch community courses',
+    );
+  }
+
+  static Future<Map<String, dynamic>> addCourseComment({
+    required String authToken,
+    required String courseId,
+    required String message,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/$courseId/comments',
+      authToken: authToken,
+      body: {'message': message},
+      defaultSuccessMessage: 'Comment added successfully',
+      defaultErrorMessage: 'Failed to add comment',
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteCourseComment({
+    required String authToken,
+    required String courseId,
+    required String commentId,
+  }) {
+    return _sendRequest(
+      method: 'DELETE',
+      path: '/api/courses/$courseId/comments/$commentId',
+      authToken: authToken,
+      defaultSuccessMessage: 'Comment deleted successfully',
+      defaultErrorMessage: 'Failed to delete comment',
+    );
+  }
+
+  static Future<Map<String, dynamic>> rateCourse({
+    required String authToken,
+    required String courseId,
+    required int rating,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/$courseId/rating',
+      authToken: authToken,
+      body: {'rating': rating},
+      defaultSuccessMessage: 'Rating saved successfully',
+      defaultErrorMessage: 'Failed to save rating',
+    );
+  }
+
   static Future<Map<String, dynamic>> getPublicCourseLevels({
     required String authToken,
     required String courseId,
@@ -645,6 +835,21 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> trackPublicCourseEvent({
+    required String authToken,
+    required String courseId,
+    required String eventType,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/courses/$courseId/events',
+      authToken: authToken,
+      body: {'eventType': eventType},
+      defaultSuccessMessage: 'Course event tracked successfully',
+      defaultErrorMessage: 'Failed to track course event',
+    );
+  }
+
   // =========================
   // ADMIN
   // =========================
@@ -679,6 +884,17 @@ class ApiService {
       path: '/api/admin/courses',
       authToken: authToken,
       defaultErrorMessage: 'Failed to fetch courses',
+    );
+  }
+
+  static Future<Map<String, dynamic>> getAdminCourseNotifications({
+    required String authToken,
+  }) {
+    return _sendRequest(
+      method: 'GET',
+      path: '/api/admin/courses/notifications',
+      authToken: authToken,
+      defaultErrorMessage: 'Failed to fetch course notifications',
     );
   }
 
@@ -721,6 +937,60 @@ class ApiService {
       authToken: authToken,
       defaultSuccessMessage: 'Course deleted successfully',
       defaultErrorMessage: 'Failed to delete course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> approveAdminCourseVerification({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/courses/$courseId/verification/approve',
+      authToken: authToken,
+      defaultSuccessMessage: 'Course verified successfully',
+      defaultErrorMessage: 'Failed to verify course',
+    );
+  }
+
+  static Future<Map<String, dynamic>> rejectAdminCourseVerification({
+    required String authToken,
+    required String courseId,
+    String reason = '',
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/courses/$courseId/verification/reject',
+      authToken: authToken,
+      body: {'reason': reason},
+      defaultSuccessMessage: 'Verification request rejected',
+      defaultErrorMessage: 'Failed to reject verification request',
+    );
+  }
+
+  static Future<Map<String, dynamic>> revokeAdminCourseVerification({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/courses/$courseId/verification/revoke',
+      authToken: authToken,
+      defaultSuccessMessage: 'Verification revoked',
+      defaultErrorMessage: 'Failed to revoke verification',
+    );
+  }
+
+  static Future<Map<String, dynamic>> dismissAdminCourseUpdateNotification({
+    required String authToken,
+    required String courseId,
+  }) {
+    return _sendRequest(
+      method: 'POST',
+      path: '/api/admin/courses/$courseId/updates/dismiss',
+      authToken: authToken,
+      defaultSuccessMessage: 'Notification dismissed',
+      defaultErrorMessage: 'Failed to dismiss notification',
     );
   }
 

@@ -22,6 +22,7 @@ import '../../scratch_builder/widgets/instruction_editor_panel.dart';
 import '../../front_view/shared/builder_collectable.dart';
 import '../../front_view/shared/builder_character.dart';
 import '../../shared/widgets/course_level_nav_banner.dart';
+import '../../shared/widgets/challenge_leave_dialog.dart';
 import '../../shared/widgets/game_builder_back_icon.dart';
 import '../../shared/widgets/game_builder_level_title_field.dart';
 import '../../shared/widgets/kids_top_bar_style.dart';
@@ -40,6 +41,7 @@ class FourthDemoBuilderPage extends StatefulWidget {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
@@ -55,6 +57,7 @@ class FourthDemoBuilderPage extends StatefulWidget {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -341,7 +344,8 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     if (currentCode.isNotEmpty) {
       return _creatorSolutionBySpriteId[currentSpriteId]!;
     }
-    final playerCode = _creatorSolutionBySpriteId[_playerSpriteId]?.trim() ?? '';
+    final playerCode =
+        _creatorSolutionBySpriteId[_playerSpriteId]?.trim() ?? '';
     if (playerCode.isNotEmpty) {
       return _creatorSolutionBySpriteId[_playerSpriteId]!;
     }
@@ -351,10 +355,8 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   void _showSolutionDialog() {
     showDialog<void>(
       context: context,
-      builder: (context) => _SolutionCodeDialog(
-        title: 'Solution',
-        code: _visibleSolutionCode,
-      ),
+      builder: (context) =>
+          _SolutionCodeDialog(title: 'Solution', code: _visibleSolutionCode),
     );
   }
 
@@ -396,158 +398,212 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
   }
 
   bool _isPlayerOnKeyHeader(String line) {
-    return RegExp(r'^@onKey\s*=\s*\(\s*key\s*\)\s*=>\s*$').hasMatch(
-      line.trim(),
-    );
+    return RegExp(
+      r'^@onKey\s*=\s*\(\s*key\s*\)\s*=>\s*$',
+    ).hasMatch(line.trim());
   }
 
   bool _isIndentedInstructionLine(String line) {
     return line.startsWith(' ') || line.startsWith('\t');
   }
 
+  Future<void> _handleLeaveRequested() async {
+    final projectId = _savedProjectId ?? widget.initialProjectId;
+    if (!widget.playMode || projectId == null || projectId.isEmpty) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    if (!widget.showRatingOnLeave || widget.courseProgressCourseId != null) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    final shouldLeave = await showChallengeLeaveDialog(
+      context: context,
+      title: titleController.text.trim().isEmpty
+          ? controller.project.title
+          : titleController.text.trim(),
+      onSubmitRating: (rating) async {
+        final result = await ApiService.rateBuilderProject(
+          authToken: widget.session.token,
+          projectId: projectId,
+          rating: rating,
+        );
+        if (result['success'] == true) {
+          return null;
+        }
+        return result['message']?.toString() ?? 'Failed to save rating.';
+      },
+    );
+
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFE8F4EC),
-        appBar: AppBar(
-          toolbarHeight: KidsTopBarStyle.toolbarHeight,
-          backgroundColor: KidsTopBarStyle.background,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          bottom: KidsTopBarStyle.appBarBottom(),
-          leading: IconButton(
-            onPressed: () => Navigator.of(context).maybePop(),
-            icon: const GameBuilderBackIcon(),
-          ),
-          title: widget.playMode
-              ? Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        titleController.text,
-                        style: KidsTopBarStyle.titleTextStyle,
+    return PopScope(
+      canPop: !widget.playMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !widget.playMode) {
+          return;
+        }
+        unawaited(_handleLeaveRequested());
+      },
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFE8F4EC),
+          appBar: AppBar(
+            toolbarHeight: KidsTopBarStyle.toolbarHeight,
+            backgroundColor: KidsTopBarStyle.background,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            shadowColor: Colors.transparent,
+            bottom: KidsTopBarStyle.appBarBottom(),
+            leading: IconButton(
+              onPressed: widget.playMode
+                  ? _handleLeaveRequested
+                  : () => Navigator.of(context).maybePop(),
+              icon: const GameBuilderBackIcon(),
+            ),
+            title: widget.playMode
+                ? Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          titleController.text,
+                          style: KidsTopBarStyle.titleTextStyle,
+                        ),
+                      ),
+                      CourseLevelNavBanner(
+                        session: widget.session,
+                        courseId: widget.courseProgressCourseId,
+                        currentLevelId:
+                            widget.courseProgressLevelId ?? _savedProjectId,
+                        currentLevelSolved: _hasSavedCourseProgress,
+                        topBarMode: true,
+                      ),
+                    ],
+                  )
+                : GameBuilderLevelTitleField(
+                    controller: titleController,
+                    hintText: language.t('builder.newLevel'),
+                  ),
+            actions: widget.playMode
+                ? <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: OutlinedButton.icon(
+                        onPressed: _showSolutionDialog,
+                        icon: const Icon(Icons.lightbulb_outline_rounded),
+                        label: const Text('Show Solution'),
                       ),
                     ),
-                    CourseLevelNavBanner(
-                      session: widget.session,
-                      courseId: widget.courseProgressCourseId,
-                      currentLevelId:
-                          widget.courseProgressLevelId ?? _savedProjectId,
-                      currentLevelSolved: _hasSavedCourseProgress,
-                      topBarMode: true,
+                  ]
+                : [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: TextButton(
+                        onPressed:
+                            _isSavingProject ||
+                                _isLoadingProject ||
+                                controller.isPlaying
+                            ? null
+                            : () => _saveProject(publish: false),
+                        style: KidsTopBarStyle.playfulText(
+                          KidsTopBarStyle.blue,
+                        ),
+                        child: Text(language.t('builder.save')),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: FilledButton(
+                        onPressed:
+                            _isSavingProject ||
+                                _isLoadingProject ||
+                                controller.isPlaying
+                            ? null
+                            : () => _saveProject(publish: true),
+                        style: KidsTopBarStyle.playfulFilled(
+                          KidsTopBarStyle.green,
+                        ),
+                        child: _isSavingProject
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(language.t('builder.publish')),
+                      ),
                     ),
                   ],
-                )
-              : GameBuilderLevelTitleField(
-                  controller: titleController,
-                  hintText: language.t('builder.newLevel'),
-                ),
-          actions: widget.playMode
-              ? <Widget>[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: OutlinedButton.icon(
-                      onPressed: _showSolutionDialog,
-                      icon: const Icon(Icons.lightbulb_outline_rounded),
-                      label: const Text('Show Solution'),
-                    ),
-                  ),
-                ]
-              : [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: TextButton(
-                      onPressed:
-                          _isSavingProject ||
-                              _isLoadingProject ||
-                              controller.isPlaying
-                          ? null
-                          : () => _saveProject(publish: false),
-                      style: KidsTopBarStyle.playfulText(KidsTopBarStyle.blue),
-                      child: Text(language.t('builder.save')),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: FilledButton(
-                      onPressed:
-                          _isSavingProject ||
-                              _isLoadingProject ||
-                              controller.isPlaying
-                          ? null
-                          : () => _saveProject(publish: true),
-                      style: KidsTopBarStyle.playfulFilled(
-                        KidsTopBarStyle.green,
+          ),
+          body: _isLoadingProject
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            flex: 34,
+                            child: widget.playMode
+                                ? _InstructionPreviewPanel(
+                                    sections: instructionSections,
+                                  )
+                                : InstructionEditorPanel(
+                                    sections: instructionSections,
+                                    onAddSection: _addInstructionSection,
+                                    onRemoveSection: _removeInstructionSection,
+                                    onReorderSections:
+                                        _reorderInstructionSections,
+                                    onTitleChanged: _updateInstructionTitle,
+                                    onContentChanged: _updateInstructionContent,
+                                    onAddItem: _addInstructionItem,
+                                    onItemChanged: _updateInstructionItem,
+                                    onRemoveItem: _removeInstructionItem,
+                                  ),
+                          ),
+                          Expanded(
+                            flex: 46,
+                            child: _CodeColumn(
+                              controller: controller,
+                              codeController: codeController,
+                              codeFocusNode: codeFocusNode,
+                              onRun: _runCode,
+                              readOnly: false,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 44,
+                            child: _StageColumn(
+                              controller: controller,
+                              game: game,
+                              focusNode: stageFocusNode,
+                              onSelectSprite: _selectSprite,
+                              readOnly: false,
+                            ),
+                          ),
+                        ],
                       ),
-                      child: _isSavingProject
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(language.t('builder.publish')),
                     ),
-                  ),
-                ],
+                  ],
+                ),
         ),
-        body: _isLoadingProject
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 34,
-                          child: widget.playMode
-                              ? _InstructionPreviewPanel(
-                                  sections: instructionSections,
-                                )
-                              : InstructionEditorPanel(
-                                  sections: instructionSections,
-                                  onAddSection: _addInstructionSection,
-                                  onRemoveSection: _removeInstructionSection,
-                                  onReorderSections:
-                                      _reorderInstructionSections,
-                                  onTitleChanged: _updateInstructionTitle,
-                                  onContentChanged: _updateInstructionContent,
-                                  onAddItem: _addInstructionItem,
-                                  onItemChanged: _updateInstructionItem,
-                                  onRemoveItem: _removeInstructionItem,
-                                ),
-                        ),
-                        Expanded(
-                          flex: 46,
-                          child: _CodeColumn(
-                            controller: controller,
-                            codeController: codeController,
-                            codeFocusNode: codeFocusNode,
-                            onRun: _runCode,
-                            readOnly: false,
-                          ),
-                        ),
-                        Expanded(
-                          flex: 44,
-                          child: _StageColumn(
-                            controller: controller,
-                            game: game,
-                            focusNode: stageFocusNode,
-                            onSelectSprite: _selectSprite,
-                            readOnly: false,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
       ),
     );
   }
@@ -872,7 +928,8 @@ class _FourthDemoBuilderPageState extends State<FourthDemoBuilderPage> {
     if (type == InstructionSectionType.overview &&
         (title.isEmpty ||
             title.toLowerCase() ==
-                AppLanguage.instance.t('builder.welcomeGameBuilder')
+                AppLanguage.instance
+                    .t('builder.welcomeGameBuilder')
                     .trim()
                     .toLowerCase())) {
       return AppLanguage.instance.t('builder.overview');
@@ -1108,22 +1165,21 @@ class _InstructionContentPreview extends StatelessWidget {
   }
 }
 
-String _previewSectionTitle(
-  BuildContext context,
-  InstructionSection section,
-) {
+String _previewSectionTitle(BuildContext context, InstructionSection section) {
   final title = section.title.trim();
   if (section.type == InstructionSectionType.overview) {
-    final welcomeTitle = AppLanguage.of(context)
-        .t('builder.welcomeGameBuilder')
-        .trim()
-        .toLowerCase();
+    final welcomeTitle = AppLanguage.of(
+      context,
+    ).t('builder.welcomeGameBuilder').trim().toLowerCase();
     if (title.isEmpty || title.toLowerCase() == welcomeTitle) {
       return AppLanguage.of(context).t('builder.overview');
     }
   }
   if (title.isEmpty) {
-    return localizedInstructionSectionLabel(AppLanguage.of(context), section.type);
+    return localizedInstructionSectionLabel(
+      AppLanguage.of(context),
+      section.type,
+    );
   }
   return title;
 }
@@ -1134,7 +1190,8 @@ class _RichInstructionPreview extends StatefulWidget {
   const _RichInstructionPreview({required this.content});
 
   @override
-  State<_RichInstructionPreview> createState() => _RichInstructionPreviewState();
+  State<_RichInstructionPreview> createState() =>
+      _RichInstructionPreviewState();
 }
 
 class _RichInstructionPreviewState extends State<_RichInstructionPreview> {

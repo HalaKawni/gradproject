@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/builder/shared/widgets/challenge_leave_dialog.dart';
 import 'package:client/features/builder/shared/widgets/course_level_nav_banner.dart';
 import 'package:flutter/material.dart';
 
@@ -23,6 +24,7 @@ class ScratchBuilderPage extends StatefulWidget {
   final bool allowPublishedAccess;
   final bool playMode;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final bool useAdminLevelApi;
   final String? initialCourseId;
   final int? initialOrderInCourse;
@@ -38,6 +40,7 @@ class ScratchBuilderPage extends StatefulWidget {
     this.allowPublishedAccess = false,
     this.playMode = false,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.useAdminLevelApi = false,
     this.initialCourseId,
     this.initialOrderInCourse,
@@ -1908,105 +1911,154 @@ class _ScratchBuilderPageState extends State<ScratchBuilderPage> {
     return next;
   }
 
+  Future<void> _handleLeaveRequested() async {
+    final projectId = _savedProjectId ?? widget.initialProjectId;
+    if (!widget.playMode || projectId == null || projectId.isEmpty) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    if (!widget.showRatingOnLeave || widget.courseProgressCourseId != null) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    final shouldLeave = await showChallengeLeaveDialog(
+      context: context,
+      title: _normalizedTitle,
+      onSubmitRating: (rating) async {
+        final result = await ApiService.rateBuilderProject(
+          authToken: widget.session.token,
+          projectId: projectId,
+          rating: rating,
+        );
+        if (result['success'] == true) {
+          return null;
+        }
+        return result['message']?.toString() ?? 'Failed to save rating.';
+      },
+    );
+
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.ltr,
-      child: Scaffold(
-        backgroundColor: const Color(0xfff4f6fb),
-        body: isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : SafeArea(
-                child: Column(
-                  children: [
-                    TopBar(
-                      titleController: _titleController,
-                      onRun: _runBlocks,
-                      onReset: _reset,
-                      onSaveDraft: () => _saveProject(publish: false),
-                      onPublish: () => _saveProject(publish: true),
-                      isSaving: isSaving,
-                      playMode: widget.playMode,
-                      courseNavigator: widget.playMode
-                          ? CourseLevelNavBanner(
-                              session: widget.session,
-                              courseId: widget.courseProgressCourseId,
-                              currentLevelId:
-                                  widget.courseProgressLevelId ??
-                                  _savedProjectId,
-                              currentLevelSolved: _hasSavedCourseProgress,
-                              topBarMode: true,
-                            )
-                          : null,
-                    ),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Expanded(
-                            flex: 34,
-                            child: InstructionEditorPanel(
-                              sections: instructionSections,
-                              onAddSection: _addInstructionSection,
-                              onRemoveSection: _removeInstructionSection,
-                              onReorderSections: _reorderInstructionSections,
-                              onTitleChanged: _updateInstructionTitle,
-                              onContentChanged: _updateInstructionContent,
-                              onAddItem: _addInstructionItem,
-                              onItemChanged: _updateInstructionItem,
-                              onRemoveItem: _removeInstructionItem,
-                            ),
-                          ),
-                          Expanded(
-                            flex: 46,
-                            child: WorkspacePanel(
-                              blocks: workspaceBlocks,
-                              selectedCategory: selectedCategory,
-                              isDraggingWorkspaceBlock:
-                                  isDraggingWorkspaceBlock,
-                              onCategoryPressed: _toggleCategory,
-                              onAcceptTemplate: _addBlock,
-                              onDetachBlock: _detachFromParent,
-                              onMoveBlockStack: _moveBlockStack,
-                              onSnapBlockStack: _snapBlockStack,
-                              onDeleteBlockStack: _deleteBlockStack,
-                              onUpdateBlockInput: _updateBlockInput,
-                              onWorkspaceDragStateChanged:
-                                  _setWorkspaceDragState,
-                            ),
-                          ),
-                          Expanded(
-                            flex: 44,
-                            child: StagePanel(
-                              sprites: stageSprites,
-                              widgets: stageWidgets,
-                              sounds: stageSounds,
-                              settings: gameSettings,
-                              selectedSpriteId: selectedSpriteId,
-                              assetTab: assetTab,
-                              stageTool: stageTool,
-                              onSelectSprite: _selectSprite,
-                              onUpdateSprite: _updateSprite,
-                              onAddSprite: _addSprite,
-                              onDeleteSprite: _deleteSprite,
-                              onDuplicateSprite: _duplicateSprite,
-                              onSetAssetTab: _setAssetTab,
-                              onSetStageTool: _setStageTool,
-                              onAddWidget: _addStageWidget,
-                              onUpdateWidget: _updateStageWidget,
-                              onDeleteWidget: _deleteStageWidget,
-                              onDuplicateWidget: _duplicateStageWidget,
-                              onAddSound: _addSound,
-                              onUpdateSound: _updateSound,
-                              onDeleteSound: _deleteSound,
-                              onUpdateSettings: _updateSettings,
-                            ),
-                          ),
-                        ],
+    return PopScope(
+      canPop: !widget.playMode,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop || !widget.playMode) {
+          return;
+        }
+        unawaited(_handleLeaveRequested());
+      },
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: Scaffold(
+          backgroundColor: const Color(0xfff4f6fb),
+          body: isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SafeArea(
+                  child: Column(
+                    children: [
+                      TopBar(
+                        titleController: _titleController,
+                        onBack: widget.playMode
+                            ? _handleLeaveRequested
+                            : () => Navigator.of(context).maybePop(),
+                        onRun: _runBlocks,
+                        onReset: _reset,
+                        onSaveDraft: () => _saveProject(publish: false),
+                        onPublish: () => _saveProject(publish: true),
+                        isSaving: isSaving,
+                        playMode: widget.playMode,
+                        courseNavigator: widget.playMode
+                            ? CourseLevelNavBanner(
+                                session: widget.session,
+                                courseId: widget.courseProgressCourseId,
+                                currentLevelId:
+                                    widget.courseProgressLevelId ??
+                                    _savedProjectId,
+                                currentLevelSolved: _hasSavedCourseProgress,
+                                topBarMode: true,
+                              )
+                            : null,
                       ),
-                    ),
-                  ],
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(
+                              flex: 34,
+                              child: InstructionEditorPanel(
+                                sections: instructionSections,
+                                onAddSection: _addInstructionSection,
+                                onRemoveSection: _removeInstructionSection,
+                                onReorderSections: _reorderInstructionSections,
+                                onTitleChanged: _updateInstructionTitle,
+                                onContentChanged: _updateInstructionContent,
+                                onAddItem: _addInstructionItem,
+                                onItemChanged: _updateInstructionItem,
+                                onRemoveItem: _removeInstructionItem,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 46,
+                              child: WorkspacePanel(
+                                blocks: workspaceBlocks,
+                                selectedCategory: selectedCategory,
+                                isDraggingWorkspaceBlock:
+                                    isDraggingWorkspaceBlock,
+                                onCategoryPressed: _toggleCategory,
+                                onAcceptTemplate: _addBlock,
+                                onDetachBlock: _detachFromParent,
+                                onMoveBlockStack: _moveBlockStack,
+                                onSnapBlockStack: _snapBlockStack,
+                                onDeleteBlockStack: _deleteBlockStack,
+                                onUpdateBlockInput: _updateBlockInput,
+                                onWorkspaceDragStateChanged:
+                                    _setWorkspaceDragState,
+                              ),
+                            ),
+                            Expanded(
+                              flex: 44,
+                              child: StagePanel(
+                                sprites: stageSprites,
+                                widgets: stageWidgets,
+                                sounds: stageSounds,
+                                settings: gameSettings,
+                                selectedSpriteId: selectedSpriteId,
+                                assetTab: assetTab,
+                                stageTool: stageTool,
+                                onSelectSprite: _selectSprite,
+                                onUpdateSprite: _updateSprite,
+                                onAddSprite: _addSprite,
+                                onDeleteSprite: _deleteSprite,
+                                onDuplicateSprite: _duplicateSprite,
+                                onSetAssetTab: _setAssetTab,
+                                onSetStageTool: _setStageTool,
+                                onAddWidget: _addStageWidget,
+                                onUpdateWidget: _updateStageWidget,
+                                onDeleteWidget: _deleteStageWidget,
+                                onDuplicateWidget: _duplicateStageWidget,
+                                onAddSound: _addSound,
+                                onUpdateSound: _updateSound,
+                                onDeleteSound: _deleteSound,
+                                onUpdateSettings: _updateSettings,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

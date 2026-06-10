@@ -16,6 +16,7 @@ import '../models/logic_command.dart';
 import '../shared/builder_character.dart';
 import '../../shared/level_score.dart';
 import '../../shared/widgets/course_level_nav_banner.dart';
+import '../../shared/widgets/challenge_leave_dialog.dart';
 import '../../shared/widgets/kids_top_bar_style.dart';
 import '../../shared/widgets/level_result_dialog.dart';
 
@@ -23,6 +24,7 @@ class BuilderPlayPage extends StatefulWidget {
   final AuthSession session;
   final String projectId;
   final String? initialTitle;
+  final bool showRatingOnLeave;
   final String? courseProgressCourseId;
   final String? courseProgressLevelId;
 
@@ -31,6 +33,7 @@ class BuilderPlayPage extends StatefulWidget {
     required this.session,
     required this.projectId,
     this.initialTitle,
+    this.showRatingOnLeave = true,
     this.courseProgressCourseId,
     this.courseProgressLevelId,
   });
@@ -799,73 +802,112 @@ class _BuilderPlayPageState extends State<BuilderPlayPage> {
     return const AssetImage(_playPageBackgroundAssetPath);
   }
 
+  Future<void> _handleLeaveRequested() async {
+    if (!widget.showRatingOnLeave || widget.courseProgressCourseId != null) {
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    final shouldLeave = await showChallengeLeaveDialog(
+      context: context,
+      title: _pageTitle,
+      onSubmitRating: (rating) async {
+        final result = await ApiService.rateBuilderProject(
+          authToken: widget.session.token,
+          projectId: widget.projectId,
+          rating: rating,
+        );
+        if (result['success'] == true) {
+          return null;
+        }
+        return result['message']?.toString() ?? 'Failed to save rating.';
+      },
+    );
+
+    if (shouldLeave && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        toolbarHeight: KidsTopBarStyle.toolbarHeight,
-        backgroundColor: KidsTopBarStyle.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        bottom: KidsTopBarStyle.appBarBottom(),
-        title: Stack(
-          alignment: Alignment.center,
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(_pageTitle, style: KidsTopBarStyle.titleTextStyle),
-            ),
-            CourseLevelNavBanner(
-              session: widget.session,
-              courseId: widget.courseProgressCourseId,
-              currentLevelId: widget.courseProgressLevelId ?? widget.projectId,
-              currentLevelSolved: hasSavedCourseProgress,
-              topBarMode: true,
-            ),
-          ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
+        unawaited(_handleLeaveRequested());
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          toolbarHeight: KidsTopBarStyle.toolbarHeight,
+          backgroundColor: KidsTopBarStyle.background,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          bottom: KidsTopBarStyle.appBarBottom(),
+          title: Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(_pageTitle, style: KidsTopBarStyle.titleTextStyle),
+              ),
+              CourseLevelNavBanner(
+                session: widget.session,
+                courseId: widget.courseProgressCourseId,
+                currentLevelId:
+                    widget.courseProgressLevelId ?? widget.projectId,
+                currentLevelSolved: hasSavedCourseProgress,
+                topBarMode: true,
+              ),
+            ],
+          ),
         ),
-      ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF6FF),
-              image: DecorationImage(
-                image: _playPageBackgroundImage,
-                fit: BoxFit.cover,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF6FF),
+                image: DecorationImage(
+                  image: _playPageBackgroundImage,
+                  fit: BoxFit.cover,
+                ),
               ),
             ),
-          ),
-          ColoredBox(color: Colors.white.withValues(alpha: 0.2)),
-          controller.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : controller.savedProjectId == null
-              ? _buildLoadErrorState()
-              : Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1380),
-                      child: Center(
-                        child: _buildFixedGameWindow(controller.project),
+            ColoredBox(color: Colors.white.withValues(alpha: 0.2)),
+            controller.isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : controller.savedProjectId == null
+                ? _buildLoadErrorState()
+                : Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1380),
+                        child: Center(
+                          child: _buildFixedGameWindow(controller.project),
+                        ),
                       ),
                     ),
                   ),
-                ),
-          Positioned(
-            left: 18,
-            bottom: 18,
-            child: _buildInstructionHelperButton(),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 18,
-            child: Center(child: _buildTrashBin()),
-          ),
-        ],
+            Positioned(
+              left: 18,
+              bottom: 18,
+              child: _buildInstructionHelperButton(),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 18,
+              child: Center(child: _buildTrashBin()),
+            ),
+          ],
+        ),
       ),
     );
   }

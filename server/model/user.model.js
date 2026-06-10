@@ -82,6 +82,16 @@ const userSchema = new Schema({
         enum: ['parent', 'child', 'admin'],
         required: true
     },
+    ageGroup: {
+        type: String,
+        enum: ['under_6', '6_8', '9_11', '12_14', '15_17', '18_plus', 'unknown'],
+        default: 'unknown'
+    },
+    gender: {
+        type: String,
+        enum: ['male', 'female', 'unknown'],
+        default: 'unknown'
+    },
     isSuspended: {
         type: Boolean,
         default: false

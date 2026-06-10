@@ -26,6 +26,8 @@ class AuthUser {
   final String name;
   final String email;
   final String role;
+  final String ageGroup;
+  final String gender;
   final bool emailVerified;
   final String authProvider;
   final List<String> authProviders;
@@ -43,6 +45,8 @@ class AuthUser {
     required this.name,
     required this.email,
     required this.role,
+    required this.ageGroup,
+    required this.gender,
     required this.emailVerified,
     required this.authProvider,
     required this.authProviders,
@@ -64,6 +68,8 @@ class AuthUser {
       name: json['name']?.toString() ?? 'User',
       email: json['email']?.toString() ?? '',
       role: json['role']?.toString() ?? '',
+      ageGroup: json['ageGroup']?.toString() ?? 'unknown',
+      gender: json['gender']?.toString() ?? 'unknown',
       emailVerified: json['emailVerified'] == true,
       authProvider: json['authProvider']?.toString() ?? 'local',
       authProviders: rawAuthProviders is List

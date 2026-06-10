@@ -524,6 +524,52 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
     }
   }
 
+  Future<void> _revokeVerification(AdminCourse course) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Revoke verification?'),
+          content: Text(
+            'Remove verification from "${course.title}"? It will leave the main Courses section.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Revoke'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    final result = await ApiService.revokeAdminCourseVerification(
+      authToken: widget.session.token,
+      courseId: course.id,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] == true) {
+      await _loadCourses();
+      _showMessage('Verification revoked');
+    } else {
+      _showMessage(
+        result['message']?.toString() ?? 'Failed to revoke verification',
+      );
+    }
+  }
+
   Future<void> _openManageLevels(AdminCourse course) async {
     await Navigator.push<void>(
       context,
@@ -649,6 +695,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                   onManageLevels: _openManageLevels,
                   onEdit: _showEditCourseDialog,
                   onDelete: _deleteCourse,
+                  onRevokeVerification: _revokeVerification,
                   onRefresh: _loadCourses,
                 ),
                 _CoursesGrid(
@@ -662,6 +709,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                   onManageLevels: _openManageLevels,
                   onEdit: _showEditCourseDialog,
                   onDelete: _deleteCourse,
+                  onRevokeVerification: _revokeVerification,
                   onRefresh: _loadCourses,
                 ),
                 _CoursesGrid(
@@ -675,6 +723,7 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
                   onManageLevels: _openManageLevels,
                   onEdit: _showEditCourseDialog,
                   onDelete: _deleteCourse,
+                  onRevokeVerification: _revokeVerification,
                   onRefresh: _loadCourses,
                 ),
               ],
@@ -696,6 +745,7 @@ class _CoursesGrid extends StatelessWidget {
     required this.onManageLevels,
     required this.onEdit,
     required this.onDelete,
+    required this.onRevokeVerification,
     required this.onRefresh,
   });
 
@@ -707,6 +757,7 @@ class _CoursesGrid extends StatelessWidget {
   final void Function(AdminCourse course) onManageLevels;
   final void Function(AdminCourse course) onEdit;
   final void Function(AdminCourse course) onDelete;
+  final void Function(AdminCourse course) onRevokeVerification;
   final Future<void> Function() onRefresh;
 
   @override
@@ -733,6 +784,7 @@ class _CoursesGrid extends StatelessWidget {
               onManageLevels: () => onManageLevels(course),
               onEdit: () => onEdit(course),
               onDelete: () => onDelete(course),
+              onRevokeVerification: () => onRevokeVerification(course),
             );
           }).toList(),
         ),
@@ -750,6 +802,7 @@ class _AdminDashboardCourseCard extends StatefulWidget {
     required this.onManageLevels,
     required this.onEdit,
     required this.onDelete,
+    required this.onRevokeVerification,
   });
 
   final AdminCourse course;
@@ -759,6 +812,7 @@ class _AdminDashboardCourseCard extends StatefulWidget {
   final VoidCallback onManageLevels;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onRevokeVerification;
 
   @override
   State<_AdminDashboardCourseCard> createState() =>
@@ -1210,6 +1264,23 @@ class _AdminDashboardCourseCardState extends State<_AdminDashboardCourseCard> {
                           color: widget.color,
                         ),
                       ),
+                      if (!widget.course.isAdminCreated &&
+                          widget.course.isVerified)
+                        Tooltip(
+                          message: 'Revoke verification',
+                          child: IconButton(
+                            onPressed: widget.onRevokeVerification,
+                            icon: const Icon(Icons.verified_user_outlined),
+                            iconSize: 18,
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints.tightFor(
+                              width: 30,
+                              height: 30,
+                            ),
+                            color: const Color(0xFFFFA726),
+                          ),
+                        ),
                       Tooltip(
                         message: language.t('delete'),
                         child: IconButton(

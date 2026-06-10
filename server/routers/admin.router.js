@@ -26,9 +26,14 @@ router.delete('/users/:id', usersController.deleteUser);
 
 // courses
 router.get('/courses', coursesController.getCourses);
+router.get('/courses/notifications', coursesController.getNotifications);
 router.post('/courses', coursesController.createCourse);
 router.put('/courses/:id', coursesController.updateCourse);
 router.delete('/courses/:id', coursesController.deleteCourse);
+router.post('/courses/:id/verification/approve', coursesController.approveVerification);
+router.post('/courses/:id/verification/reject', coursesController.rejectVerification);
+router.post('/courses/:id/verification/revoke', coursesController.revokeVerification);
+router.post('/courses/:id/updates/dismiss', coursesController.dismissUpdateNotification);
 
 // levels
 router.get('/levels', levelsController.getLevels);

@@ -137,7 +137,7 @@ async function getAllProjects(req, res) {
 
 async function getPublishedProjects(req, res) {
   try {
-    const projects = await builderService.getPublishedProjects();
+    const projects = await builderService.getPublishedProjects(req.user);
 
     return res.status(200).json({
       success: true,
@@ -155,7 +155,7 @@ async function getPublishedProjects(req, res) {
 async function getPublishedProjectById(req, res) {
   try {
     const { id } = req.params;
-    const project = await builderService.getPublishedProjectById(id);
+    const project = await builderService.getPublishedProjectById(id, req.user);
 
     if (!project) {
       return res.status(404).json({
@@ -173,6 +173,119 @@ async function getPublishedProjectById(req, res) {
       success: false,
       message: 'Failed to fetch published project.',
       error: error.message,
+    });
+  }
+}
+
+async function incrementProjectPlayCount(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.incrementProjectPlayCount(id, req.user);
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Published project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Play count updated successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update play count.',
+      error: error.message,
+    });
+  }
+}
+
+async function addProjectComment(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.addProjectComment(
+      id,
+      req.body.message,
+      req.user
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Comment added successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to add comment.',
+    });
+  }
+}
+
+async function deleteProjectComment(req, res) {
+  try {
+    const { id, commentId } = req.params;
+    const project = await builderService.deleteProjectComment(
+      id,
+      commentId,
+      req.user
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Comment not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Comment deleted successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to delete comment.',
+    });
+  }
+}
+
+async function rateProject(req, res) {
+  try {
+    const { id } = req.params;
+    const project = await builderService.rateProject(
+      id,
+      req.body.rating,
+      req.user
+    );
+
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        message: 'Published project not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Rating saved successfully.',
+      data: project,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'Failed to save rating.',
     });
   }
 }
@@ -211,5 +324,9 @@ module.exports = {
   getAllProjects,
   getPublishedProjects,
   getPublishedProjectById,
+  incrementProjectPlayCount,
+  addProjectComment,
+  deleteProjectComment,
+  rateProject,
   deleteProject,
 };

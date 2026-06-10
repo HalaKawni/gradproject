@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:client/app/navigation/app_route_data.dart';
@@ -6,7 +7,9 @@ import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/services/api_service.dart' as LegacyApiService;
+import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
+import 'package:client/features/home/models/legacy_public_course_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
@@ -24,6 +27,7 @@ import 'package:client/utils/responsive.dart';
 import 'package:client/mycourses/course_detail_page.dart';
 import 'package:client/mycourses/create_course_page.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
+import 'package:client/features/home/widgets/challenge_comments_dialog.dart';
 
 class DashboardPage extends StatefulWidget {
   final AuthSession session;
@@ -44,7 +48,14 @@ enum _DiscoverContentTab { challenges, assets, favorites }
 
 enum _MyCreationContentTab { challenges, assets }
 
-enum _CreationBuilderOption { slides, frontView, topView, scratch, fourthDemo }
+enum _CreationBuilderOption {
+  slides,
+  levelCourse,
+  frontView,
+  topView,
+  scratch,
+  fourthDemo,
+}
 
 class _DashboardPageState extends State<DashboardPage> {
   static const double _creationCardWidth = 240;
@@ -78,6 +89,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Map<String, dynamic>? _myStats;
   List<_CourseData> _publicCourses = const [];
   bool _isLoadingPublicCourses = false;
+  List<_CourseData> _communityCourses = const [];
+  bool _isLoadingCommunityCourses = false;
+  String? _communityCoursesErrorMessage;
   List<SavedBuilderProject> _publishedGames = const [];
   bool _isLoadingPublishedGames = false;
   String? _publishedGamesErrorMessage;
@@ -91,6 +105,9 @@ class _DashboardPageState extends State<DashboardPage> {
   List<SavedBuilderProject> _myBuilderProjects = const [];
   bool _isLoadingMyBuilderProjects = false;
   String? _myBuilderProjectsErrorMessage;
+  List<AdminCourse> _myLevelCourses = const [];
+  bool _isLoadingMyLevelCourses = false;
+  String? _myLevelCoursesErrorMessage;
   List<_PublishedBuilderAsset> _myBuilderAssets = const [];
   bool _isLoadingMyBuilderAssets = false;
   String? _myBuilderAssetsErrorMessage;
@@ -102,6 +119,7 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadProfileAvatar();
     _loadDiscoverFavorites();
     _loadPublicCourses();
+    _loadCommunityCourses();
     _loadPublishedGames();
     _loadPublishedAssets();
     _loadMyStats();
@@ -291,10 +309,12 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     if (result['success'] == true) {
-      final courses = _parseList(result['data'])
-          .map(_CourseData.fromPublicCourseJson)
-          .where((course) => course.publicCourseId.isNotEmpty)
-          .toList();
+      final courses = _mergeLegacyPublicCourseFallbacks(
+        _parseList(result['data'])
+            .map(_CourseData.fromPublicCourseJson)
+            .where((course) => course.publicCourseId.isNotEmpty)
+            .toList(),
+      );
       setState(() {
         _publicCourses = courses;
         _isLoadingPublicCourses = false;
@@ -305,6 +325,51 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _isLoadingPublicCourses = false;
     });
+  }
+
+  Future<void> _loadCommunityCourses() async {
+    setState(() {
+      _isLoadingCommunityCourses = true;
+      _communityCoursesErrorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.getCommunityCourses(
+        authToken: widget.session.token,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        final courses = _parseList(result['data'])
+            .map(_CourseData.fromPublicCourseJson)
+            .where((course) => course.publicCourseId.isNotEmpty)
+            .toList();
+        setState(() {
+          _communityCourses = courses;
+          _isLoadingCommunityCourses = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _communityCoursesErrorMessage =
+            result['message']?.toString() ??
+            'Failed to load community courses.';
+        _isLoadingCommunityCourses = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _communityCoursesErrorMessage = 'Failed to load community courses: $e';
+        _isLoadingCommunityCourses = false;
+      });
+    }
   }
 
   Future<void> _loadPublishedGames() async {
@@ -416,6 +481,51 @@ class _DashboardPageState extends State<DashboardPage> {
     });
     _loadMyBuilderProjects();
     _loadMyBuilderAssets();
+    _loadMyLevelCourses();
+  }
+
+  Future<void> _loadMyLevelCourses() async {
+    setState(() {
+      _isLoadingMyLevelCourses = true;
+      _myLevelCoursesErrorMessage = null;
+    });
+
+    try {
+      final result = await ApiService.getMyLevelCourses(
+        authToken: widget.session.token,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result['success'] == true) {
+        final courses = _parseList(result['data'])
+            .map(AdminCourse.fromJson)
+            .where((course) => course.id.isNotEmpty)
+            .toList();
+        setState(() {
+          _myLevelCourses = courses;
+          _isLoadingMyLevelCourses = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _myLevelCoursesErrorMessage =
+            result['message']?.toString() ?? 'Failed to load your courses.';
+        _isLoadingMyLevelCourses = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _myLevelCoursesErrorMessage = 'Failed to load your courses: $e';
+        _isLoadingMyLevelCourses = false;
+      });
+    }
   }
 
   Future<void> _loadMyBuilderProjects() async {
@@ -512,6 +622,380 @@ class _DashboardPageState extends State<DashboardPage> {
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+  }
+
+  SavedBuilderProject? _parseProjectFromResponse(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    final project = SavedBuilderProject.fromJson(
+      Map<String, dynamic>.from(value),
+    );
+    return project.id.isEmpty ? null : project;
+  }
+
+  _CourseData? _parseCourseFromResponse(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    final course = _CourseData.fromPublicCourseJson(
+      Map<String, dynamic>.from(value),
+    );
+    return course.publicCourseId.isEmpty ? null : course;
+  }
+
+  void _replaceProjectInCollections(SavedBuilderProject project) {
+    setState(() {
+      _publishedGames = _replaceProjectInList(_publishedGames, project);
+      _myBuilderProjects = _replaceProjectInList(_myBuilderProjects, project);
+    });
+  }
+
+  void _replaceCourseInCollections(_CourseData course) {
+    setState(() {
+      _publicCourses = _replaceCourseInList(_publicCourses, course);
+      _communityCourses = _replaceCourseInList(_communityCourses, course);
+    });
+  }
+
+  List<_CourseData> _replaceCourseInList(
+    List<_CourseData> source,
+    _CourseData course,
+  ) {
+    var didReplace = false;
+    final updated = source
+        .map((item) {
+          final sameId =
+              item.publicCourseId.isNotEmpty &&
+              item.publicCourseId == course.publicCourseId;
+          final sameKey =
+              item.publicCourseKey.isNotEmpty &&
+              item.publicCourseKey == course.publicCourseKey;
+          if (!sameId && !sameKey) {
+            return item;
+          }
+          didReplace = true;
+          return course;
+        })
+        .toList(growable: false);
+
+    return didReplace ? updated : source;
+  }
+
+  List<SavedBuilderProject> _replaceProjectInList(
+    List<SavedBuilderProject> source,
+    SavedBuilderProject project,
+  ) {
+    var didReplace = false;
+    final updated = source
+        .map((item) {
+          if (item.id != project.id) {
+            return item;
+          }
+          didReplace = true;
+          return project;
+        })
+        .toList(growable: false);
+
+    return didReplace ? updated : source;
+  }
+
+  Future<void> _refreshChallengeLists() async {
+    await Future.wait<void>([_loadPublishedGames(), _loadMyBuilderProjects()]);
+  }
+
+  Future<void> _trackChallengePlay(SavedBuilderProject project) async {
+    final result = await ApiService.incrementBuilderProjectPlayCount(
+      authToken: widget.session.token,
+      projectId: project.id,
+    );
+    final updatedProject = _parseProjectFromResponse(result['data']);
+    if (!mounted || updatedProject == null) {
+      return;
+    }
+
+    _replaceProjectInCollections(updatedProject);
+  }
+
+  Future<SavedBuilderProject?> _submitChallengeComment({
+    required SavedBuilderProject project,
+    required String message,
+  }) async {
+    final result = await ApiService.addBuilderProjectComment(
+      authToken: widget.session.token,
+      projectId: project.id,
+      message: message,
+    );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message']?.toString() ?? 'Failed to add comment.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    final updatedProject = _parseProjectFromResponse(result['data']);
+    if (updatedProject != null) {
+      _replaceProjectInCollections(updatedProject);
+    }
+    return updatedProject;
+  }
+
+  Future<SavedBuilderProject?> _deleteChallengeComment({
+    required SavedBuilderProject project,
+    required BuilderProjectComment comment,
+  }) async {
+    final result = await ApiService.deleteBuilderProjectComment(
+      authToken: widget.session.token,
+      projectId: project.id,
+      commentId: comment.id,
+    );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message']?.toString() ?? 'Failed to delete comment.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    final updatedProject = _parseProjectFromResponse(result['data']);
+    if (updatedProject != null) {
+      _replaceProjectInCollections(updatedProject);
+    }
+    return updatedProject;
+  }
+
+  Future<void> _openChallengeComments(
+    SavedBuilderProject project, {
+    bool allowCommentDelete = false,
+  }) async {
+    final updatedProject = await showDialog<SavedBuilderProject>(
+      context: context,
+      builder: (context) {
+        return ChallengeCommentsDialog(
+          project: project,
+          currentUser: widget.session.user,
+          onSubmitComment: (message) {
+            return _submitChallengeComment(project: project, message: message);
+          },
+          onDeleteComment: allowCommentDelete
+              ? (comment) {
+                  return _deleteChallengeComment(
+                    project: project,
+                    comment: comment,
+                  );
+                }
+              : null,
+        );
+      },
+    );
+
+    if (updatedProject != null && mounted) {
+      _replaceProjectInCollections(updatedProject);
+    }
+  }
+
+  Future<_CourseData?> _submitCourseComment({
+    required _CourseData course,
+    required String message,
+  }) async {
+    final result = await ApiService.addCourseComment(
+      authToken: widget.session.token,
+      courseId: course.publicCourseId,
+      message: message,
+    );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message']?.toString() ?? 'Failed to add comment.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    final updatedCourse = _parseCourseFromResponse(result['data']);
+    if (updatedCourse != null) {
+      _replaceCourseInCollections(updatedCourse);
+    }
+    return updatedCourse;
+  }
+
+  Future<_CourseData?> _deleteCourseComment({
+    required _CourseData course,
+    required BuilderProjectComment comment,
+  }) async {
+    final result = await ApiService.deleteCourseComment(
+      authToken: widget.session.token,
+      courseId: course.publicCourseId,
+      commentId: comment.id,
+    );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message']?.toString() ?? 'Failed to delete comment.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    final updatedCourse = _parseCourseFromResponse(result['data']);
+    if (updatedCourse != null) {
+      _replaceCourseInCollections(updatedCourse);
+    }
+    return updatedCourse;
+  }
+
+  Future<_CourseData?> _rateCourse({
+    required _CourseData course,
+    required int rating,
+  }) async {
+    final result = await ApiService.rateCourse(
+      authToken: widget.session.token,
+      courseId: course.publicCourseId,
+      rating: rating,
+    );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result['message']?.toString() ?? 'Failed to save rating.',
+          ),
+        ),
+      );
+      return null;
+    }
+
+    final updatedCourse = _parseCourseFromResponse(result['data']);
+    if (updatedCourse != null) {
+      _replaceCourseInCollections(updatedCourse);
+    }
+    return updatedCourse;
+  }
+
+  Future<void> _openCourseComments(
+    _CourseData course, {
+    bool allowCommentDelete = false,
+  }) async {
+    final updatedCourse = await showDialog<_CourseData>(
+      context: context,
+      builder: (context) {
+        return _CourseCommentsDialog(
+          course: course,
+          currentUser: widget.session.user,
+          onSubmitComment: (message) {
+            return _submitCourseComment(course: course, message: message);
+          },
+          onSubmitRating: course.currentUserRating == null
+              ? (rating) => _rateCourse(course: course, rating: rating)
+              : null,
+          onDeleteComment: allowCommentDelete
+              ? (comment) {
+                  return _deleteCourseComment(course: course, comment: comment);
+                }
+              : null,
+        );
+      },
+    );
+
+    if (updatedCourse != null && mounted) {
+      _replaceCourseInCollections(updatedCourse);
+      if (allowCommentDelete) {
+        unawaited(_loadMyLevelCourses());
+      }
+    }
+  }
+
+  _CourseData _courseDataFromAdminCourse(AdminCourse course) {
+    return _CourseData(
+      publicCourseId: course.id,
+      publicCourseKey: course.courseId,
+      topic: course.category.isEmpty ? 'Coding' : course.category,
+      level: 'Beginner',
+      title: course.title,
+      subtitle: course.creatorName.isEmpty
+          ? 'Your course'
+          : 'Created by ${course.creatorName}',
+      color: const Color(0xFF4A90C4),
+      imagePath: 'assets/images/course1.jpg',
+      imageBase64: course.courseImageBase64,
+      coverFrameScale: course.coverFrameScale,
+      coverFrameOffsetX: course.coverFrameOffsetX,
+      coverFrameOffsetY: course.coverFrameOffsetY,
+      description: course.description,
+      creatorName: course.creatorName,
+      isVerified: course.isVerified,
+      ratingAverage: course.ratingAverage,
+      ratingCount: course.ratingCount,
+      commentCount: course.commentCount,
+      currentUserRating: course.currentUserRating,
+      comments: course.comments
+          .map(
+            (comment) => BuilderProjectComment(
+              id: comment.id,
+              userId: comment.userId,
+              userName: comment.userName,
+              message: comment.message,
+              createdAt: comment.createdAt,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  List<_CourseData> _mergeLegacyPublicCourseFallbacks(
+    List<_CourseData> courses,
+  ) {
+    final merged = List<_CourseData>.from(courses);
+    final seenCourseKeys = merged
+        .map((course) => course.publicCourseKey.trim())
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    for (final metadata in legacyPublicCourseCatalog.values) {
+      if (seenCourseKeys.contains(metadata.courseId)) {
+        continue;
+      }
+      merged.add(_CourseData.fromLegacyMetadata(metadata));
+    }
+
+    return merged;
   }
 
   Map<String, dynamic> _extractProfileJson(Object? value) {
@@ -2015,81 +2499,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   // ── COURSES SECTION ──
   Widget _buildCoursesSection() {
-    final courses = [
-      _CourseData(
-        topic: 'Coding',
-        level: 'Novice',
-        title: 'Linus the Lemur',
-        subtitle: 'Computers',
-        color: const Color(0xFF5B9EA0),
-        imagePath: 'assets/images/course2.jpg',
-        description:
-            'Linus is having fun using computers! Help him collect items he needs such as a screen and mouse. The Chameleon will raise and lower the trees making Linus reach different heights or just clearing the path.',
-      ),
-      _CourseData(
-        topic: 'Coding',
-        level: 'Novice',
-        title: 'CodeMonkey Jr.',
-        subtitle: 'Sequencing & Loops',
-        color: const Color(0xFF7BC67E),
-        imagePath: 'assets/images/course1.jpg',
-        description:
-            'Learn sequencing and loops by guiding the monkey through fun challenges and puzzles!',
-      ),
-      _CourseData(
-        topic: 'CS Topics',
-        level: 'Beginner',
-        title: 'Data is Everywhere',
-        subtitle: 'Functions & Variables',
-        color: const Color(0xFF4A90C4),
-        imagePath: 'assets/images/datacourse.png',
-        description:
-            'Get a glimpse into the world of data. Learn what data is and how to collect it. You will also learn how to organize your data using different graphing visualizations.',
-      ),
-      _CourseData(
-        topic: 'Text Coding',
-        level: 'Beginner',
-        title: 'Banana Tales',
-        subtitle: 'Loops & Conditions',
-        color: const Color(0xFFE8A838),
-        imagePath: 'assets/images/elephant.png',
-      ),
-      _CourseData(
-        topic: 'Digital Literacy',
-        level: 'Beginner',
-        title: 'Digital Literacy',
-        subtitle: 'Internet Safety',
-        color: const Color(0xFF9B7BCB),
-        imagePath: 'assets/images/digitalcourse.png',
-        description:
-            'A short introduction to some important topics in the digital world: How to use computers, what are software and hardware, possible threats online and protecting your privacy.',
-      ),
-      _CourseData(
-        topic: 'Text Coding',
-        level: 'Intermediate',
-        title: 'Game Builder',
-        subtitle: 'Game Design',
-        color: const Color(0xFFE57373),
-        imagePath: 'assets/images/monkey_yes.png',
-      ),
-      _CourseData(
-        topic: 'Coding',
-        level: 'Intermediate',
-        title: 'Coding Chatbots',
-        subtitle: 'AI & Logic',
-        color: const Color(0xFF4DB6AC),
-        imagePath: 'assets/images/monkey_no.png',
-      ),
-      _CourseData(
-        topic: 'Text Coding',
-        level: 'Advanced',
-        title: 'Data Science',
-        subtitle: 'Python & Data',
-        color: const Color(0xFF7986CB),
-        imagePath: 'assets/images/elephant.png',
-      ),
-      ..._publicCourses,
-    ];
+    final courses = _publicCourses;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -2237,22 +2647,27 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildDiscoverChallenges() {
-    if (_isLoadingPublishedGames) {
+    if (_isLoadingPublishedGames || _isLoadingCommunityCourses) {
       return const _DashboardDiscoverMessage(
         child: CircularProgressIndicator(),
       );
     }
 
-    if (_publishedGamesErrorMessage != null) {
+    final errorMessage =
+        _publishedGamesErrorMessage ?? _communityCoursesErrorMessage;
+    if (errorMessage != null) {
       return _DashboardDiscoverMessage(
         icon: Icons.error_outline,
-        message: _publishedGamesErrorMessage!,
+        message: errorMessage,
         actionLabel: 'Try Again',
-        onAction: _loadPublishedGames,
+        onAction: () {
+          _loadPublishedGames();
+          _loadCommunityCourses();
+        },
       );
     }
 
-    if (_publishedGames.isEmpty) {
+    if (_publishedGames.isEmpty && _communityCourses.isEmpty) {
       return const _DashboardDiscoverMessage(
         icon: Icons.extension_outlined,
         message: 'No community challenges are available yet.',
@@ -2271,12 +2686,23 @@ class _DashboardPageState extends State<DashboardPage> {
             spacing: 16,
             runSpacing: 16,
             children: [
+              ..._communityCourses.map(
+                (course) => SizedBox(
+                  width: cardWidth,
+                  child: _CourseCard(
+                    session: widget.session,
+                    course: course,
+                    onCommentsTap: () => _openCourseComments(course),
+                  ),
+                ),
+              ),
               ..._publishedGames.map(
                 (game) => SizedBox(
                   width: cardWidth,
                   child: _DashboardPublishedGameCard(
                     game: game,
                     onTap: () => _openPublishedGame(game),
+                    onCommentsTap: () => _openChallengeComments(game),
                     isFavorite: _favoriteChallengeIds.contains(game.id),
                     onFavoriteToggle: () => _toggleFavoriteChallenge(game),
                   ),
@@ -2431,6 +2857,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: _DashboardPublishedGameCard(
                               game: game,
                               onTap: () => _openPublishedGame(game),
+                              onCommentsTap: () => _openChallengeComments(game),
                               isFavorite: true,
                               onFavoriteToggle: () =>
                                   _toggleFavoriteChallenge(game),
@@ -2487,10 +2914,14 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _openPublishedGame(SavedBuilderProject game) async {
+    unawaited(_trackChallengePlay(game));
+
     final routeName = game.isTopView
         ? AppRoutes.topViewBuilder
         : game.isScratch
         ? AppRoutes.scratchBuilder
+        : game.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builderPlay;
     final routeData = game.isTopView
         ? TopViewBuilderRouteData(
@@ -2499,6 +2930,7 @@ class _DashboardPageState extends State<DashboardPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           )
         : game.isScratch
         ? ScratchBuilderRouteData(
@@ -2507,14 +2939,28 @@ class _DashboardPageState extends State<DashboardPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
+          )
+        : game.isFourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialProjectId: game.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           )
         : BuilderPlayRouteData(
             session: widget.session,
             projectId: game.id,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           );
 
     await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+    if (mounted) {
+      unawaited(_refreshChallengeLists());
+    }
   }
 
   Widget _buildMyCreationsView() {
@@ -2628,20 +3074,26 @@ class _DashboardPageState extends State<DashboardPage> {
             snapshot.connectionState == ConnectionState.waiting;
         final courses = snapshot.data ?? const <Map<String, dynamic>>[];
 
-        if (isLoadingCourses || _isLoadingMyBuilderProjects) {
+        if (isLoadingCourses ||
+            _isLoadingMyBuilderProjects ||
+            _isLoadingMyLevelCourses) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        if (_myBuilderProjectsErrorMessage != null) {
+        final errorMessage =
+            _myBuilderProjectsErrorMessage ?? _myLevelCoursesErrorMessage;
+        if (errorMessage != null) {
           return _DashboardDiscoverMessage(
             icon: Icons.error_outline,
-            message: _myBuilderProjectsErrorMessage!,
+            message: errorMessage,
             actionLabel: 'Try Again',
-            onAction: _loadMyBuilderProjects,
+            onAction: _loadMyCreations,
           );
         }
 
-        if (courses.isEmpty && _myBuilderProjects.isEmpty) {
+        if (courses.isEmpty &&
+            _myLevelCourses.isEmpty &&
+            _myBuilderProjects.isEmpty) {
           return const _DashboardDiscoverMessage(
             icon: Icons.add_circle_outline_rounded,
             message: 'No challenges yet. Create your first one!',
@@ -2710,12 +3162,33 @@ class _DashboardPageState extends State<DashboardPage> {
                       },
                     );
                   }),
+                  ..._myLevelCourses.map(
+                    (course) => SizedBox(
+                      width: levelWidth,
+                      child: _MyCreationCourseCard(
+                        course: course,
+                        levelsCount: _builderProjectsForCourse(course).length,
+                        onManageLevels: () => _openManageLevelCourse(course),
+                        onCommentsTap: course.isPublic
+                            ? () => _openCourseComments(
+                                _courseDataFromAdminCourse(course),
+                                allowCommentDelete: true,
+                              )
+                            : null,
+                        onSettings: () => _showLevelCourseSettings(course),
+                      ),
+                    ),
+                  ),
                   ..._myBuilderProjects.map(
                     (project) => SizedBox(
                       width: levelWidth,
                       child: _MyCreationLevelCard(
                         project: project,
                         onOpen: () => _openMyBuilderProject(project),
+                        onCommentsTap: () => _openChallengeComments(
+                          project,
+                          allowCommentDelete: true,
+                        ),
                         onSettings: () => _showBuilderProjectSettings(project),
                       ),
                     ),
@@ -2774,6 +3247,355 @@ class _DashboardPageState extends State<DashboardPage> {
         },
       ),
     );
+  }
+
+  String _buildLevelCourseSlug(String title) {
+    final slug = title
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+
+    if (slug.isNotEmpty) {
+      return '${slug}-${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    return 'course-${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  String _levelCourseKey(AdminCourse course) {
+    return course.courseId.isNotEmpty ? course.courseId : course.id;
+  }
+
+  List<SavedBuilderProject> _builderProjectsForCourse(AdminCourse course) {
+    final courseKey = _levelCourseKey(course);
+    final courseIds = {course.id, courseKey}..remove('');
+    final levels = _myBuilderProjects
+        .where((project) => courseIds.contains(project.courseId))
+        .toList();
+
+    levels.sort((a, b) {
+      final orderComparison = a.orderInCourse.compareTo(b.orderInCourse);
+      if (orderComparison != 0) {
+        return orderComparison;
+      }
+      return a.title.compareTo(b.title);
+    });
+    return levels;
+  }
+
+  Future<void> _showCreateLevelCourseDialog() async {
+    final course = await _showLevelCourseSettingsDialog();
+
+    if (!mounted || course == null) {
+      return;
+    }
+
+    await _openManageLevelCourse(course);
+  }
+
+  Future<void> _showLevelCourseSettings(AdminCourse course) async {
+    await _showLevelCourseSettingsDialog(course: course);
+  }
+
+  Future<AdminCourse?> _showLevelCourseSettingsDialog({
+    AdminCourse? course,
+  }) async {
+    final isEditing = course != null;
+    final nameController = TextEditingController(text: course?.title ?? '');
+    final categoryController = TextEditingController(
+      text: course?.category ?? 'Coding',
+    );
+    final descriptionController = TextEditingController(
+      text: course?.description ?? '',
+    );
+    bool isPublic = course?.isPublic ?? false;
+    String? coverImageBase64 = course?.courseImageBase64;
+    double coverFrameScale = course?.coverFrameScale ?? 1;
+    double coverFrameOffsetX = course?.coverFrameOffsetX ?? 0;
+    double coverFrameOffsetY = course?.coverFrameOffsetY ?? 0;
+
+    final payload = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(20),
+              child: _CreationSettingsShell(
+                title: isEditing ? 'Course Settings' : 'Create Course',
+                subtitle: isEditing
+                    ? course.title
+                    : 'Start empty, then add your levels.',
+                icon: Icons.local_library_rounded,
+                color: const Color(0xFF4A90C4),
+                actions: [
+                  if (isEditing)
+                    TextButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(context, {'action': 'delete'}),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('Delete'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFE53935),
+                      ),
+                    ),
+                  if (isEditing && course.canRequestVerification)
+                    OutlinedButton.icon(
+                      onPressed: () => Navigator.pop(context, {
+                        'action': 'requestVerification',
+                      }),
+                      icon: const Icon(Icons.verified_outlined),
+                      label: const Text('Request verification'),
+                    ),
+                  if (isEditing)
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          Navigator.pop(context, {'action': 'manageLevels'}),
+                      icon: const Icon(Icons.reorder_rounded),
+                      label: const Text('Manage levels'),
+                    ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: () {
+                      final title = nameController.text.trim();
+                      if (title.isEmpty) {
+                        return;
+                      }
+                      Navigator.pop(context, {
+                        'courseName': title,
+                        'courseId': course?.courseId.isNotEmpty == true
+                            ? course!.courseId
+                            : _buildLevelCourseSlug(title),
+                        'category': categoryController.text.trim(),
+                        'description': descriptionController.text.trim(),
+                        'courseImageBase64': coverImageBase64,
+                        'coverFrameScale': coverFrameScale,
+                        'coverFrameOffsetX': coverFrameOffsetX,
+                        'coverFrameOffsetY': coverFrameOffsetY,
+                        'isPublic': isPublic,
+                      });
+                    },
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF4A90C4),
+                    ),
+                    child: Text(isEditing ? 'Save' : 'Create'),
+                  ),
+                ],
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _SettingsTextField(
+                      controller: nameController,
+                      label: 'Course name',
+                      icon: Icons.title_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    _SettingsTextField(
+                      controller: categoryController,
+                      label: 'Category',
+                      icon: Icons.category_rounded,
+                    ),
+                    const SizedBox(height: 12),
+                    _SettingsTextField(
+                      controller: descriptionController,
+                      label: 'Description',
+                      icon: Icons.notes_rounded,
+                      minLines: 2,
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Public'),
+                      subtitle: Text(
+                        isPublic
+                            ? 'Visible to learners.'
+                            : 'Only you can manage it.',
+                      ),
+                      value: isPublic,
+                      onChanged: (value) {
+                        setDialogState(() => isPublic = value);
+                      },
+                    ),
+                    if (isEditing) ...[
+                      const SizedBox(height: 12),
+                      _CourseVerificationStatusPanel(course: course),
+                    ],
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await showFramedImageUploadDialog(
+                          context: context,
+                          title: 'Upload course cover',
+                          initialImageBase64: coverImageBase64,
+                          initialScale: coverFrameScale,
+                          initialOffsetX: coverFrameOffsetX,
+                          initialOffsetY: coverFrameOffsetY,
+                          aspectRatio: _myCreationLevelCoverAspectRatio,
+                        );
+                        if (result == null) {
+                          return;
+                        }
+                        setDialogState(() {
+                          coverImageBase64 = result.imageBase64;
+                          coverFrameScale = result.scale;
+                          coverFrameOffsetX = result.offsetX;
+                          coverFrameOffsetY = result.offsetY;
+                        });
+                      },
+                      icon: const Icon(Icons.upload_rounded),
+                      label: const Text('Upload cover'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    categoryController.dispose();
+    descriptionController.dispose();
+
+    if (!mounted || payload == null) {
+      return null;
+    }
+
+    if (payload['action'] == 'delete' && course != null) {
+      final confirmed = await _confirmDeleteLevelCourse(course);
+      return confirmed ? null : course;
+    }
+
+    if (payload['action'] == 'requestVerification' && course != null) {
+      final result = await ApiService.requestMyLevelCourseVerification(
+        authToken: widget.session.token,
+        courseId: course.id,
+      );
+
+      if (!mounted) {
+        return null;
+      }
+
+      if (result['success'] == true) {
+        await _loadMyLevelCourses();
+        _showDashboardMessage('Verification request sent.');
+      } else {
+        _showDashboardMessage(
+          result['message']?.toString() ?? 'Failed to request verification.',
+        );
+      }
+      return course;
+    }
+
+    if (payload['action'] == 'manageLevels' && course != null) {
+      await _openManageLevelCourse(course);
+      return course;
+    }
+
+    final result = isEditing
+        ? await ApiService.updateMyLevelCourse(
+            authToken: widget.session.token,
+            courseId: course.id,
+            courseJson: payload,
+          )
+        : await ApiService.createMyLevelCourse(
+            authToken: widget.session.token,
+            courseJson: payload,
+          );
+
+    if (!mounted) {
+      return null;
+    }
+
+    if (result['success'] == true) {
+      await _loadMyLevelCourses();
+      final rawData = result['data'];
+      final savedCourse = rawData is Map
+          ? AdminCourse.fromJson(Map<String, dynamic>.from(rawData))
+          : course;
+      _showDashboardMessage(
+        isEditing ? 'Course updated successfully.' : 'Course created.',
+      );
+      return savedCourse;
+    }
+
+    _showDashboardMessage(
+      result['message']?.toString() ??
+          (isEditing ? 'Failed to update course.' : 'Failed to create course.'),
+    );
+    return null;
+  }
+
+  Future<bool> _confirmDeleteLevelCourse(AdminCourse course) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete Course?'),
+          content: Text(
+            'Delete "${course.title}"? Your level cards will stay in My Creations.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return false;
+    }
+
+    final result = await ApiService.deleteMyLevelCourse(
+      authToken: widget.session.token,
+      courseId: course.id,
+    );
+
+    if (!mounted) {
+      return true;
+    }
+
+    if (result['success'] == true) {
+      _loadMyCreations();
+      _showDashboardMessage('Course deleted.');
+      return true;
+    }
+
+    _showDashboardMessage(
+      result['message']?.toString() ?? 'Failed to delete course.',
+    );
+    return false;
+  }
+
+  Future<void> _openManageLevelCourse(AdminCourse course) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _MyCreationCourseLevelsPage(
+          session: widget.session,
+          course: course,
+          courseLevels: _builderProjectsForCourse(course),
+          allLevels: _myBuilderProjects,
+        ),
+      ),
+    );
+
+    if (mounted) {
+      _loadMyCreations();
+    }
   }
 
   Future<void> _openMyBuilderProject(SavedBuilderProject project) async {
@@ -3239,6 +4061,8 @@ class _DashboardPageState extends State<DashboardPage> {
             builder: (_) => CreateCoursePage(session: widget.session),
           ),
         );
+      case _CreationBuilderOption.levelCourse:
+        await _showCreateLevelCourseDialog();
       case _CreationBuilderOption.frontView:
         await Navigator.of(context).pushNamed(
           AppRoutes.builder,
@@ -3278,6 +4102,14 @@ class _CreationBuilderPickerDialog extends StatelessWidget {
       icon: Icons.auto_stories_rounded,
       color: Color(0xFFFFB84D),
       accentColor: Color(0xFFFFF2C7),
+    ),
+    _CreationBuilderCardData(
+      option: _CreationBuilderOption.levelCourse,
+      title: 'Create Course',
+      subtitle: 'Start an empty course and add your created levels.',
+      icon: Icons.local_library_rounded,
+      color: Color(0xFF4A90C4),
+      accentColor: Color(0xFFE8F2FB),
     ),
     _CreationBuilderCardData(
       option: _CreationBuilderOption.frontView,
@@ -3756,12 +4588,14 @@ class _DashboardFavoriteButton extends StatelessWidget {
 class _DashboardPublishedGameCard extends StatelessWidget {
   final SavedBuilderProject game;
   final VoidCallback onTap;
+  final VoidCallback onCommentsTap;
   final bool isFavorite;
   final VoidCallback onFavoriteToggle;
 
   const _DashboardPublishedGameCard({
     required this.game,
     required this.onTap,
+    required this.onCommentsTap,
     required this.isFavorite,
     required this.onFavoriteToggle,
   });
@@ -3827,7 +4661,7 @@ class _DashboardPublishedGameCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -3836,17 +4670,17 @@ class _DashboardPublishedGameCard extends StatelessWidget {
                         style: GoogleFonts.nunito(
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF243A1B),
-                          fontSize: 18,
+                          fontSize: 15,
                         ),
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 8),
                       Text(
                         'By ${game.publisherName}',
                         style: GoogleFonts.nunito(
                           color: const Color(0xFF667064),
                           fontWeight: FontWeight.w700,
+                          fontSize: 12,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -3854,19 +4688,60 @@ class _DashboardPublishedGameCard extends StatelessWidget {
                       const Spacer(),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.play_circle_fill,
-                            color: Color(0xFF6C9D43),
-                            size: 20,
+                          Icon(
+                            Icons.star_rounded,
+                            color: const Color(0xFFF59E0B),
+                            size: 15,
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 3),
                           Text(
-                            game.difficulty.toUpperCase(),
+                            game.ratingCount == 0
+                                ? 'New'
+                                : game.ratingAverage.toStringAsFixed(1),
                             style: GoogleFonts.montserrat(
-                              color: const Color(0xFF6C9D43),
-                              fontSize: 11,
+                              color: const Color(0xFFF59E0B),
+                              fontSize: 10,
                               fontWeight: FontWeight.w800,
                             ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            color: Color(0xFF6C9D43),
+                            size: 15,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${game.playCount}',
+                            style: GoogleFonts.montserrat(
+                              color: const Color(0xFF6C9D43),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE9F5DE),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              game.difficulty.toUpperCase(),
+                              style: GoogleFonts.montserrat(
+                                color: const Color(0xFF6C9D43),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _ChallengeCommentButton(
+                            count: game.commentCount,
+                            onTap: onCommentsTap,
                           ),
                         ],
                       ),
@@ -3990,11 +4865,13 @@ class _DashboardPublishedAssetCard extends StatelessWidget {
 class _MyCreationLevelCard extends StatelessWidget {
   final SavedBuilderProject project;
   final VoidCallback onOpen;
+  final VoidCallback onCommentsTap;
   final VoidCallback onSettings;
 
   const _MyCreationLevelCard({
     required this.project,
     required this.onOpen,
+    required this.onCommentsTap,
     required this.onSettings,
   });
 
@@ -4093,51 +4970,122 @@ class _MyCreationLevelCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         project.title,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.nunito(
-                          fontSize: 18,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: const Color(0xFF243A1B),
                         ),
                       ),
-                      const SizedBox(height: 8),
                       Text(
                         project.description.isEmpty
                             ? _builderLabel()
                             : project.description,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.nunito(
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: FontWeight.w700,
                           color: const Color(0xFF667064),
                         ),
                       ),
                       const Spacer(),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 7,
+                      Row(
                         children: [
-                          _CreationStatusChip(
-                            label: _builderLabel(),
-                            color: color,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                _builderLabel(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w800,
+                                  color: color,
+                                ),
+                              ),
+                            ),
                           ),
-                          _CreationStatusChip(
-                            label: project.difficulty.toUpperCase(),
-                            color: const Color(0xFFFFA726),
+                          const SizedBox(width: 6),
+                          Icon(
+                            Icons.star_rounded,
+                            size: 14,
+                            color: const Color(0xFFF59E0B),
                           ),
-                          _CreationStatusChip(
-                            label: isPublished ? 'PUBLIC' : 'DRAFT',
-                            color: isPublished
-                                ? const Color(0xFF4DB6AC)
-                                : const Color(0xFF9E9E9E),
+                          const SizedBox(width: 2),
+                          Text(
+                            project.ratingCount == 0
+                                ? 'New'
+                                : project.ratingAverage.toStringAsFixed(1),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.play_arrow_rounded,
+                            size: 14,
+                            color: Color(0xFF66B64A),
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '${project.playCount}',
+                            style: GoogleFonts.montserrat(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF66B64A),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  (isPublished
+                                          ? const Color(0xFF4DB6AC)
+                                          : const Color(0xFF9E9E9E))
+                                      .withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              isPublished ? 'PUBLIC' : 'DRAFT',
+                              style: GoogleFonts.montserrat(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: isPublished
+                                    ? const Color(0xFF26877F)
+                                    : const Color(0xFF616161),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                          _ChallengeCommentButton(
+                            count: project.commentCount,
+                            onTap: onCommentsTap,
                           ),
                         ],
                       ),
@@ -4161,6 +5109,711 @@ class _MyCreationLevelCard extends StatelessWidget {
     } catch (_) {
       return null;
     }
+  }
+}
+
+class _ChallengeEngagementSummary extends StatelessWidget {
+  const _ChallengeEngagementSummary({required this.project});
+
+  final SavedBuilderProject project;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 8,
+      children: [
+        _ChallengeStatPill(
+          icon: Icons.star_rounded,
+          label: project.ratingCount == 0
+              ? 'New'
+              : '${project.ratingAverage.toStringAsFixed(1)} (${project.ratingCount})',
+          color: const Color(0xFFF59E0B),
+        ),
+        _ChallengeStatPill(
+          icon: Icons.play_arrow_rounded,
+          label: '${project.playCount} plays',
+          color: const Color(0xFF66B64A),
+        ),
+        _ChallengeStatPill(
+          icon: Icons.chat_bubble_outline_rounded,
+          label: '${project.commentCount} comments',
+          color: const Color(0xFF4A90E2),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChallengeStatPill extends StatelessWidget {
+  const _ChallengeStatPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.montserrat(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChallengeCommentButton extends StatelessWidget {
+  const _ChallengeCommentButton({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEEF4FF),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.comment_outlined,
+              size: 15,
+              color: Color(0xFF4A90E2),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              count.toString(),
+              style: GoogleFonts.montserrat(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF4A90E2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MyCreationCourseCard extends StatelessWidget {
+  final AdminCourse course;
+  final int levelsCount;
+  final VoidCallback onManageLevels;
+  final VoidCallback? onCommentsTap;
+  final VoidCallback onSettings;
+
+  const _MyCreationCourseCard({
+    required this.course,
+    required this.levelsCount,
+    required this.onManageLevels,
+    this.onCommentsTap,
+    required this.onSettings,
+  });
+
+  Uint8List? _safeDecodeCourseCover(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    try {
+      return base64Decode(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const color = Color(0xFF4A90C4);
+
+    return Material(
+      color: Colors.white,
+      elevation: 2,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onManageLevels,
+        child: SizedBox(
+          height: _DashboardPageState._levelCardHeight,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 104,
+                width: double.infinity,
+                decoration: const BoxDecoration(color: Color(0xFFE8F2FB)),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: course.courseImageBase64 == null
+                          ? const Center(
+                              child: Icon(
+                                Icons.local_library_rounded,
+                                size: 48,
+                                color: color,
+                              ),
+                            )
+                          : FramedImagePreview(
+                              bytes: _safeDecodeCourseCover(
+                                course.courseImageBase64,
+                              ),
+                              scale: course.coverFrameScale,
+                              offsetX: course.coverFrameOffsetX,
+                              offsetY: course.coverFrameOffsetY,
+                              placeholderIcon: Icons.local_library_rounded,
+                            ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _CreationCardIconButton(
+                        icon: Icons.reorder_rounded,
+                        tooltip: 'Manage levels',
+                        onTap: onManageLevels,
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _CreationCardIconButton(
+                        icon: Icons.settings_rounded,
+                        tooltip: 'Settings',
+                        onTap: onSettings,
+                      ),
+                    ),
+                    if (onCommentsTap != null)
+                      Positioned(
+                        top: 8,
+                        right: 46,
+                        child: _CreationCardIconButton(
+                          icon: Icons.chat_bubble_outline_rounded,
+                          tooltip: 'Comments',
+                          onTap: onCommentsTap!,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        course.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.nunito(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: const Color(0xFF243A1B),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        course.description.isEmpty
+                            ? 'Course made from your levels'
+                            : course.description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.nunito(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF667064),
+                        ),
+                      ),
+                      const Spacer(),
+                      Wrap(
+                        spacing: 7,
+                        runSpacing: 7,
+                        children: [
+                          const _CreationStatusChip(
+                            label: 'COURSE',
+                            color: color,
+                          ),
+                          _CreationStatusChip(
+                            label:
+                                '$levelsCount LEVEL${levelsCount == 1 ? '' : 'S'}',
+                            color: const Color(0xFFFFA726),
+                          ),
+                          if (course.commentCount > 0)
+                            _CreationStatusChip(
+                              label: '${course.commentCount} COMMENTS',
+                              color: const Color(0xFF4A90E2),
+                            ),
+                          _CreationStatusChip(
+                            label: course.isPublic ? 'PUBLIC' : 'DRAFT',
+                            color: course.isPublic
+                                ? const Color(0xFF4DB6AC)
+                                : const Color(0xFF9E9E9E),
+                          ),
+                          _CreationStatusChip(
+                            label: switch (course.verificationStatus) {
+                              'approved' => 'VERIFIED',
+                              'pending' => 'PENDING',
+                              'rejected' => 'REJECTED',
+                              _ => 'UNVERIFIED',
+                            },
+                            color: switch (course.verificationStatus) {
+                              'approved' => const Color(0xFF4DB6AC),
+                              'pending' => const Color(0xFFFFA726),
+                              'rejected' => const Color(0xFFE53935),
+                              _ => const Color(0xFF9E9E9E),
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourseVerificationStatusPanel extends StatelessWidget {
+  const _CourseVerificationStatusPanel({required this.course});
+
+  final AdminCourse course;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = course.verificationStatus;
+    final color = switch (status) {
+      'approved' => const Color(0xFF4DB6AC),
+      'pending' => const Color(0xFFFFA726),
+      'rejected' => const Color(0xFFE53935),
+      _ => const Color(0xFF9E9E9E),
+    };
+    final message = switch (status) {
+      'approved' => 'Verified. It can appear in the main Courses section.',
+      'pending' => 'Verification request pending admin review.',
+      'rejected' =>
+        course.verificationRejectedReason.isEmpty
+            ? 'Verification was rejected. You can reapply.'
+            : 'Rejected: ${course.verificationRejectedReason}',
+      _ =>
+        course.isPublic
+            ? 'Not verified. You can request verification.'
+            : 'Make the course public before requesting verification.',
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.verified_outlined, color: color, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: GoogleFonts.nunito(
+                color: const Color(0xFF45523F),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MyCreationCourseLevelsPage extends StatefulWidget {
+  const _MyCreationCourseLevelsPage({
+    required this.session,
+    required this.course,
+    required this.courseLevels,
+    required this.allLevels,
+  });
+
+  final AuthSession session;
+  final AdminCourse course;
+  final List<SavedBuilderProject> courseLevels;
+  final List<SavedBuilderProject> allLevels;
+
+  @override
+  State<_MyCreationCourseLevelsPage> createState() =>
+      _MyCreationCourseLevelsPageState();
+}
+
+class _MyCreationCourseLevelsPageState
+    extends State<_MyCreationCourseLevelsPage> {
+  late List<SavedBuilderProject> _levels;
+  late List<SavedBuilderProject> _allLevels;
+  bool _isSaving = false;
+  String? _selectedLevelId;
+
+  @override
+  void initState() {
+    super.initState();
+    _levels = List<SavedBuilderProject>.from(widget.courseLevels);
+    _allLevels = List<SavedBuilderProject>.from(widget.allLevels);
+  }
+
+  String get _courseKey {
+    return widget.course.courseId.isNotEmpty
+        ? widget.course.courseId
+        : widget.course.id;
+  }
+
+  List<SavedBuilderProject> get _availableLevels {
+    final selectedIds = _levels.map((level) => level.id).toSet();
+    final available = _allLevels
+        .where(
+          (level) =>
+              !selectedIds.contains(level.id) && level.courseId.trim().isEmpty,
+        )
+        .toList();
+
+    available.sort((a, b) => a.title.compareTo(b.title));
+    return available;
+  }
+
+  Future<void> _addSelectedLevel() async {
+    if (_isSaving || _selectedLevelId == null) {
+      return;
+    }
+
+    SavedBuilderProject? selected;
+    for (final level in _availableLevels) {
+      if (level.id == _selectedLevelId) {
+        selected = level;
+        break;
+      }
+    }
+
+    if (selected == null) {
+      return;
+    }
+
+    final selectedLevel = selected;
+    final nextOrder = _levels.length + 1;
+    final assignedLevel = selectedLevel.copyWith(
+      courseId: _courseKey,
+      orderInCourse: nextOrder,
+    );
+    final previousLevels = List<SavedBuilderProject>.from(_levels);
+    final previousAllLevels = List<SavedBuilderProject>.from(_allLevels);
+    final previousSelected = _selectedLevelId;
+
+    setState(() {
+      _levels.add(assignedLevel);
+      _allLevels = _allLevels
+          .map((level) => level.id == assignedLevel.id ? assignedLevel : level)
+          .toList();
+      _selectedLevelId = null;
+      _isSaving = true;
+    });
+
+    final result = await ApiService.updateBuilderProjectSettings(
+      authToken: widget.session.token,
+      projectId: selectedLevel.id,
+      settingsJson: {'courseId': _courseKey, 'orderInCourse': nextOrder},
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (result['success'] != true) {
+        _levels = previousLevels;
+        _allLevels = previousAllLevels;
+        _selectedLevelId = previousSelected;
+      }
+      _isSaving = false;
+    });
+
+    if (result['success'] == true) {
+      _showMessage('Level added to course.');
+    } else {
+      _showMessage(result['message']?.toString() ?? 'Failed to add level.');
+    }
+  }
+
+  Future<void> _removeLevel(SavedBuilderProject level) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final previousLevels = List<SavedBuilderProject>.from(_levels);
+    final previousAllLevels = List<SavedBuilderProject>.from(_allLevels);
+    final unassignedLevel = level.copyWith(courseId: '', orderInCourse: 0);
+    setState(() {
+      _levels.removeWhere((item) => item.id == level.id);
+      _allLevels = _allLevels
+          .map((item) => item.id == level.id ? unassignedLevel : item)
+          .toList();
+      _isSaving = true;
+    });
+
+    final result = await ApiService.updateBuilderProjectSettings(
+      authToken: widget.session.token,
+      projectId: level.id,
+      settingsJson: {'courseId': '', 'orderInCourse': 0},
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (result['success'] != true) {
+      setState(() {
+        _levels = previousLevels;
+        _allLevels = previousAllLevels;
+        _isSaving = false;
+      });
+      _showMessage(result['message']?.toString() ?? 'Failed to remove level.');
+      return;
+    }
+
+    final savedOrder = await _persistCurrentOrder();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() => _isSaving = false);
+    if (savedOrder) {
+      _showMessage('Level removed from this course.');
+    }
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    if (_isSaving) {
+      return;
+    }
+
+    final previousLevels = List<SavedBuilderProject>.from(_levels);
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final item = _levels.removeAt(oldIndex);
+      _levels.insert(newIndex, item);
+      _levels = [
+        for (var index = 0; index < _levels.length; index++)
+          _levels[index].copyWith(orderInCourse: index + 1),
+      ];
+      _isSaving = true;
+    });
+
+    final savedOrder = await _persistCurrentOrder();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      if (!savedOrder) {
+        _levels = previousLevels;
+      }
+      _isSaving = false;
+    });
+
+    if (savedOrder) {
+      _showMessage('Level order saved.');
+    }
+  }
+
+  Future<bool> _persistCurrentOrder() async {
+    for (var index = 0; index < _levels.length; index++) {
+      final level = _levels[index];
+      final result = await ApiService.updateBuilderProjectSettings(
+        authToken: widget.session.token,
+        projectId: level.id,
+        settingsJson: {'courseId': _courseKey, 'orderInCourse': index + 1},
+      );
+
+      if (!mounted) {
+        return false;
+      }
+
+      if (result['success'] != true) {
+        _showMessage(
+          result['message']?.toString() ?? 'Failed to save course levels.',
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+
+  Widget _buildAddLevelPanel() {
+    final availableLevels = _availableLevels;
+    final selectedLevelId =
+        availableLevels.any((level) => level.id == _selectedLevelId)
+        ? _selectedLevelId
+        : null;
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                initialValue: selectedLevelId,
+                decoration: const InputDecoration(
+                  labelText: 'Add level',
+                  border: OutlineInputBorder(),
+                ),
+                items: availableLevels.map((level) {
+                  return DropdownMenuItem(
+                    value: level.id,
+                    child: Text(level.title, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: availableLevels.isEmpty
+                    ? null
+                    : (value) {
+                        setState(() => _selectedLevelId = value);
+                      },
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: _isSaving || selectedLevelId == null
+                  ? null
+                  : _addSelectedLevel,
+              icon: const Icon(Icons.playlist_add_rounded),
+              label: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.course.title} - Levels'),
+        actions: [
+          if (_isSaving)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildAddLevelPanel(),
+          Expanded(
+            child: _levels.isEmpty
+                ? Center(
+                    child: Text(
+                      'This course has no levels yet.',
+                      style: GoogleFonts.nunito(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF667064),
+                      ),
+                    ),
+                  )
+                : ReorderableListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    buildDefaultDragHandles: false,
+                    itemCount: _levels.length,
+                    onReorder: _onReorder,
+                    itemBuilder: (context, index) {
+                      final level = _levels[index];
+                      return Card(
+                        key: ValueKey(level.id),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: CircleAvatar(child: Text('${index + 1}')),
+                          title: Text(level.title),
+                          subtitle: Text(
+                            '${level.builderType} - ${level.difficulty}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Remove from course',
+                                onPressed: _isSaving
+                                    ? null
+                                    : () => _removeLevel(level),
+                                icon: const Icon(Icons.remove_circle_outline),
+                              ),
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: Icon(Icons.drag_handle),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -4407,17 +6060,23 @@ class _SettingsTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final IconData icon;
+  final int? minLines;
+  final int? maxLines;
 
   const _SettingsTextField({
     required this.controller,
     required this.label,
     required this.icon,
+    this.minLines,
+    this.maxLines,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      minLines: minLines,
+      maxLines: maxLines ?? 1,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
@@ -4600,6 +6259,8 @@ class _DashboardDiscoverMessage extends StatelessWidget {
 class _CourseData {
   final String publicCourseId;
   final String publicCourseKey;
+  final String courseDeliveryType;
+  final String legacyPageKey;
   final String topic;
   final String level;
   final String title;
@@ -4611,10 +6272,19 @@ class _CourseData {
   final double coverFrameOffsetX;
   final double coverFrameOffsetY;
   final String description;
+  final String creatorName;
+  final bool isVerified;
+  final double ratingAverage;
+  final int ratingCount;
+  final int commentCount;
+  final int? currentUserRating;
+  final List<BuilderProjectComment> comments;
 
   const _CourseData({
     this.publicCourseId = '',
     this.publicCourseKey = '',
+    this.courseDeliveryType = 'builder_levels',
+    this.legacyPageKey = '',
     required this.topic,
     required this.level,
     required this.title,
@@ -4626,41 +6296,136 @@ class _CourseData {
     this.coverFrameOffsetX = 0,
     this.coverFrameOffsetY = 0,
     this.description = 'Start this course to learn exciting coding concepts!',
+    this.creatorName = '',
+    this.isVerified = false,
+    this.ratingAverage = 0,
+    this.ratingCount = 0,
+    this.commentCount = 0,
+    this.currentUserRating,
+    this.comments = const <BuilderProjectComment>[],
   });
 
   factory _CourseData.fromPublicCourseJson(Map<String, dynamic> json) {
+    final courseKey = json['courseId']?.toString() ?? '';
+    final legacyMetadata = legacyPublicCourseMetadataForCourseId(courseKey);
     final title =
         json['courseName']?.toString() ??
         json['title']?.toString() ??
+        legacyMetadata?.title ??
         'Untitled Course';
     final category = json['category']?.toString().trim();
+    final createdBy = json['createdBy'];
+    final createdByMap = createdBy is Map
+        ? Map<String, dynamic>.from(createdBy)
+        : const <String, dynamic>{};
+    final creatorName =
+        createdByMap['name']?.toString() ??
+        createdByMap['email']?.toString() ??
+        '';
+    final isVerified = json['verificationStatus']?.toString() == 'approved';
     final topic =
-        category == 'Coding' ||
-            category == 'Digital Literacy' ||
-            category == 'CS Topics'
-        ? category!
-        : 'Coding';
+        legacyMetadata?.topic ??
+        (category == 'Coding' ||
+                category == 'Digital Literacy' ||
+                category == 'CS Topics'
+            ? category!
+            : 'Coding');
 
     return _CourseData(
       publicCourseId: json['_id']?.toString() ?? json['id']?.toString() ?? '',
-      publicCourseKey: json['courseId']?.toString() ?? '',
+      publicCourseKey: courseKey,
+      courseDeliveryType:
+          json['courseDeliveryType']?.toString() ??
+          (legacyMetadata != null ? 'legacy_page' : 'builder_levels'),
+      legacyPageKey:
+          json['legacyPageKey']?.toString() ??
+          legacyMetadata?.legacyPageKey ??
+          '',
       topic: topic,
-      level: _normalizeLevel(json['difficulty']?.toString()),
+      level:
+          legacyMetadata?.level ??
+          _normalizeLevel(json['difficulty']?.toString()),
       title: title,
-      subtitle: json['subtitle']?.toString() ?? 'Admin Course',
-      color: const Color(0xFF4A90C4),
-      imagePath: 'assets/images/course1.jpg',
+      subtitle:
+          json['subtitle']?.toString() ??
+          legacyMetadata?.subtitle ??
+          (creatorName.isEmpty
+              ? 'Admin Course'
+              : isVerified
+              ? 'Created by user: $creatorName'
+              : 'Community Course by $creatorName'),
+      color: legacyMetadata?.color ?? const Color(0xFF4A90C4),
+      imagePath: legacyMetadata?.imagePath ?? 'assets/images/course1.jpg',
       imageBase64: json['courseImageBase64']?.toString(),
       coverFrameScale: _readCourseDouble(json['coverFrameScale'], fallback: 1),
       coverFrameOffsetX: _readCourseDouble(json['coverFrameOffsetX']),
       coverFrameOffsetY: _readCourseDouble(json['coverFrameOffsetY']),
       description:
           json['description']?.toString() ??
+          legacyMetadata?.description ??
           'Open this course to play the levels built by your teacher.',
+      creatorName: creatorName,
+      isVerified: isVerified,
+      ratingAverage: _readCourseDouble(json['ratingAverage']),
+      ratingCount: _readCourseInt(json['ratingCount']),
+      commentCount: _readCourseInt(json['commentCount']),
+      currentUserRating: _readNullableCourseInt(json['currentUserRating']),
+      comments: _readCourseComments(json['comments']),
+    );
+  }
+
+  factory _CourseData.fromLegacyMetadata(LegacyPublicCourseMetadata metadata) {
+    return _CourseData(
+      publicCourseId: metadata.courseId,
+      publicCourseKey: metadata.courseId,
+      courseDeliveryType: 'legacy_page',
+      legacyPageKey: metadata.legacyPageKey,
+      topic: metadata.topic,
+      level: metadata.level,
+      title: metadata.title,
+      subtitle: metadata.subtitle,
+      color: metadata.color,
+      imagePath: metadata.imagePath,
+      description: metadata.description,
     );
   }
 
   bool get isPublicCourse => publicCourseId.isNotEmpty;
+  bool get isLegacyPublicCourse =>
+      isPublicCourse && courseDeliveryType == 'legacy_page';
+
+  _CourseData copyWithEngagement({
+    double? ratingAverage,
+    int? ratingCount,
+    int? commentCount,
+    int? currentUserRating,
+    List<BuilderProjectComment>? comments,
+  }) {
+    return _CourseData(
+      publicCourseId: publicCourseId,
+      publicCourseKey: publicCourseKey,
+      courseDeliveryType: courseDeliveryType,
+      legacyPageKey: legacyPageKey,
+      topic: topic,
+      level: level,
+      title: title,
+      subtitle: subtitle,
+      color: color,
+      imagePath: imagePath,
+      imageBase64: imageBase64,
+      coverFrameScale: coverFrameScale,
+      coverFrameOffsetX: coverFrameOffsetX,
+      coverFrameOffsetY: coverFrameOffsetY,
+      description: description,
+      creatorName: creatorName,
+      isVerified: isVerified,
+      ratingAverage: ratingAverage ?? this.ratingAverage,
+      ratingCount: ratingCount ?? this.ratingCount,
+      commentCount: commentCount ?? this.commentCount,
+      currentUserRating: currentUserRating ?? this.currentUserRating,
+      comments: comments ?? this.comments,
+    );
+  }
 
   static String _normalizeLevel(String? raw) {
     switch (raw?.toLowerCase()) {
@@ -4685,12 +6450,379 @@ class _CourseData {
     }
     return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
+
+  static int _readCourseInt(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static int? _readNullableCourseInt(Object? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value.toString());
+  }
+
+  static List<BuilderProjectComment> _readCourseComments(Object? value) {
+    if (value is! List) {
+      return const <BuilderProjectComment>[];
+    }
+    return value
+        .whereType<Map>()
+        .map(
+          (item) =>
+              BuilderProjectComment.fromJson(Map<String, dynamic>.from(item)),
+        )
+        .toList(growable: false);
+  }
+}
+
+typedef _CourseCommentSubmitter = Future<_CourseData?> Function(String message);
+typedef _CourseRatingSubmitter = Future<_CourseData?> Function(int rating);
+typedef _CourseCommentDeleteHandler =
+    Future<_CourseData?> Function(BuilderProjectComment comment);
+
+class _CourseCommentsDialog extends StatefulWidget {
+  const _CourseCommentsDialog({
+    required this.course,
+    required this.currentUser,
+    required this.onSubmitComment,
+    this.onSubmitRating,
+    this.onDeleteComment,
+  });
+
+  final _CourseData course;
+  final AuthUser currentUser;
+  final _CourseCommentSubmitter onSubmitComment;
+  final _CourseRatingSubmitter? onSubmitRating;
+  final _CourseCommentDeleteHandler? onDeleteComment;
+
+  @override
+  State<_CourseCommentsDialog> createState() => _CourseCommentsDialogState();
+}
+
+class _CourseCommentsDialogState extends State<_CourseCommentsDialog> {
+  late _CourseData _course;
+  late final TextEditingController _commentController;
+  int _selectedRating = 0;
+  bool _isSubmittingComment = false;
+  bool _isSubmittingRating = false;
+  final Set<String> _deletingCommentIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _course = widget.course;
+    _commentController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitComment() async {
+    final message = _commentController.text.trim();
+    if (message.isEmpty || _isSubmittingComment) {
+      return;
+    }
+
+    setState(() => _isSubmittingComment = true);
+    final updatedCourse = await widget.onSubmitComment(message);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isSubmittingComment = false;
+      if (updatedCourse != null) {
+        _course = updatedCourse;
+        _commentController.clear();
+      }
+    });
+  }
+
+  Future<void> _submitRating() async {
+    if (_selectedRating == 0 ||
+        _isSubmittingRating ||
+        widget.onSubmitRating == null) {
+      return;
+    }
+
+    setState(() => _isSubmittingRating = true);
+    final updatedCourse = await widget.onSubmitRating!(_selectedRating);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isSubmittingRating = false;
+      if (updatedCourse != null) {
+        _course = updatedCourse;
+      }
+    });
+  }
+
+  Future<void> _deleteComment(BuilderProjectComment comment) async {
+    if (comment.id.isEmpty ||
+        _deletingCommentIds.contains(comment.id) ||
+        widget.onDeleteComment == null) {
+      return;
+    }
+
+    setState(() => _deletingCommentIds.add(comment.id));
+    final updatedCourse = await widget.onDeleteComment!(comment);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _deletingCommentIds.remove(comment.id);
+      if (updatedCourse != null) {
+        _course = updatedCourse;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final comments = _course.comments;
+    final canRate =
+        widget.onSubmitRating != null && _course.currentUserRating == null;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      child: SizedBox(
+        width: 620,
+        height: 700,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 14, 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _course.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.nunito(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF243A1B),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(_course),
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close',
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Row(
+                children: [
+                  _ChallengeStatPill(
+                    icon: Icons.chat_bubble_outline_rounded,
+                    label: '${_course.commentCount} comments',
+                    color: const Color(0xFF4A90E2),
+                  ),
+                  const SizedBox(width: 10),
+                  _ChallengeStatPill(
+                    icon: Icons.star_rounded,
+                    label: _course.ratingCount == 0
+                        ? 'New'
+                        : '${_course.ratingAverage.toStringAsFixed(1)} (${_course.ratingCount})',
+                    color: const Color(0xFFF59E0B),
+                  ),
+                ],
+              ),
+            ),
+            if (canRate)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                child: Row(
+                  children: [
+                    ...List.generate(5, (index) {
+                      final value = index + 1;
+                      final selected = value <= _selectedRating;
+                      return IconButton(
+                        tooltip: '$value star${value == 1 ? '' : 's'}',
+                        onPressed: _isSubmittingRating
+                            ? null
+                            : () => setState(() => _selectedRating = value),
+                        icon: Icon(
+                          selected
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          color: const Color(0xFFF59E0B),
+                        ),
+                      );
+                    }),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: _selectedRating == 0 || _isSubmittingRating
+                          ? null
+                          : _submitRating,
+                      child: _isSubmittingRating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Rate'),
+                    ),
+                  ],
+                ),
+              ),
+            const Divider(height: 22),
+            Expanded(
+              child: comments.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No comments yet.',
+                        style: GoogleFonts.nunito(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF667064),
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 14),
+                      itemCount: comments.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final comment = comments[index];
+                        final isDeleting = _deletingCommentIds.contains(
+                          comment.id,
+                        );
+                        final canDelete =
+                            widget.onDeleteComment != null &&
+                            comment.id.isNotEmpty;
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFFCF5),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFE7E5D4)),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        comment.userId == widget.currentUser.id
+                                            ? '${comment.userName} (You)'
+                                            : comment.userName,
+                                        style: GoogleFonts.nunito(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w900,
+                                          color: const Color(0xFF243A1B),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        comment.message,
+                                        style: GoogleFonts.nunito(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: const Color(0xFF475569),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (canDelete)
+                                  IconButton(
+                                    tooltip: 'Delete comment',
+                                    onPressed: isDeleting
+                                        ? null
+                                        : () => _deleteComment(comment),
+                                    icon: isDeleting
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.delete_outline_rounded,
+                                            color: Color(0xFFE53935),
+                                          ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 12, 22, 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: 'Share a comment about this course...',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton.icon(
+                    onPressed: _isSubmittingComment ? null : _submitComment,
+                    icon: _isSubmittingComment
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send_rounded),
+                    label: const Text('Post'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _CourseCard extends StatefulWidget {
   final AuthSession session;
   final _CourseData course;
-  const _CourseCard({required this.session, required this.course});
+  final VoidCallback? onCommentsTap;
+  const _CourseCard({
+    required this.session,
+    required this.course,
+    this.onCommentsTap,
+  });
 
   @override
   State<_CourseCard> createState() => _CourseCardState();
@@ -4706,9 +6838,21 @@ class _CourseCardState extends State<_CourseCard> {
     setState(() => _hovered = value);
   }
 
-  void _showCourseDialog(BuildContext context) {
+  Future<void> _showCourseDialog() async {
+    if (widget.course.isPublicCourse) {
+      await ApiService.trackPublicCourseEvent(
+        authToken: widget.session.token,
+        courseId: widget.course.publicCourseKey.isNotEmpty
+            ? widget.course.publicCourseKey
+            : widget.course.publicCourseId,
+        eventType: 'click',
+      );
+    }
+    if (!mounted) {
+      return;
+    }
     showDialog(
-      context: context,
+      context: this.context,
       builder: (ctx) =>
           _CourseDialog(session: widget.session, course: widget.course),
     );
@@ -4731,7 +6875,7 @@ class _CourseCardState extends State<_CourseCard> {
       onEnter: (_) => _setHovered(true),
       onExit: (_) => _setHovered(false),
       child: GestureDetector(
-        onTap: () => _showCourseDialog(context),
+        onTap: _showCourseDialog,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           width: 220,
@@ -4878,6 +7022,39 @@ class _CourseCardState extends State<_CourseCard> {
                         fontSize: 12,
                         color: const Color(0xFF888888),
                       ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        if (widget.onCommentsTap != null)
+                          _ChallengeCommentButton(
+                            count: widget.course.commentCount,
+                            onTap: widget.onCommentsTap!,
+                          ),
+                        if (widget.onCommentsTap != null)
+                          const SizedBox(width: 8),
+                        if (widget.onCommentsTap != null)
+                          Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: const Color(0xFFF59E0B),
+                          ),
+                        if (widget.onCommentsTap != null)
+                          const SizedBox(width: 2),
+                        if (widget.onCommentsTap != null)
+                          Text(
+                            widget.course.ratingCount == 0
+                                ? 'New'
+                                : widget.course.ratingAverage.toStringAsFixed(
+                                    1,
+                                  ),
+                            style: GoogleFonts.montserrat(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFFF59E0B),
+                            ),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 8),
                     Container(
@@ -5078,19 +7255,17 @@ class _CourseDialogState extends State<_CourseDialog> {
   bool _isOpeningCourse = false;
   // Add more screenshot paths per course if you have them
   List<String> get _screenshots => [widget.course.imagePath];
-  Widget? _getGamePage(String title) {
-    switch (title) {
-      case 'CodeMonkey Jr.':
+  Widget? _getGamePage(String legacyPageKey) {
+    switch (legacyPageKey) {
+      case 'code_monkey_jr':
         return const WorldMapPage();
-      case 'Linus the Lemur':
+      case 'linus_the_lemur':
         return null; // replace with LinusGamePage() when ready
-      case 'Coding Adventure':
-        return null; // replace with CodingAdventurePage() when ready
-      case 'Digital Literacy':
+      case 'digital_literacy':
         return const DigitalLiteracyPage();
-      case 'Data is Everywhere':
+      case 'data_is_everywhere':
         return const DataCoursePage();
-      case 'Coding Chatbots':
+      case 'coding_chatbots':
         return const CodeMonkeyScratchPage();
       default:
         return null;
@@ -5102,7 +7277,7 @@ class _CourseDialogState extends State<_CourseDialog> {
       return;
     }
 
-    if (!widget.course.isPublicCourse) {
+    if (widget.course.isLegacyPublicCourse) {
       _openLegacyCourse();
       return;
     }
@@ -5149,25 +7324,39 @@ class _CourseDialogState extends State<_CourseDialog> {
 
   void _openLegacyCourse() {
     final navigator = Navigator.of(context);
-    final page = _getGamePage(widget.course.title);
+    final page = _getGamePage(widget.course.legacyPageKey);
     if (page == null) {
       navigator.pop();
       return;
     }
 
-    final routeName = switch (widget.course.title) {
-      'Data is Everywhere' => 'data_course_hub',
-      'Coding Chatbots' => 'ai_hoot_hub',
+    final routeName = switch (widget.course.legacyPageKey) {
+      'code_monkey_jr' => 'code_monkey_jr_hub',
+      'data_is_everywhere' => 'data_course_hub',
+      'coding_chatbots' => 'ai_hoot_hub',
       _ => 'digital_literacy_hub',
     };
 
-    navigator.pop();
-    navigator.push(
-      MaterialPageRoute(
-        settings: RouteSettings(name: routeName),
-        builder: (_) => page,
-      ),
-    );
+    Future<void> openRoute() async {
+      navigator.pop();
+      navigator.push(
+        MaterialPageRoute(
+          settings: RouteSettings(name: routeName),
+          builder: (_) => page,
+        ),
+      );
+    }
+
+    if (!widget.course.isPublicCourse) {
+      openRoute();
+      return;
+    }
+
+    ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: _courseLookupId,
+      eventType: 'level_play',
+    ).whenComplete(openRoute);
   }
 
   Future<List<SavedBuilderProject>> _loadPublicCourseLevels() async {
@@ -5221,8 +7410,16 @@ class _CourseDialogState extends State<_CourseDialog> {
     );
   }
 
-  void _openPublicCourseLevel(SavedBuilderProject level) {
+  Future<void> _openPublicCourseLevel(SavedBuilderProject level) async {
     final navigator = Navigator.of(context);
+    await ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: _courseLookupId,
+      eventType: 'level_play',
+    );
+    if (!mounted) {
+      return;
+    }
     final routeName = level.isTopView
         ? AppRoutes.topViewBuilder
         : level.isScratch
@@ -5237,6 +7434,7 @@ class _CourseDialogState extends State<_CourseDialog> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            showRatingOnLeave: false,
             courseProgressCourseId: _courseLookupId,
             courseProgressLevelId: level.id,
           )
@@ -5247,6 +7445,7 @@ class _CourseDialogState extends State<_CourseDialog> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            showRatingOnLeave: false,
             courseProgressCourseId: _courseLookupId,
             courseProgressLevelId: level.id,
           )
@@ -5257,6 +7456,7 @@ class _CourseDialogState extends State<_CourseDialog> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            showRatingOnLeave: false,
             courseProgressCourseId: _courseLookupId,
             courseProgressLevelId: level.id,
           )
@@ -5264,6 +7464,7 @@ class _CourseDialogState extends State<_CourseDialog> {
             session: widget.session,
             projectId: level.id,
             initialTitle: level.title,
+            showRatingOnLeave: false,
             courseProgressCourseId: _courseLookupId,
             courseProgressLevelId: level.id,
           );
@@ -5604,10 +7805,30 @@ class _DashboardPublicCourseLevelsPageState
   }
 
   Future<void> _openLevel(SavedBuilderProject level) async {
+    await ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: widget.course.publicCourseKey.isNotEmpty
+          ? widget.course.publicCourseKey
+          : widget.course.publicCourseId,
+      eventType: 'level_play',
+    );
+    if (!mounted) {
+      return;
+    }
+    await ApiService.incrementBuilderProjectPlayCount(
+      authToken: widget.session.token,
+      projectId: level.id,
+    );
+    if (!mounted) {
+      return;
+    }
+
     final routeName = level.isTopView
         ? AppRoutes.topViewBuilder
         : level.isScratch
         ? AppRoutes.scratchBuilder
+        : level.isFourthDemo
+        ? AppRoutes.fourthDemoBuilder
         : AppRoutes.builderPlay;
     final routeData = level.isTopView
         ? TopViewBuilderRouteData(
@@ -5616,6 +7837,7 @@ class _DashboardPublicCourseLevelsPageState
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            showRatingOnLeave: false,
           )
         : level.isScratch
         ? ScratchBuilderRouteData(
@@ -5624,14 +7846,28 @@ class _DashboardPublicCourseLevelsPageState
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: level.title,
+            showRatingOnLeave: false,
+          )
+        : level.isFourthDemo
+        ? FourthDemoBuilderRouteData(
+            session: widget.session,
+            initialProjectId: level.id,
+            allowPublishedAccess: true,
+            playMode: true,
+            initialTitle: level.title,
+            showRatingOnLeave: false,
           )
         : BuilderPlayRouteData(
             session: widget.session,
             projectId: level.id,
             initialTitle: level.title,
+            showRatingOnLeave: false,
           );
 
     await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+    if (mounted) {
+      await _loadLevels();
+    }
   }
 
   @override

@@ -14,6 +14,13 @@ router.get('/assets/:id', uploadedAssetController.getAssetMetadata);
 router.put('/assets/:id', uploadedAssetController.updateAsset);
 router.delete('/assets/:id', uploadedAssetController.deleteAsset);
 router.post('/projects', builderController.createProject);
+router.post('/projects/:id/play', builderController.incrementProjectPlayCount);
+router.post('/projects/:id/comments', builderController.addProjectComment);
+router.delete(
+  '/projects/:id/comments/:commentId',
+  builderController.deleteProjectComment
+);
+router.post('/projects/:id/rating', builderController.rateProject);
 router.patch('/projects/:id/settings', builderController.updateProjectSettings);
 router.put('/projects/:id', builderController.updateProject);
 router.delete('/projects/:id', builderController.deleteProject);

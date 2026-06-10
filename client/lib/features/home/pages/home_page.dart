@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../auth/pages/student_account_page.dart';
+import 'package:client/features/home/pages/gender_page.dart';
 import '../../auth/pages/sorry_page.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -339,7 +339,7 @@ class _HomeAgePageState extends State<HomeAgePage>
                                             context,
                                             MaterialPageRoute(
                                               builder: (_) =>
-                                                  const StudentAccountPage(),
+                                                  HomeGenderPage(age: _age),
                                             ),
                                           );
                                         } else {

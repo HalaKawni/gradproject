@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'email_verification_page.dart';
+import '../models/child_signup_profile.dart';
 import '../services/auth_service.dart';
 import '../services/google_auth_service.dart';
 import '../widgets/google_sign_in_button_stub.dart'
@@ -18,7 +19,13 @@ import 'package:easy_localization/easy_localization.dart';
 
 class StudentAccountPage extends StatefulWidget {
   final String? classroomCode;
-  const StudentAccountPage({super.key, this.classroomCode});
+  final ChildSignupProfile? childSignupProfile;
+
+  const StudentAccountPage({
+    super.key,
+    this.classroomCode,
+    this.childSignupProfile,
+  });
 
   @override
   State<StudentAccountPage> createState() => _StudentAccountPageState();
@@ -100,6 +107,8 @@ class _StudentAccountPageState extends State<StudentAccountPage>
         password: _passwordController.text.trim(),
         role: 'child',
         classroomCode: widget.classroomCode,
+        ageGroup: widget.childSignupProfile?.ageGroup,
+        gender: widget.childSignupProfile?.gender,
       );
 
       if (!mounted) return;
@@ -198,6 +207,8 @@ class _StudentAccountPageState extends State<StudentAccountPage>
       final result = await ApiService.loginWithGoogle(
         idToken: GoogleAuthService.idTokenFor(account),
         role: 'child',
+        ageGroup: widget.childSignupProfile?.ageGroup,
+        gender: widget.childSignupProfile?.gender,
       );
 
       if (!mounted) {

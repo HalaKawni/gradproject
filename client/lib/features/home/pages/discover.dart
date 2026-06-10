@@ -96,6 +96,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           )
         : game.isScratch
         ? ScratchBuilderRouteData(
@@ -104,6 +105,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           )
         : game.isFourthDemo
         ? FourthDemoBuilderRouteData(
@@ -112,14 +114,19 @@ class _DiscoverPageState extends State<DiscoverPage> {
             allowPublishedAccess: true,
             playMode: true,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           )
         : BuilderPlayRouteData(
             session: widget.session,
             projectId: game.id,
             initialTitle: game.title,
+            showRatingOnLeave: game.currentUserRating == null,
           );
 
     await Navigator.of(context).pushNamed(routeName, arguments: routeData);
+    if (mounted) {
+      await _loadPublishedGames();
+    }
   }
 
   void _openCourses() {

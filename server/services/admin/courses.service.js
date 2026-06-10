@@ -54,7 +54,26 @@ async function attachCourseStats(courses) {
 exports.getCourses = async () => {
   const courses = await Course.find()
     .populate('createdBy', 'name email role')
+    .populate('verifiedBy', 'name email role')
+    .populate('verificationReviewedBy', 'name email role')
     .sort({ createdAt: -1, courseName: 1 });
+  return attachCourseStats(courses);
+};
+
+exports.getNotifications = async () => {
+  const courses = await Course.find({
+    $or: [
+      { verificationStatus: 'pending' },
+      { hasUnreadUpdateNotification: true },
+    ],
+  })
+    .populate('createdBy', 'name email role')
+    .sort({
+      verificationRequestedAt: -1,
+      lastUpdateNotificationAt: -1,
+      updatedAt: -1,
+    });
+
   return attachCourseStats(courses);
 };
 
@@ -122,6 +141,102 @@ exports.updateCourse = async (id, data, userId) => {
     returnDocument: 'after',
     runValidators: true,
   });
+
+  if (!course) {
+    throw new Error('Course not found');
+  }
+
+  const [courseWithStats] = await attachCourseStats([course]);
+  return courseWithStats;
+};
+
+exports.approveVerification = async (id, adminId) => {
+  const course = await Course.findByIdAndUpdate(
+    id,
+    {
+      verificationStatus: 'approved',
+      verificationReviewedAt: new Date(),
+      verificationReviewedBy: adminId,
+      verificationRejectedReason: '',
+      verifiedAt: new Date(),
+      verifiedBy: adminId,
+      isPublic: true,
+      hasUnreadUpdateNotification: false,
+      lastUpdateNotificationMessage: '',
+    },
+    { returnDocument: 'after', runValidators: true }
+  )
+    .populate('createdBy', 'name email role')
+    .populate('verifiedBy', 'name email role')
+    .populate('verificationReviewedBy', 'name email role');
+
+  if (!course) {
+    throw new Error('Course not found');
+  }
+
+  const [courseWithStats] = await attachCourseStats([course]);
+  return courseWithStats;
+};
+
+exports.rejectVerification = async (id, adminId, reason = '') => {
+  const course = await Course.findByIdAndUpdate(
+    id,
+    {
+      verificationStatus: 'rejected',
+      verificationReviewedAt: new Date(),
+      verificationReviewedBy: adminId,
+      verificationRejectedReason: reason,
+      verifiedAt: null,
+      verifiedBy: null,
+    },
+    { returnDocument: 'after', runValidators: true }
+  )
+    .populate('createdBy', 'name email role')
+    .populate('verificationReviewedBy', 'name email role');
+
+  if (!course) {
+    throw new Error('Course not found');
+  }
+
+  const [courseWithStats] = await attachCourseStats([course]);
+  return courseWithStats;
+};
+
+exports.dismissUpdateNotification = async (id) => {
+  const course = await Course.findByIdAndUpdate(
+    id,
+    {
+      hasUnreadUpdateNotification: false,
+      lastUpdateNotificationMessage: '',
+    },
+    { returnDocument: 'after', runValidators: true }
+  ).populate('createdBy', 'name email role');
+
+  if (!course) {
+    throw new Error('Course not found');
+  }
+
+  const [courseWithStats] = await attachCourseStats([course]);
+  return courseWithStats;
+};
+
+exports.revokeVerification = async (id, adminId) => {
+  const course = await Course.findByIdAndUpdate(
+    id,
+    {
+      verificationStatus: 'none',
+      verificationReviewedAt: new Date(),
+      verificationReviewedBy: adminId,
+      verificationRejectedReason: '',
+      verifiedAt: null,
+      verifiedBy: null,
+      hasUnreadUpdateNotification: false,
+      lastUpdateNotificationMessage: '',
+    },
+    { returnDocument: 'after', runValidators: true }
+  )
+    .populate('createdBy', 'name email role')
+    .populate('verificationReviewedBy', 'name email role');
 
   if (!course) {
     throw new Error('Course not found');

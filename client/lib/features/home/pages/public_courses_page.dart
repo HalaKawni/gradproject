@@ -3,11 +3,16 @@ import 'dart:typed_data';
 
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/aicourse/ai_hoot_page_game.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/datagame/data_course_page.dart';
+import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
+import 'package:client/features/home/models/legacy_public_course_catalog.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
+import 'world_map_page.dart';
 
 class PublicCoursesPage extends StatefulWidget {
   const PublicCoursesPage({super.key, required this.session});
@@ -46,10 +51,12 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
 
     if (result['success'] == true) {
       setState(() {
-        _courses = _parseList(result['data'])
+        _courses = _mergeLegacyPublicCourseFallbacks(
+          _parseList(result['data'])
             .map(_PublicCourse.fromJson)
             .where((course) => course.id.isNotEmpty)
-            .toList();
+            .toList(),
+        );
         _isLoading = false;
       });
       return;
@@ -79,6 +86,23 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
     });
 
     try {
+      await ApiService.trackPublicCourseEvent(
+        authToken: widget.session.token,
+        courseId: _courseLookupId(course),
+        eventType: 'click',
+      );
+      if (course.isLegacyPublicCourse) {
+        await ApiService.trackPublicCourseEvent(
+          authToken: widget.session.token,
+          courseId: _courseLookupId(course),
+          eventType: 'level_play',
+        );
+        if (!mounted) {
+          return;
+        }
+        await _openLegacyCourse(course);
+        return;
+      }
       final levels = await _loadCourseLevels(course);
       if (!mounted) {
         return;
@@ -118,6 +142,61 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
           _openingCourseId = null;
         });
       }
+    }
+  }
+
+  List<_PublicCourse> _mergeLegacyPublicCourseFallbacks(
+    List<_PublicCourse> courses,
+  ) {
+    final merged = List<_PublicCourse>.from(courses);
+    final seenCourseKeys = merged
+        .map((course) => course.courseId.trim())
+        .where((key) => key.isNotEmpty)
+        .toSet();
+
+    for (final metadata in legacyPublicCourseCatalog.values) {
+      if (seenCourseKeys.contains(metadata.courseId)) {
+        continue;
+      }
+      merged.add(_PublicCourse.fromLegacyMetadata(metadata));
+    }
+
+    return merged;
+  }
+
+  Future<void> _openLegacyCourse(_PublicCourse course) async {
+    final page = _legacyCoursePage(course.legacyPageKey);
+    if (!mounted || page == null) {
+      return;
+    }
+
+    final routeName = switch (course.legacyPageKey) {
+      'code_monkey_jr' => 'code_monkey_jr_hub',
+      'data_is_everywhere' => 'data_course_hub',
+      'coding_chatbots' => 'ai_hoot_hub',
+      _ => 'digital_literacy_hub',
+    };
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        settings: RouteSettings(name: routeName),
+        builder: (_) => page,
+      ),
+    );
+  }
+
+  Widget? _legacyCoursePage(String legacyPageKey) {
+    switch (legacyPageKey) {
+      case 'code_monkey_jr':
+        return const WorldMapPage();
+      case 'digital_literacy':
+        return const DigitalLiteracyPage();
+      case 'data_is_everywhere':
+        return const DataCoursePage();
+      case 'coding_chatbots':
+        return const CodeMonkeyScratchPage();
+      default:
+        return null;
     }
   }
 
@@ -177,6 +256,14 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
     SavedBuilderProject level, {
     required _PublicCourse course,
   }) async {
+    await ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: _courseLookupId(course),
+      eventType: 'level_play',
+    );
+    if (!mounted) {
+      return;
+    }
     final routeName = level.isTopView
         ? AppRoutes.topViewBuilder
         : level.isScratch
@@ -288,13 +375,18 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
                       height: 40,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: FramedImagePreview(
-                          bytes: _safeDecodeBase64(course.imageBase64),
-                          scale: course.coverFrameScale,
-                          offsetX: course.coverFrameOffsetX,
-                          offsetY: course.coverFrameOffsetY,
-                          placeholderIcon: Icons.menu_book_outlined,
-                        ),
+                        child: course.imageBase64 == null
+                            ? Image.asset(
+                                course.imagePath,
+                                fit: BoxFit.cover,
+                              )
+                            : FramedImagePreview(
+                                bytes: _safeDecodeBase64(course.imageBase64),
+                                scale: course.coverFrameScale,
+                                offsetX: course.coverFrameOffsetX,
+                                offsetY: course.coverFrameOffsetY,
+                                placeholderIcon: Icons.menu_book_outlined,
+                              ),
                       ),
                     ),
                     title: Text(course.title),
@@ -413,6 +505,14 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
   }
 
   Future<void> _openLevel(SavedBuilderProject level) async {
+    await ApiService.trackPublicCourseEvent(
+      authToken: widget.session.token,
+      courseId: _courseLookupId,
+      eventType: 'level_play',
+    );
+    if (!mounted) {
+      return;
+    }
     final routeName = level.isTopView
         ? AppRoutes.topViewBuilder
         : level.isScratch
@@ -544,8 +644,11 @@ class _PublicCourse {
   const _PublicCourse({
     required this.id,
     required this.courseId,
+    required this.courseDeliveryType,
+    required this.legacyPageKey,
     required this.title,
     required this.description,
+    required this.imagePath,
     this.imageBase64,
     this.coverFrameScale = 1,
     this.coverFrameOffsetX = 0,
@@ -554,26 +657,59 @@ class _PublicCourse {
 
   final String id;
   final String courseId;
+  final String courseDeliveryType;
+  final String legacyPageKey;
   final String title;
   final String description;
+  final String imagePath;
   final String? imageBase64;
   final double coverFrameScale;
   final double coverFrameOffsetX;
   final double coverFrameOffsetY;
 
+  bool get isLegacyPublicCourse => courseDeliveryType == 'legacy_page';
+
   factory _PublicCourse.fromJson(Map<String, dynamic> json) {
+    final courseKey = json['courseId']?.toString() ?? '';
+    final legacyMetadata = legacyPublicCourseMetadataForCourseId(courseKey);
     return _PublicCourse(
       id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
-      courseId: json['courseId']?.toString() ?? '',
+      courseId: courseKey,
+      courseDeliveryType:
+          json['courseDeliveryType']?.toString() ??
+          (legacyMetadata != null ? 'legacy_page' : 'builder_levels'),
+      legacyPageKey:
+          json['legacyPageKey']?.toString() ??
+          legacyMetadata?.legacyPageKey ??
+          '',
       title:
           json['courseName']?.toString() ??
           json['title']?.toString() ??
+          legacyMetadata?.title ??
           'Untitled Course',
-      description: json['description']?.toString() ?? '',
+      description:
+          json['description']?.toString() ??
+          legacyMetadata?.description ??
+          '',
+      imagePath: legacyMetadata?.imagePath ?? 'assets/images/course1.jpg',
       imageBase64: json['courseImageBase64']?.toString(),
       coverFrameScale: _readDouble(json['coverFrameScale'], fallback: 1),
       coverFrameOffsetX: _readDouble(json['coverFrameOffsetX']),
       coverFrameOffsetY: _readDouble(json['coverFrameOffsetY']),
+    );
+  }
+
+  factory _PublicCourse.fromLegacyMetadata(
+    LegacyPublicCourseMetadata metadata,
+  ) {
+    return _PublicCourse(
+      id: metadata.courseId,
+      courseId: metadata.courseId,
+      courseDeliveryType: 'legacy_page',
+      legacyPageKey: metadata.legacyPageKey,
+      title: metadata.title,
+      description: metadata.description,
+      imagePath: metadata.imagePath,
     );
   }
 
