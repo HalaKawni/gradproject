@@ -741,7 +741,7 @@ class _DashboardPageState extends State<DashboardPage> {
           bannerState.legacyResumeUnit ?? 1,
         );
         break;
-      case 'coding_chatbots':
+      case 'AI is a hoot':
         await Navigator.push(
           context,
           MaterialPageRoute(
@@ -770,7 +770,7 @@ class _DashboardPageState extends State<DashboardPage> {
         return const DigitalLiteracyPage();
       case 'data_is_everywhere':
         return const DataCoursePage();
-      case 'coding_chatbots':
+      case 'AI is a hoot':
         return const CodeMonkeyScratchPage();
       default:
         return const WorldMapPage();
@@ -875,7 +875,7 @@ class _DashboardPageState extends State<DashboardPage> {
           totalUnits: totalUnits,
           detailLabel: 'lessons',
         );
-      case 'coding_chatbots':
+      case 'AI is a hoot':
         final currentLevel = _boundedInt(
           _readWelcomeInt(progress['currentLevel'], fallback: 1),
           min: 1,
@@ -2695,7 +2695,7 @@ class _DashboardPageState extends State<DashboardPage> {
     'linus-lemur': 'Linus the Lemur',
     'data-everywhere': 'Data is Everywhere',
     'digital-literacy': 'Digital Literacy',
-    'ai-hoot': 'Coding Chatbots',
+    'ai-hoot': 'AI is a Hoot',
     'scratch-game': 'Coding Chatbots',
   };
 
@@ -8077,7 +8077,7 @@ class _CourseDialogState extends State<_CourseDialog> {
         return const DigitalLiteracyPage();
       case 'data_is_everywhere':
         return const DataCoursePage();
-      case 'coding_chatbots':
+      case 'AI is a hoot':
         return const CodeMonkeyScratchPage();
       default:
         return null;
@@ -8145,7 +8145,7 @@ class _CourseDialogState extends State<_CourseDialog> {
     final routeName = switch (widget.course.legacyPageKey) {
       'code_monkey_jr' => 'code_monkey_jr_hub',
       'data_is_everywhere' => 'data_course_hub',
-      'coding_chatbots' => 'ai_hoot_hub',
+      'AI is a hoot' => 'ai_hoot_hub',
       _ => 'digital_literacy_hub',
     };
 
@@ -8803,21 +8803,21 @@ const Map<String, String> _legacyGameIdByPageKey = <String, String>{
   'code_monkey_jr': 'codemonkey-jr',
   'digital_literacy': 'digital-literacy',
   'data_is_everywhere': 'data-everywhere',
-  'coding_chatbots': 'ai-hoot',
+  'AI is a hoot': 'ai-hoot',
 };
 
 const Map<String, String> _legacyPageKeyByGameId = <String, String>{
   'codemonkey-jr': 'code_monkey_jr',
   'digital-literacy': 'digital_literacy',
   'data-everywhere': 'data_is_everywhere',
-  'ai-hoot': 'coding_chatbots',
+  'ai-hoot': 'AI is a hoot',
 };
 
 const Map<String, int> _legacyCourseUnitTotals = <String, int>{
   'code_monkey_jr': 15,
   'digital_literacy': 3,
   'data_is_everywhere': 2,
-  'coding_chatbots': 9,
+  'AI is a hoot': 9,
 };
 
 class _WelcomeBannerState {
