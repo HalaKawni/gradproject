@@ -13,6 +13,7 @@ enum ArrowDirection { up, down, left, right }
 /// If [targetKey] is null the bubble appears bottom-center above the FAB.
 class HintCard extends StatefulWidget {
   final String hintKey;
+  final String? userScope;
   final GlobalKey? targetKey;
   final ArrowDirection arrowDirection;
   final IconData icon;
@@ -24,6 +25,7 @@ class HintCard extends StatefulWidget {
   const HintCard({
     super.key,
     required this.hintKey,
+    this.userScope,
     this.targetKey,
     this.arrowDirection = ArrowDirection.down,
     required this.icon,
@@ -63,7 +65,10 @@ class _HintCardState extends State<HintCard>
   Future<void> _maybeShow() async {
     if (!mounted) return;
     final dismissed =
-        await OnboardingService.isHintDismissed(widget.hintKey);
+        await OnboardingService.isHintDismissed(
+          widget.hintKey,
+          widget.userScope,
+        );
     if (!mounted || dismissed) return;
     _show();
   }
@@ -78,7 +83,7 @@ class _HintCardState extends State<HintCard>
     await _ctrl.reverse();
     _entry?.remove();
     _entry = null;
-    await OnboardingService.dismissHint(widget.hintKey);
+    await OnboardingService.dismissHint(widget.hintKey, widget.userScope);
     widget.onDismissed?.call();
   }
 

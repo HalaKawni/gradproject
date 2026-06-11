@@ -165,6 +165,8 @@ class _DashboardPageState extends State<DashboardPage> {
   bool _isLoadingWelcomeBanner = true;
   int _welcomeBannerRequestId = 0;
 
+  String get _onboardingUserScope => widget.session.user.id;
+
   @override
   void initState() {
     super.initState();
@@ -184,9 +186,18 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _initCourseHintIndex() async {
-    final b = await OnboardingService.isHintDismissed('dashboard_beginner');
-    final f = await OnboardingService.isHintDismissed('dashboard_filter');
-    final c = await OnboardingService.isHintDismissed('dashboard_courses');
+    final b = await OnboardingService.isHintDismissed(
+      'dashboard_beginner',
+      _onboardingUserScope,
+    );
+    final f = await OnboardingService.isHintDismissed(
+      'dashboard_filter',
+      _onboardingUserScope,
+    );
+    final c = await OnboardingService.isHintDismissed(
+      'dashboard_courses',
+      _onboardingUserScope,
+    );
     if (!mounted) return;
     setState(() {
       _courseHintIndex = b ? (f ? (c ? 3 : 2) : 1) : 0;
@@ -194,7 +205,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _replayHints() async {
-    await OnboardingService.resetAllHints();
+    await OnboardingService.resetAllHints(_onboardingUserScope);
     if (mounted) {
       setState(() {
         _hintsVersion++;
@@ -2123,6 +2134,7 @@ class _DashboardPageState extends State<DashboardPage> {
           HintCard(
             key: ValueKey('dashboard_beginner_$_hintsVersion'),
             hintKey: 'dashboard_beginner',
+            userScope: _onboardingUserScope,
             targetKey: _heroBannerKey,
             arrowDirection: ArrowDirection.up,
             icon: Icons.auto_stories_rounded,
@@ -2135,6 +2147,7 @@ class _DashboardPageState extends State<DashboardPage> {
           HintCard(
             key: ValueKey('dashboard_filter_$_hintsVersion'),
             hintKey: 'dashboard_filter',
+            userScope: _onboardingUserScope,
             targetKey: _filterKey,
             arrowDirection: ArrowDirection.down,
             icon: Icons.tune_rounded,
@@ -2147,6 +2160,7 @@ class _DashboardPageState extends State<DashboardPage> {
           HintCard(
             key: ValueKey('dashboard_courses_$_hintsVersion'),
             hintKey: 'dashboard_courses',
+            userScope: _onboardingUserScope,
             targetKey: _coursesKey,
             arrowDirection: ArrowDirection.down,
             icon: Icons.school_rounded,
@@ -3363,6 +3377,7 @@ class _DashboardPageState extends State<DashboardPage> {
         HintCard(
           key: ValueKey('dashboard_discover_$_hintsVersion'),
           hintKey: 'dashboard_discover',
+          userScope: _onboardingUserScope,
           targetKey: _discoverBannerKey,
           arrowDirection: ArrowDirection.up,
           icon: Icons.explore_rounded,
@@ -3797,6 +3812,7 @@ class _DashboardPageState extends State<DashboardPage> {
         HintCard(
           key: ValueKey('dashboard_creations_$_hintsVersion'),
           hintKey: 'dashboard_creations',
+          userScope: _onboardingUserScope,
           icon: Icons.sports_esports_rounded,
           color: Color(0xFF328CBD),
           title: 'Ready to build your own game?',

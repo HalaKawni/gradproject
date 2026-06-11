@@ -66,29 +66,40 @@ const _kSteps = [
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 class WelcomeWizard extends StatefulWidget {
-  const WelcomeWizard({super.key});
+  const WelcomeWizard({
+    super.key,
+    this.userScope,
+  });
+
+  final String? userScope;
 
   /// Shows the wizard the first time only, then never again.
-  static Future<void> showIfNeeded(BuildContext context) async {
-    final shown = await OnboardingService.hasShownWelcome();
+  static Future<void> showIfNeeded(
+    BuildContext context, {
+    String? userScope,
+  }) async {
+    final shown = await OnboardingService.hasShownWelcome(userScope);
     if (shown || !context.mounted) return;
-    await OnboardingService.markWelcomeShown();
+    await OnboardingService.markWelcomeShown(userScope);
     if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (_) => const WelcomeWizard(),
+      builder: (_) => WelcomeWizard(userScope: userScope),
     );
   }
 
   /// Force-shows the wizard regardless of visit history (e.g. "Replay Tour" button).
-  static void show(BuildContext context) {
+  static void show(
+    BuildContext context, {
+    String? userScope,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.6),
-      builder: (_) => const WelcomeWizard(),
+      builder: (_) => WelcomeWizard(userScope: userScope),
     );
   }
 

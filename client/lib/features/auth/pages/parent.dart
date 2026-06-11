@@ -202,7 +202,7 @@ class _parentAccountPageState extends State<parentAccountPage>
       }
 
       if (result['success'] == true) {
-        _openAuthenticatedSession(result['data']);
+        await _openAuthenticatedSession(result['data']);
       } else {
         setState(() {
           _apiError = result['message']?.toString() ?? 'Google signup failed';
@@ -220,7 +220,7 @@ class _parentAccountPageState extends State<parentAccountPage>
     }
   }
 
-  void _openAuthenticatedSession(dynamic rawData) {
+  Future<void> _openAuthenticatedSession(dynamic rawData) async {
     final session = AuthSession.fromJson(
       rawData is Map ? Map<String, dynamic>.from(rawData) : {},
     );
@@ -229,6 +229,31 @@ class _parentAccountPageState extends State<parentAccountPage>
       throw Exception(
         'Google signup succeeded but no valid session was returned.',
       );
+    }
+
+    await AuthService.saveToken(session.token);
+    await AuthService.saveUser({
+      'id': session.user.id,
+      'name': session.user.name,
+      'email': session.user.email,
+      'role': session.user.role,
+      'ageGroup': session.user.ageGroup,
+      'gender': session.user.gender,
+      'emailVerified': session.user.emailVerified,
+      'authProvider': session.user.authProvider,
+      'authProviders': session.user.authProviders,
+      'lastSignInProvider': session.user.lastSignInProvider,
+      'photoUrl': session.user.photoUrl,
+      'profileAvatarType': session.user.profileAvatarType,
+      'profileAvatarAssetPath': session.user.profileAvatarAssetPath,
+      'profilePhotoBase64': session.user.profilePhotoBase64,
+      'profilePhotoFrameScale': session.user.profilePhotoFrameScale,
+      'profilePhotoFrameOffsetX': session.user.profilePhotoFrameOffsetX,
+      'profilePhotoFrameOffsetY': session.user.profilePhotoFrameOffsetY,
+    });
+
+    if (!mounted) {
+      return;
     }
 
     ScaffoldMessenger.maybeOf(context)?.removeCurrentSnackBar();
