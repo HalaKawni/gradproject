@@ -229,6 +229,7 @@ class _ClassroomPageState extends State<ClassroomPage>
     if (_loading) return const Center(child: CircularProgressIndicator());
     return Row(children: [
       _DesktopSidebar(
+        onBack: () => Navigator.of(context).maybePop(),
         classroomCode: _classroomCode,
         selectedIndex: _desktopSection,
         onSelect: _onDesktopSection,
@@ -252,13 +253,26 @@ class _ClassroomPageState extends State<ClassroomPage>
     ][_desktopSection];
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(padding: const EdgeInsets.fromLTRB(36, 32, 36, 0), child:
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(titles[_desktopSection],
-              style: GoogleFonts.fredoka(fontSize: 28, fontWeight: FontWeight.w700, color: _kInk)),
-          Text(subs[_desktopSection],
-              style: GoogleFonts.fredoka(fontSize: 14, color: _kMuted)),
-        ])),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(36, 32, 36, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              titles[_desktopSection],
+              style: GoogleFonts.fredoka(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: _kInk,
+              ),
+            ),
+            Text(
+              subs[_desktopSection],
+              style: GoogleFonts.fredoka(fontSize: 14, color: _kMuted),
+            ),
+          ],
+        ),
+      ),
       Expanded(child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(36, 20, 36, 48), child: body)),
     ]);
@@ -397,6 +411,27 @@ class _ClassroomPageState extends State<ClassroomPage>
       ])),
       const _CodeyMascot(size: 48),
     ]),
+  );
+
+  Widget _buildBackButton() => GestureDetector(
+    onTap: () => Navigator.of(context).maybePop(),
+    child: Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: _kLine),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Icon(Icons.arrow_back, color: _kInk, size: 20),
+    ),
   );
 
   Widget _buildMobileTabBar() => Container(

@@ -478,11 +478,12 @@ class _PodiumColumn extends StatelessWidget {
 
 // ── _DesktopSidebar ───────────────────────────────────────────────────────────
 class _DesktopSidebar extends StatelessWidget {
+  final VoidCallback onBack;
   final String? classroomCode;
   final int selectedIndex;
   final ValueChanged<int> onSelect;
   final VoidCallback onShare;
-  const _DesktopSidebar({required this.classroomCode, required this.selectedIndex,
+  const _DesktopSidebar({required this.onBack, required this.classroomCode, required this.selectedIndex,
       required this.onSelect, required this.onShare});
 
   static const _items = [
@@ -507,6 +508,24 @@ class _DesktopSidebar extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // brand
           Row(children: [
+            GestureDetector(
+              onTap: onBack,
+              child: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.arrow_back,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
             const _CodeyMascot(size: 42),
             const SizedBox(width: 12),
             RichText(text: TextSpan(
