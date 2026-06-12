@@ -1,5 +1,11 @@
 const BuilderProject = require('../../model/builderProjectModel');
 const uploadedAssetService = require('../uploadedAsset.service');
+const { prepareLocalizedInput } = require('../localizedContent.service');
+
+const LEVEL_LOCALIZATION_CONFIG = {
+  directFields: ['title', 'description'],
+  recursiveFields: ['title', 'description', 'instructions', 'instruction', 'lessonText', 'text', 'content', 'body', 'summary', 'subtitle'],
+};
 
 exports.getLevels = async (query) => {
   const status = query.status;
@@ -48,60 +54,61 @@ async function getNextOrderInCourse(courseId, excludedLevelId) {
 }
 
 exports.updateLevel = async (id, data) => {
+  const localizedData = prepareLocalizedInput(data, LEVEL_LOCALIZATION_CONFIG);
   const update = {};
 
-  if (data.title !== undefined) {
-    update.title = data.title;
+  if (localizedData.title !== undefined) {
+    update.title = localizedData.title;
   }
 
-  if (data.description !== undefined) {
-    update.description = data.description;
+  if (localizedData.description !== undefined) {
+    update.description = localizedData.description;
   }
 
-  if (data.coverImageBase64 !== undefined) {
-    update.coverImageBase64 = data.coverImageBase64;
+  if (localizedData.coverImageBase64 !== undefined) {
+    update.coverImageBase64 = localizedData.coverImageBase64;
   }
 
-  if (data.coverFrameScale !== undefined) {
-    update.coverFrameScale = Number(data.coverFrameScale);
+  if (localizedData.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(localizedData.coverFrameScale);
   }
 
-  if (data.coverFrameOffsetX !== undefined) {
-    update.coverFrameOffsetX = Number(data.coverFrameOffsetX);
+  if (localizedData.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(localizedData.coverFrameOffsetX);
   }
 
-  if (data.coverFrameOffsetY !== undefined) {
-    update.coverFrameOffsetY = Number(data.coverFrameOffsetY);
+  if (localizedData.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(localizedData.coverFrameOffsetY);
   }
 
-  if (data.builderType !== undefined) {
-    update.builderType = data.builderType;
+  if (localizedData.builderType !== undefined) {
+    update.builderType = localizedData.builderType;
   }
 
-  if (data.difficulty !== undefined) {
-    update.difficulty = data.difficulty;
+  if (localizedData.difficulty !== undefined) {
+    update.difficulty = localizedData.difficulty;
   }
 
-  if (data.status !== undefined) {
-    update.status = data.status;
+  if (localizedData.status !== undefined) {
+    update.status = localizedData.status;
   }
 
-  if (data.levelJson !== undefined || data.draftData !== undefined) {
-    update.draftData = data.levelJson ?? data.draftData;
+  if (localizedData.levelJson !== undefined || localizedData.draftData !== undefined) {
+    update.draftData = localizedData.levelJson ?? localizedData.draftData;
   }
 
-  if (data.codeBySpriteId !== undefined && update.draftData) {
+  if (localizedData.codeBySpriteId !== undefined && update.draftData) {
     update.draftData = {
       ...update.draftData,
-      codeBySpriteId: data.codeBySpriteId,
+      codeBySpriteId: localizedData.codeBySpriteId,
     };
   }
 
-  if (data.courseId !== undefined) {
-    const nextCourseId = data.courseId?.toString() ?? '';
+  if (localizedData.courseId !== undefined) {
+    const nextCourseId = localizedData.courseId?.toString() ?? '';
     update.courseId = nextCourseId;
 
-    if (data.orderInCourse === undefined) {
+    if (localizedData.orderInCourse === undefined) {
       if (nextCourseId === '') {
         update.orderInCourse = 0;
       } else {
@@ -123,23 +130,23 @@ exports.updateLevel = async (id, data) => {
     }
   }
 
-  if (data.orderInCourse !== undefined) {
-    update.orderInCourse = data.orderInCourse;
+  if (localizedData.orderInCourse !== undefined) {
+    update.orderInCourse = localizedData.orderInCourse;
   }
 
-  if (data.reviewStatus !== undefined) {
-    update.reviewStatus = data.reviewStatus;
+  if (localizedData.reviewStatus !== undefined) {
+    update.reviewStatus = localizedData.reviewStatus;
   }
 
-  if (data.approvedBy !== undefined) {
-    update.approvedBy = data.approvedBy;
+  if (localizedData.approvedBy !== undefined) {
+    update.approvedBy = localizedData.approvedBy;
   }
 
-  if (data.reviewStatus === 'approved') {
-    update.approvedAt = data.approvedAt ? new Date(data.approvedAt) : new Date();
+  if (localizedData.reviewStatus === 'approved') {
+    update.approvedAt = localizedData.approvedAt ? new Date(localizedData.approvedAt) : new Date();
   }
 
-  if (data.status === 'published' && !data.publishedAt) {
+  if (localizedData.status === 'published' && !localizedData.publishedAt) {
     update.publishedAt = new Date();
   }
 

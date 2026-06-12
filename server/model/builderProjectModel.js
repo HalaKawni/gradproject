@@ -67,13 +67,13 @@ const BuilderProjectSchema = new mongoose.Schema(
       required: true,
     },
     title: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       required: true,
-      default: 'New Level',
+      default: () => ({ en: 'New Level' }),
     },
     description: {
-      type: String,
-      default: '',
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({ en: '' }),
     },
     coverImageBase64: {
       type: String,

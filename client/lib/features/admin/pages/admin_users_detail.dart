@@ -1,6 +1,7 @@
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/admin/shared/admin_view_theme.dart';
 import 'package:client/features/admin/models/admin_user.dart';
 import 'package:flutter/material.dart';
 
@@ -420,52 +421,67 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              language.t('users'),
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(width: 12),
-            Text(language.t('totalCount', params: {'count': '$_total'})),
-            const Spacer(),
-            SizedBox(
-              width: 280,
-              child: TextField(
-                controller: _searchController,
-                textInputAction: TextInputAction.search,
-                onSubmitted: (_) => _loadUsers(page: 1),
-                decoration: InputDecoration(
-                  hintText: language.t('searchUsers'),
-                  suffixIcon: IconButton(
-                    tooltip: language.t('search'),
-                    onPressed: () => _loadUsers(page: 1),
-                    icon: const Icon(Icons.search),
-                  ),
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: AdminViewTheme.softCardDecoration(
+            AdminViewTheme.highlight,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      language.t('users'),
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      language.t('totalCount', params: {'count': '$_total'}),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: language.t('refreshUsers'),
-              onPressed: () => _loadUsers(),
-              icon: const Icon(Icons.refresh),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _showPromoteUserDialog,
-              icon: const Icon(Icons.admin_panel_settings_outlined),
-              label: Text(language.t('promoteToAdmin')),
-            ),
-            const SizedBox(width: 8),
-            ElevatedButton.icon(
-              onPressed: _showCreateAdminDialog,
-              icon: const Icon(Icons.person_add_alt),
-              label: Text(language.t('createAdmin')),
-            ),
-          ],
+              SizedBox(
+                width: 280,
+                child: TextField(
+                  controller: _searchController,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _loadUsers(page: 1),
+                  decoration: InputDecoration(
+                    hintText: language.t('searchUsers'),
+                    suffixIcon: IconButton(
+                      tooltip: language.t('search'),
+                      onPressed: () => _loadUsers(page: 1),
+                      icon: const Icon(Icons.search),
+                    ),
+                    isDense: true,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: language.t('refreshUsers'),
+                onPressed: () => _loadUsers(),
+                icon: const Icon(Icons.refresh),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _showPromoteUserDialog,
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                label: Text(language.t('promoteToAdmin')),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _showCreateAdminDialog,
+                icon: const Icon(Icons.person_add_alt),
+                label: Text(language.t('createAdmin')),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -482,8 +498,18 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                       final isAdmin = user.role == 'admin';
 
                       return Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          side: BorderSide(
+                            color: AdminViewTheme.border.withValues(alpha: 0.9),
+                          ),
+                        ),
                         child: ListTile(
                           leading: CircleAvatar(
+                            backgroundColor: isAdmin
+                                ? AdminViewTheme.accent
+                                : AdminViewTheme.primarySoft,
+                            foregroundColor: AdminViewTheme.text,
                             child: Text(
                               user.name.isNotEmpty
                                   ? user.name[0].toUpperCase()
@@ -532,6 +558,9 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                                     : () => _deleteUser(user),
                                 icon: const Icon(Icons.delete_outline),
                                 label: Text(language.t('delete')),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AdminViewTheme.danger,
+                                ),
                               ),
                             ],
                           ),
@@ -560,6 +589,7 @@ class _AdminUserDetailsPageState extends State<AdminUserDetailsPage> {
                     'pageOf',
                     params: {'page': '$_page', 'total': '$_totalPages'},
                   ),
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
               OutlinedButton.icon(

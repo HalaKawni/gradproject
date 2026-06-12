@@ -3,7 +3,22 @@ const BuilderProject = require('../model/builderProjectModel');
 const CourseProgress = require('../model/courseProgress.model');
 const CourseInteraction = require('../model/courseInteraction.model');
 const { ensureSystemCourses } = require('./systemCourses.service');
+const {
+  localizeDocument,
+  localizeDocuments,
+  prepareLocalizedInput,
+} = require('./localizedContent.service');
 const mongoose = require('mongoose');
+
+const COURSE_LOCALIZATION_CONFIG = {
+  directFields: ['courseName', 'description'],
+  recursiveFields: ['title', 'description', 'instructions', 'instruction', 'lessonText', 'text', 'content', 'body', 'summary', 'subtitle'],
+};
+
+const LEVEL_LOCALIZATION_CONFIG = {
+  directFields: ['title', 'description'],
+  recursiveFields: ['title', 'description', 'instructions', 'instruction', 'lessonText', 'text', 'content', 'body', 'summary', 'subtitle'],
+};
 
 function stringifyValue(value) {
   return value === undefined || value === null ? '' : String(value);
@@ -80,7 +95,7 @@ function normalizeRatingValue(rating) {
   return normalizedRating;
 }
 
-async function getPublicCourses(currentUser) {
+async function getPublicCourses(currentUser, language) {
   await ensureSystemCourses();
   const courses = await Course.find({
     isPublic: true,
@@ -101,12 +116,18 @@ async function getPublicCourses(currentUser) {
     return [];
   }
 
-  return (await rankPublicCourses(eligibleCourses, currentUser)).map((course) =>
+  const rankedCourses = await rankPublicCourses(eligibleCourses, currentUser);
+  const serializedCourses = rankedCourses.map((course) =>
     serializeCourse(course, currentUser?._id?.toString())
   );
+
+  return localizeDocuments(serializedCourses, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function getCommunityCourses(currentUserId) {
+async function getCommunityCourses(currentUserId, language) {
   await ensureSystemCourses();
   const courses = await Course.find({
     isPublic: true,
@@ -116,24 +137,34 @@ async function getCommunityCourses(currentUserId) {
     .populate('createdBy', 'name email role')
     .sort({ updatedAt: -1, createdAt: -1 });
 
-  return courses
+  const serializedCourses = courses
     .filter((course) => course.createdBy?.role !== 'admin')
     .map((course) => serializeCourse(course, currentUserId?.toString()));
+
+  return localizeDocuments(serializedCourses, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function getMineCourses(userId) {
+async function getMineCourses(userId, language) {
   const courses = await Course.find({ createdBy: userId })
     .populate('createdBy', 'name email role')
     .sort({ updatedAt: -1, createdAt: -1, courseName: 1 });
-  return attachCourseStats(courses, userId?.toString());
+  const coursesWithStats = await attachCourseStats(courses, userId?.toString());
+  return localizeDocuments(coursesWithStats, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function createMineCourse(data, userId) {
+async function createMineCourse(data, userId, language) {
+  const localizedData = prepareLocalizedInput(data, COURSE_LOCALIZATION_CONFIG);
   const course = await Course.create({
-    courseName: data.courseName,
+    courseName: localizedData.courseName,
     courseId: data.courseId,
     category: data.category,
-    description: data.description,
+    description: localizedData.description,
     courseImageBase64: data.courseImageBase64 ?? null,
     coverFrameScale: Number(data.coverFrameScale ?? 1),
     coverFrameOffsetX: Number(data.coverFrameOffsetX ?? 0),
@@ -144,42 +175,46 @@ async function createMineCourse(data, userId) {
   });
 
   const [courseWithStats] = await attachCourseStats([course], userId?.toString());
-  return courseWithStats;
+  return localizeDocument(courseWithStats, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function updateMineCourse(id, data, userId) {
+async function updateMineCourse(id, data, userId, language) {
+  const localizedData = prepareLocalizedInput(data, COURSE_LOCALIZATION_CONFIG);
   const update = {
     updatedBy: userId,
     updatedAt: new Date(),
   };
 
-  if (data.courseName !== undefined || data.title !== undefined) {
-    update.courseName = data.courseName ?? data.title;
+  if (localizedData.courseName !== undefined || localizedData.title !== undefined) {
+    update.courseName = localizedData.courseName ?? localizedData.title;
   }
-  if (data.courseId !== undefined) {
-    update.courseId = data.courseId;
+  if (localizedData.courseId !== undefined) {
+    update.courseId = localizedData.courseId;
   }
-  if (data.category !== undefined) {
-    update.category = data.category;
+  if (localizedData.category !== undefined) {
+    update.category = localizedData.category;
   }
-  if (data.description !== undefined) {
-    update.description = data.description;
+  if (localizedData.description !== undefined) {
+    update.description = localizedData.description;
   }
-  if (data.courseImageBase64 !== undefined) {
-    update.courseImageBase64 = data.courseImageBase64;
+  if (localizedData.courseImageBase64 !== undefined) {
+    update.courseImageBase64 = localizedData.courseImageBase64;
   }
-  if (data.coverFrameScale !== undefined) {
-    update.coverFrameScale = Number(data.coverFrameScale);
+  if (localizedData.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(localizedData.coverFrameScale);
   }
-  if (data.coverFrameOffsetX !== undefined) {
-    update.coverFrameOffsetX = Number(data.coverFrameOffsetX);
+  if (localizedData.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(localizedData.coverFrameOffsetX);
   }
-  if (data.coverFrameOffsetY !== undefined) {
-    update.coverFrameOffsetY = Number(data.coverFrameOffsetY);
+  if (localizedData.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(localizedData.coverFrameOffsetY);
   }
-  if (data.isPublic !== undefined) {
-    update.isPublic = data.isPublic;
-    if (data.isPublic === false) {
+  if (localizedData.isPublic !== undefined) {
+    update.isPublic = localizedData.isPublic;
+    if (localizedData.isPublic === false) {
       update.verificationStatus = 'none';
       update.verifiedAt = null;
       update.verifiedBy = null;
@@ -197,7 +232,7 @@ async function updateMineCourse(id, data, userId) {
 
   if (
     existingCourse.verificationStatus === 'approved' &&
-    data.isPublic !== false
+    localizedData.isPublic !== false
   ) {
     update.hasUnreadUpdateNotification = true;
     update.lastUpdateNotificationAt = new Date();
@@ -215,7 +250,10 @@ async function updateMineCourse(id, data, userId) {
   }
 
   const [courseWithStats] = await attachCourseStats([course], userId?.toString());
-  return courseWithStats;
+  return localizeDocument(courseWithStats, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function deleteMineCourse(id, userId) {
@@ -233,7 +271,7 @@ async function deleteMineCourse(id, userId) {
   return course;
 }
 
-async function requestMineCourseVerification(id, userId) {
+async function requestMineCourseVerification(id, userId, language) {
   const course = await Course.findOne({ _id: id, createdBy: userId });
 
   if (!course) {
@@ -257,7 +295,12 @@ async function requestMineCourseVerification(id, userId) {
   course.verificationReviewedAt = null;
   course.verificationReviewedBy = null;
   course.verificationRejectedReason = '';
-  return course.save();
+  const savedCourse = await course.save();
+  const [courseWithStats] = await attachCourseStats([savedCourse], userId?.toString());
+  return localizeDocument(courseWithStats, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function attachCourseStats(courses, viewerId) {
@@ -288,11 +331,11 @@ async function attachCourseStats(courses, viewerId) {
   });
 }
 
-async function getPublicCourseLevels(courseId) {
+async function getPublicCourseLevels(courseId, language) {
   const course = await findPublicCourse(courseId);
   const courseKeys = [course._id.toString(), course.courseId].filter(Boolean);
 
-  return BuilderProject.find({
+  const levels = await BuilderProject.find({
     courseId: { $in: courseKeys },
     status: 'published',
   })
@@ -300,6 +343,11 @@ async function getPublicCourseLevels(courseId) {
       '_id title description status builderType difficulty courseId orderInCourse ownerName updatedAt'
     )
     .sort({ orderInCourse: 1, updatedAt: -1 });
+
+  return localizeDocuments(levels, {
+    ...LEVEL_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function getCourseProgress(courseId, userId) {
@@ -412,7 +460,7 @@ async function trackCourseEvent(courseId, user, eventType) {
   });
 }
 
-async function addCourseComment(courseId, message, user) {
+async function addCourseComment(courseId, message, user, language) {
   const normalizedMessage = normalizeCommentMessage(message);
   if (!normalizedMessage) {
     throw new Error('Comment cannot be empty.');
@@ -443,10 +491,14 @@ async function addCourseComment(courseId, message, user) {
     }
   ).populate('createdBy', 'name email role');
 
-  return serializeCourse(course, userId);
+  const serializedCourse = serializeCourse(course, userId);
+  return localizeDocument(serializedCourse, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function deleteCourseComment(courseId, commentId, user) {
+async function deleteCourseComment(courseId, commentId, user, language) {
   const userId = user._id.toString();
   const course = await Course.findOne({
     isPublic: true,
@@ -463,10 +515,14 @@ async function deleteCourseComment(courseId, commentId, user) {
     (comment) => stringifyValue(comment._id) !== stringifyValue(commentId)
   );
   await course.save();
-  return serializeCourse(course, userId);
+  const serializedCourse = serializeCourse(course, userId);
+  return localizeDocument(serializedCourse, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function rateCourse(courseId, rating, user) {
+async function rateCourse(courseId, rating, user, language) {
   const normalizedRating = normalizeRatingValue(rating);
   if (normalizedRating == null) {
     throw new Error('Rating must be a whole number between 1 and 5.');
@@ -498,7 +554,11 @@ async function rateCourse(courseId, rating, user) {
   }
 
   await course.save();
-  return serializeCourse(course, userId);
+  const serializedCourse = serializeCourse(course, userId);
+  return localizeDocument(serializedCourse, {
+    ...COURSE_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function findPublicCourse(courseId) {

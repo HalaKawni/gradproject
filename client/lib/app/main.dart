@@ -32,7 +32,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'CodeMonkey',
+      title: 'app.title'.tr(),
       debugShowCheckedModeBanner: false,
       localizationsDelegates: [
         ...context.localizationDelegates,
@@ -43,7 +43,9 @@ class MyApp extends StatelessWidget {
       ],
       supportedLocales: context.supportedLocales,
       locale: context.locale,
-      home: const WelcomePage(),
+      home: WelcomePage(
+        key: ValueKey('welcome-${context.locale.languageCode}'),
+      ),
       onGenerateRoute: AppRouter.onGenerateRoute,
       onUnknownRoute: AppRouter.onUnknownRoute,
     );
@@ -435,7 +437,7 @@ class WelcomePage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Codey is an AWARD-WINNING online platform that teaches kids real coding languages like Python and JavaScript. Children and teenagers learn block-based and text-based coding through an engaging game-like environment.',
+          'home.about_paragraph_1'.tr(),
           style: GoogleFonts.nunito(
             color: const Color(0xFF444444),
             fontSize: isMobile ? 15 : 17,
@@ -444,7 +446,7 @@ class WelcomePage extends StatelessWidget {
         ),
         const SizedBox(height: 24),
         Text(
-          "Millions of Codey's students are now excited about coding! Codey does not require prior coding experience and is designed for home and family use.",
+          'home.about_paragraph_2'.tr(),
           style: GoogleFonts.nunito(
             color: const Color(0xFF444444),
             fontSize: isMobile ? 15 : 17,
@@ -459,17 +461,16 @@ class WelcomePage extends StatelessWidget {
               fontSize: isMobile ? 15 : 17,
               height: 1.85,
             ),
-            children: const [
+            children: [
               TextSpan(
-                text: 'Do you want to start coding now? ',
+                text: 'home.about_paragraph_3_intro'.tr(),
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
                   color: Color(0xFF222222),
                 ),
               ),
               TextSpan(
-                text:
-                    'Kids from 5–14 years old can learn block-coding, text-coding, and Python all while playing! Kids as young as 5 can start programming and build their own games. Try it today!',
+                text: 'home.about_paragraph_3_body'.tr(),
               ),
             ],
           ),
@@ -487,7 +488,7 @@ class WelcomePage extends StatelessWidget {
         children: [
           Center(
             child: Text(
-              'Write Code.',
+              'home.write_code'.tr(),
               style: GoogleFonts.pacifico(color: _darkTeal, fontSize: 30),
             ),
           ),
@@ -550,7 +551,7 @@ class WelcomePage extends StatelessWidget {
                   Image.asset('assets/images/Parent-Image2.png', height: 220),
                   const SizedBox(height: 24),
                   Text(
-                    'PARENTS',
+                    'home.parents_title'.tr(),
                     style: GoogleFonts.amaticSc(
                       color: _navyText,
                       fontSize: 44,
@@ -559,7 +560,7 @@ class WelcomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    "With Codey's all-inclusive home plan, your child will learn to code in no time! Codey's courses teach text-based coding so kids learn to program like a real developer. This is coding made fun. No previous experience is needed!",
+                    'home.parents_desc'.tr(),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.nunito(
                       color: _navyText.withValues(alpha: 0.85),
@@ -569,9 +570,9 @@ class WelcomePage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   ...[
-                    '🐾  Track Child\'s Progress',
-                    '🐾  Self-Paced',
-                    '🐾  Educational Screen Time',
+                    'home.parents_feature_track'.tr(),
+                    'home.parents_feature_paced'.tr(),
+                    'home.parents_feature_screen'.tr(),
                   ].map(
                     (f) => Padding(
                       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -600,7 +601,7 @@ class WelcomePage extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      'LEARN MORE',
+                      'home.learn_more'.tr(),
                       style: GoogleFonts.montserrat(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -631,7 +632,7 @@ class WelcomePage extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'A fun coding course for kids',
+          'home.curriculum_caption'.tr(),
           style: GoogleFonts.nunito(color: Colors.grey[600], fontSize: 13),
         ),
         const SizedBox(height: 10),
@@ -657,7 +658,7 @@ class WelcomePage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'CURRICULUM',
+          'home.curriculum_title'.tr(),
           style: GoogleFonts.amaticSc(
             color: _navyText,
             fontSize: 52,
@@ -666,7 +667,7 @@ class WelcomePage extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'Codey offers educational resources for students of different grades and experience levels. From Codey Jr. to advanced courses, students learn coding basics such as block-based and text-based coding. Kids also learn how to code in real programming languages like Python and JavaScript. Through Codey, kids will develop the necessary skills for the future while having fun!',
+          'home.curriculum_desc'.tr(),
           style: GoogleFonts.nunito(color: _darkTeal, fontSize: 14, height: 1.7),
         ),
         const SizedBox(height: 32),
@@ -679,7 +680,7 @@ class WelcomePage extends StatelessWidget {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
           child: Text(
-            'SIGN UP NOW',
+            'home.signup_now'.tr(),
             style: GoogleFonts.montserrat(
               fontSize: 14,
               fontWeight: FontWeight.w800,
@@ -690,7 +691,7 @@ class WelcomePage extends StatelessWidget {
         TextButton(
           onPressed: () {},
           child: Text(
-            'free trial',
+            'home.free_trial'.tr(),
             style: GoogleFonts.nunito(color: _darkTeal, fontSize: 13),
           ),
         ),
@@ -723,7 +724,7 @@ class WelcomePage extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'Get your students coding in no time!',
+            'home.awards_title'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.amaticSc(
               color: Colors.white,
@@ -733,7 +734,7 @@ class WelcomePage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'Codey is a fun and educational game-based environment where kids learn to code without any prior experience. After completing Codey\'s award-winning coding courses, kids will be able to navigate through the programming world with a sense of confidence and accomplishment.',
+            'home.awards_desc'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.nunito(
               color: Colors.white70,
@@ -752,12 +753,24 @@ class WelcomePage extends StatelessWidget {
   // ── FEATURES SECTION ─────────────────────────────────────────────────────────
   Widget _buildFeaturesSection(bool isMobile) {
     final cols = [
-      _featureCol('assets/images/Full-courses-ready-to-go.png', 'READY TO GO COURSES',
-          "With Codey's support team, anyone can learn the basics of computer science and start coding today.", isMobile),
-      _featureCol('assets/images/Real-coding-langauges.png', 'REAL CODING LANGUAGES',
-          "Codey's courses teach text-based coding so students learn to program like a real developer.", isMobile),
-      _featureCol('assets/images/game-based.png', 'GAME-BASED LEARNING',
-          'Kids learn coding in an engaging and rewarding environment that utilizes gaming elements.', isMobile),
+      _featureCol(
+        'assets/images/Full-courses-ready-to-go.png',
+        'home.feature_card_ready_title'.tr(),
+        'home.feature_card_ready_desc'.tr(),
+        isMobile,
+      ),
+      _featureCol(
+        'assets/images/Real-coding-langauges.png',
+        'home.feature_card_languages_title'.tr(),
+        'home.feature_card_languages_desc'.tr(),
+        isMobile,
+      ),
+      _featureCol(
+        'assets/images/game-based.png',
+        'home.feature_card_game_title'.tr(),
+        'home.feature_card_game_desc'.tr(),
+        isMobile,
+      ),
     ];
 
     return Container(
@@ -769,7 +782,7 @@ class WelcomePage extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'Kids will love learning to code\nwith Codey',
+            'home.features_title'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.amaticSc(
               color: _navyText,
@@ -842,7 +855,7 @@ class WelcomePage extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'APPS AND WEB-BASED COURSES',
+            'home.apps_title'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.amaticSc(
               color: Colors.white,
@@ -874,7 +887,7 @@ class WelcomePage extends StatelessWidget {
           Image.asset('assets/images/sprites/logocodey.png', height: 56),
           const SizedBox(height: 20),
           Text(
-            "What sets Codey apart is its unique approach to teaching children programming right from day one, in an engaging, gamified manner. We believe that learning should be fun, and that's exactly what we've been doing.",
+            'home.numbers_desc'.tr(),
             textAlign: TextAlign.center,
             style: GoogleFonts.nunito(
               color: _navyText,
@@ -888,14 +901,19 @@ class WelcomePage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _statBlob(
-                'LEVELS\nSOLVED',
+                'stats.levels_solved'.tr(),
                 '570M+',
                 const Color(0xFFF5E88A),
                 const Color(0xFF7B6B10),
               ),
-              _statBlob('KIDS', '45M+', const Color(0xFFADD8E6), _darkTeal),
               _statBlob(
-                'PARENTS',
+                'stats.kids'.tr(),
+                '45M+',
+                const Color(0xFFADD8E6),
+                _darkTeal,
+              ),
+              _statBlob(
+                'stats.parents'.tr(),
                 '350K+',
                 const Color(0xFFBFD9A0),
                 const Color(0xFF3A6B20),
@@ -958,7 +976,7 @@ class WelcomePage extends StatelessWidget {
           Column(
             children: [
               Text(
-                'All you need in one place',
+                'home.all_in_one_title'.tr(),
                 textAlign: TextAlign.center,
                 style: GoogleFonts.amaticSc(
                   color: _navyText,
@@ -981,7 +999,7 @@ class WelcomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'PROGRESS TRACKING',
+                      'home.progress_tracking_title'.tr(),
                       style: GoogleFonts.montserrat(
                         color: _navyText,
                         fontSize: 14,
@@ -991,7 +1009,7 @@ class WelcomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "Equipped with student solutions, automatic grading, and progress management, Codey's dashboard allows you to effortlessly monitor your child's coding journey.",
+                      'home.progress_tracking_desc'.tr(),
                       style: GoogleFonts.nunito(
                         color: _navyText.withValues(alpha: 0.82),
                         fontSize: 14,
@@ -1009,7 +1027,7 @@ class WelcomePage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'PROGRESS TRACKING',
+                            'home.progress_tracking_title'.tr(),
                             style: GoogleFonts.montserrat(
                               color: _navyText,
                               fontSize: 14,
@@ -1019,7 +1037,7 @@ class WelcomePage extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            "Equipped with student solutions, automatic grading, and progress management, Codey's dashboard allows you to effortlessly monitor your child's coding journey.",
+                            'home.progress_tracking_desc'.tr(),
                             style: GoogleFonts.nunito(
                               color: _navyText.withValues(alpha: 0.82),
                               fontSize: 14,
@@ -1053,7 +1071,7 @@ class WelcomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      'STANDARDS ALIGNMENT',
+                      'home.standards_alignment_title'.tr(),
                       style: GoogleFonts.montserrat(
                         color: _navyText,
                         fontSize: 14,
@@ -1063,7 +1081,7 @@ class WelcomePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      'Codey places a high emphasis on content that aligns to today\'s standards. With online challenges and activities, students not only develop coding skills, but also computational thinking, collaboration, reasoning, and logic.',
+                      'home.standards_alignment_desc'.tr(),
                       style: GoogleFonts.nunito(
                         color: _navyText.withValues(alpha: 0.82),
                         fontSize: 14,
@@ -1085,7 +1103,7 @@ class WelcomePage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'STANDARDS ALIGNMENT',
+                            'home.standards_alignment_title'.tr(),
                             style: GoogleFonts.montserrat(
                               color: _navyText,
                               fontSize: 14,
@@ -1095,7 +1113,7 @@ class WelcomePage extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'Codey places a high emphasis on content that aligns to today\'s standards. With online challenges and activities, students not only develop coding skills, but also computational thinking, collaboration, reasoning, and logic.',
+                            'home.standards_alignment_desc'.tr(),
                             style: GoogleFonts.nunito(
                               color: _navyText.withValues(alpha: 0.82),
                               fontSize: 14,
@@ -1159,17 +1177,18 @@ class _TypewriterSection extends StatefulWidget {
 }
 
 class _TypewriterSectionState extends State<_TypewriterSection> {
-  static const _words = [
-    'GAMIFIED',
-    'FUN',
-    'INTERACTIVE',
-    'ENGAGING',
-    'EXCITING',
-  ];
   int _wordIdx = 0;
   int _charCount = 0;
   bool _deleting = false;
   Timer? _timer;
+
+  List<String> _words() => [
+    'home.typewriter_word_gamified'.tr(),
+    'home.typewriter_word_fun'.tr(),
+    'home.typewriter_word_interactive'.tr(),
+    'home.typewriter_word_engaging'.tr(),
+    'home.typewriter_word_exciting'.tr(),
+  ];
 
   @override
   void initState() {
@@ -1178,8 +1197,9 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
   }
 
   void _tick() {
+    final words = _words();
     int delay;
-    if (!_deleting && _charCount == _words[_wordIdx].length) {
+    if (!_deleting && _charCount == words[_wordIdx].length) {
       delay = 1400;
     } else if (_deleting) {
       delay = 75;
@@ -1190,7 +1210,7 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
       if (!mounted) return;
       setState(() {
         if (!_deleting) {
-          if (_charCount < _words[_wordIdx].length) {
+          if (_charCount < words[_wordIdx].length) {
             _charCount++;
           } else {
             _deleting = true;
@@ -1198,7 +1218,7 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
         } else {
           _charCount--;
           if (_charCount == 0) {
-            _wordIdx = (_wordIdx + 1) % _words.length;
+            _wordIdx = (_wordIdx + 1) % words.length;
             _deleting = false;
           }
         }
@@ -1215,7 +1235,12 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
 
   @override
   Widget build(BuildContext context) {
-    final display = _words[_wordIdx].substring(0, _charCount);
+    final words = _words();
+    if (_wordIdx >= words.length) {
+      _wordIdx = 0;
+    }
+    final safeCharCount = _charCount.clamp(0, words[_wordIdx].length);
+    final display = words[_wordIdx].substring(0, safeCharCount);
     final isMobile = MediaQuery.of(context).size.width < 900;
     return Container(
       color: Colors.white,
@@ -1227,7 +1252,7 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
           ? Column(
               children: [
                 Text(
-                  'TEACH KIDS COURSES THAT ARE',
+                  'home.typewriter_prefix'.tr(),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.amaticSc(
                     color: const Color(0xFF2D3560),
@@ -1256,7 +1281,7 @@ class _TypewriterSectionState extends State<_TypewriterSection> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'TEACH KIDS COURSES THAT ARE ',
+                  '${'home.typewriter_prefix'.tr()} ',
                   style: GoogleFonts.amaticSc(
                     color: const Color(0xFF2D3560),
                     fontSize: 36,
@@ -1575,111 +1600,87 @@ class _HoverButtonState extends State<_HoverButton> {
 }
 
 // ── Language Dropdown ──────────────────────────────────────────────────────────
-class _NavLanguageDropdown extends StatefulWidget {
+class _NavLanguageDropdown extends StatelessWidget {
   const _NavLanguageDropdown();
-  @override
-  State<_NavLanguageDropdown> createState() => _NavLanguageDropdownState();
-}
-
-class _NavLanguageDropdownState extends State<_NavLanguageDropdown> {
-  String _selected = '🇺🇸 EN';
-  bool _hovered = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _selected = context.locale.languageCode == 'ar' ? '🇸🇦 AR' : '🇺🇸 EN';
-  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: PopupMenuButton<String>(
-        color: const Color(0xFF2A1505),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        offset: const Offset(0, 52),
-        onSelected: (value) async {
-          setState(() => _selected = value);
-          if (value == '🇸🇦 AR') {
-            await AppLanguage.instance.setLanguage('ar');
-            if (context.mounted) {
-              await context.setLocale(const Locale('ar'));
-            }
-          } else {
-            await AppLanguage.instance.setLanguage('en');
-            if (context.mounted) {
-              await context.setLocale(const Locale('en'));
-            }
-          }
-        },
-        itemBuilder: (_) => [
-          PopupMenuItem(
-            value: '🇺🇸 EN',
-            child: Text(
-              '🇺🇸 English',
-              style: GoogleFonts.montserrat(
-                color: const Color(0xFFE8D8B0),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+    final currentCode = context.locale.languageCode;
+    final closedLabel = currentCode == 'ar' ? '🇸🇦 AR' : '🇺🇸 EN';
+
+    return PopupMenuButton<String>(
+      color: const Color(0xFF2A1505),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      offset: const Offset(0, 52),
+      onSelected: (value) async {
+        final newLocale = value == 'ar'
+            ? const Locale('ar')
+            : const Locale('en');
+
+        await context.setLocale(newLocale);
+
+        try {
+          await AppLanguage.instance.setLanguage(value);
+        } catch (_) {}
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'en',
+          child: Text(
+            'English',
+            style: GoogleFonts.montserrat(
+              color: const Color(0xFFE8D8B0),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          PopupMenuItem(
-            value: '🇸🇦 AR',
-            child: Text(
-              '🇸🇦 العربية',
-              style: GoogleFonts.montserrat(
-                color: const Color(0xFFE8D8B0),
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+        ),
+        PopupMenuItem(
+          value: 'ar',
+          child: Text(
+            'العربية',
+            style: GoogleFonts.montserrat(
+              color: const Color(0xFFE8D8B0),
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
           ),
-        ],
-        child: Builder(builder: (context) {
+        ),
+      ],
+      child: Builder(
+        builder: (context) {
           final isMobile = MediaQuery.of(context).size.width < 900;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+
+          return Container(
             height: 52,
             padding: EdgeInsets.symmetric(horizontal: isMobile ? 8 : 20),
-            decoration: BoxDecoration(
-              color: _hovered
-                  ? const Color.fromARGB(255, 220, 202, 233)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.zero,
-            ),
+            alignment: Alignment.center,
             child: isMobile
-                ? Icon(
+                ? const Icon(
                     Icons.language,
-                    color: _hovered ? const Color(0xFF3A2A00) : Colors.white,
+                    color: Colors.white,
                     size: 22,
                   )
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _selected,
+                        closedLabel,
                         style: GoogleFonts.montserrat(
-                          color: _hovered
-                              ? const Color(0xFF3A2A00)
-                              : const Color(0xFFE8D8B0),
+                          color: const Color(0xFFE8D8B0),
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      Icon(
+                      const Icon(
                         Icons.keyboard_arrow_down,
-                        color: _hovered
-                            ? const Color(0xFF3A2A00)
-                            : const Color(0xFFE8D8B0),
+                        color: Color(0xFFE8D8B0),
                         size: 16,
                       ),
                     ],
                   ),
           );
-        }),
+        },
       ),
     );
   }

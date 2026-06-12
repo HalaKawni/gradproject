@@ -1,6 +1,7 @@
 import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
+import 'package:client/features/admin/shared/admin_view_theme.dart';
 import 'package:flutter/material.dart';
 
 class AdminDashboardPage extends StatefulWidget {
@@ -117,6 +118,47 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: AdminViewTheme.softCardDecoration(
+                AdminViewTheme.primarySoft,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AdminViewTheme.highlight,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.insights_outlined,
+                      color: AdminViewTheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          language.t('overview'),
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Keep an eye on courses, levels, and community activity in one glance.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
             Wrap(
               spacing: 16,
               runSpacing: 16,
@@ -134,22 +176,52 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             ),
             const SizedBox(height: 12),
             Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: BorderSide(
+                  color: AdminViewTheme.border.withValues(alpha: 0.9),
+                ),
+              ),
               child: Column(
                 children: [
                   ListTile(
-                    leading: const Icon(Icons.public_outlined),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AdminViewTheme.primarySoft.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.public_outlined),
+                    ),
                     title: Text(language.t('publishedLevels')),
                     trailing: Text('${_readInt('publishedLevels')}'),
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.edit_outlined),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AdminViewTheme.accent.withValues(alpha: 0.4),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.edit_outlined),
+                    ),
                     title: Text(language.t('draftLevels')),
                     trailing: Text('${_readInt('draftLevels')}'),
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: const Icon(Icons.people_outline),
+                    leading: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AdminViewTheme.highlight.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Icon(Icons.people_outline),
+                    ),
                     title: Text(language.t('userCreatedLevels')),
                     trailing: Text('${_readInt('userCreatedLevels')}'),
                   ),
@@ -179,17 +251,34 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: AdminViewTheme.border.withValues(alpha: 0.9)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Icon(data.icon, size: 32),
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AdminViewTheme.primarySoft, AdminViewTheme.accent],
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(data.icon, size: 28, color: AdminViewTheme.text),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(data.title),
+                  Text(
+                    data.title,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                   const SizedBox(height: 6),
                   Text(
                     data.value,
@@ -219,12 +308,26 @@ class _AdminErrorState extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: AdminViewTheme.danger.withValues(alpha: 0.2),
+            ),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.error_outline, size: 36),
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AdminViewTheme.accent.withValues(alpha: 0.45),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.error_outline, size: 30),
+                ),
                 const SizedBox(height: 12),
                 Text(message, textAlign: TextAlign.center),
                 const SizedBox(height: 16),

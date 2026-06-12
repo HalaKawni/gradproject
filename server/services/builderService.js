@@ -2,6 +2,11 @@ const BuilderProject = require('../model/builderProjectModel');
 const Course = require('../model/course.model');
 const uploadedAssetService = require('./uploadedAsset.service');
 const {
+  localizeDocument,
+  localizeDocuments,
+  prepareLocalizedInput,
+} = require('./localizedContent.service');
+const {
   FRONT_VIEW_COLLECTABLE_ITEMS,
   FRONT_VIEW_PLAYER_CHARACTERS,
   FRONT_VIEW_PLAYER_DIRECTIONS,
@@ -10,6 +15,28 @@ const {
 const DEFAULT_PLAYER_CHARACTER = 'polar';
 const DEFAULT_PLAYER_DIRECTION = 'right';
 const DEFAULT_COLLECTABLE_ITEM = 'banana';
+const PROJECT_LOCALIZATION_CONFIG = {
+  directFields: ['title', 'description'],
+  recursiveFields: [
+    'title',
+    'description',
+    'instructions',
+    'instruction',
+    'lessonText',
+    'content',
+    'summary',
+    'subtitle',
+    'items',
+  ],
+  allowPaths: [
+    /^title$/,
+    /^description$/,
+    /^draftData\.description$/,
+    /^draftData\.(instructions|instruction|lessonText|summary|subtitle)$/,
+    /^draftData\.instructionSections\.\d+\.(title|content)$/,
+    /^draftData\.instructionSections\.\d+\.items\.\d+$/,
+  ],
+};
 
 function buildOwnerSummary(user) {
   return {
@@ -220,44 +247,55 @@ function normalizeRatingValue(rating) {
   return normalizedRating;
 }
 
-async function createProject(projectData, user) {
+async function createProject(projectData, user, language) {
+  const localizedProjectData = prepareLocalizedInput(
+    projectData,
+    PROJECT_LOCALIZATION_CONFIG
+  );
   const owner = buildOwnerSummary(user);
-  const draftData = buildDraftData(projectData, user);
+  const draftData = buildDraftData(localizedProjectData, user);
   const project = new BuilderProject({
     ownerId: owner.id,
     ownerName: owner.name,
     ownerEmail: owner.email,
     ownerRole: owner.role,
-    title: projectData.title || 'New Level',
-    description: projectData.description || '',
-    coverImageBase64: projectData.coverImageBase64 ?? null,
-    coverFrameScale: Number(projectData.coverFrameScale ?? 1),
-    coverFrameOffsetX: Number(projectData.coverFrameOffsetX ?? 0),
-    coverFrameOffsetY: Number(projectData.coverFrameOffsetY ?? 0),
-    status: projectData.status || 'draft',
+    title: localizedProjectData.title || { en: 'New Level' },
+    description: localizedProjectData.description || { en: '' },
+    coverImageBase64: localizedProjectData.coverImageBase64 ?? null,
+    coverFrameScale: Number(localizedProjectData.coverFrameScale ?? 1),
+    coverFrameOffsetX: Number(localizedProjectData.coverFrameOffsetX ?? 0),
+    coverFrameOffsetY: Number(localizedProjectData.coverFrameOffsetY ?? 0),
+    status: localizedProjectData.status || 'draft',
     builderType: draftData.builderType,
-    courseId: projectData.courseId,
-    orderInCourse: projectData.orderInCourse,
-    difficulty: projectData.difficulty || 'medium',
-    ...(projectData.status === 'published' ? { publishedAt: new Date() } : {}),
+    courseId: localizedProjectData.courseId,
+    orderInCourse: localizedProjectData.orderInCourse,
+    difficulty: localizedProjectData.difficulty || 'medium',
+    ...(localizedProjectData.status === 'published' ? { publishedAt: new Date() } : {}),
     frontViewDetails: draftData.frontViewDetails || null,
     draftData,
   });
 
   const savedProject = await project.save();
-  if (projectData.status === 'published') {
+  if (localizedProjectData.status === 'published') {
     await uploadedAssetService.makeAssetsPublic(
       collectDraftAssetIds(draftData),
       user
     );
   }
 
-  return savedProject;
+  return localizeDocument(savedProject, {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function updateProject(projectId, projectData, user) {
+async function updateProject(projectId, projectData, user, language) {
+  const localizedProjectData = prepareLocalizedInput(
+    projectData,
+    PROJECT_LOCALIZATION_CONFIG
+  );
   const owner = buildOwnerSummary(user);
-  const draftData = buildDraftData(projectData, user);
+  const draftData = buildDraftData(localizedProjectData, user);
 
   const project = await BuilderProject.findOneAndUpdate(
     {
@@ -269,26 +307,26 @@ async function updateProject(projectId, projectData, user) {
       ownerName: owner.name,
       ownerEmail: owner.email,
       ownerRole: owner.role,
-      title: projectData.title || 'Untitled',
-      description: projectData.description || '',
-      ...(projectData.coverImageBase64 !== undefined
-        ? { coverImageBase64: projectData.coverImageBase64 }
+      title: localizedProjectData.title || { en: 'Untitled' },
+      description: localizedProjectData.description || { en: '' },
+      ...(localizedProjectData.coverImageBase64 !== undefined
+        ? { coverImageBase64: localizedProjectData.coverImageBase64 }
         : {}),
-      ...(projectData.coverFrameScale !== undefined
-        ? { coverFrameScale: Number(projectData.coverFrameScale) }
+      ...(localizedProjectData.coverFrameScale !== undefined
+        ? { coverFrameScale: Number(localizedProjectData.coverFrameScale) }
         : {}),
-      ...(projectData.coverFrameOffsetX !== undefined
-        ? { coverFrameOffsetX: Number(projectData.coverFrameOffsetX) }
+      ...(localizedProjectData.coverFrameOffsetX !== undefined
+        ? { coverFrameOffsetX: Number(localizedProjectData.coverFrameOffsetX) }
         : {}),
-      ...(projectData.coverFrameOffsetY !== undefined
-        ? { coverFrameOffsetY: Number(projectData.coverFrameOffsetY) }
+      ...(localizedProjectData.coverFrameOffsetY !== undefined
+        ? { coverFrameOffsetY: Number(localizedProjectData.coverFrameOffsetY) }
         : {}),
-      status: projectData.status || 'draft',
+      status: localizedProjectData.status || 'draft',
       builderType: draftData.builderType,
-      courseId: projectData.courseId,
-      orderInCourse: projectData.orderInCourse,
-      difficulty: projectData.difficulty || 'medium',
-      ...(projectData.status === 'published' ? { publishedAt: new Date() } : {}),
+      courseId: localizedProjectData.courseId,
+      orderInCourse: localizedProjectData.orderInCourse,
+      difficulty: localizedProjectData.difficulty || 'medium',
+      ...(localizedProjectData.status === 'published' ? { publishedAt: new Date() } : {}),
       frontViewDetails: draftData.frontViewDetails || null,
       draftData,
     },
@@ -297,60 +335,71 @@ async function updateProject(projectId, projectData, user) {
     }
   );
 
-  if (project && projectData.status === 'published') {
+  if (project && localizedProjectData.status === 'published') {
     await uploadedAssetService.makeAssetsPublic(
       collectDraftAssetIds(draftData),
       user
     );
   }
 
-  return project;
+  if (!project) {
+    return null;
+  }
+
+  return localizeDocument(project, {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function updateProjectSettings(projectId, settingsData, user) {
+async function updateProjectSettings(projectId, settingsData, user, language) {
+  const localizedSettingsData = prepareLocalizedInput(
+    settingsData,
+    PROJECT_LOCALIZATION_CONFIG
+  );
   const update = {};
 
-  if (settingsData.title !== undefined) {
-    update.title = settingsData.title || 'Untitled';
+  if (localizedSettingsData.title !== undefined) {
+    update.title = localizedSettingsData.title || { en: 'Untitled' };
   }
 
-  if (settingsData.description !== undefined) {
-    update.description = settingsData.description || '';
+  if (localizedSettingsData.description !== undefined) {
+    update.description = localizedSettingsData.description || { en: '' };
   }
 
-  if (settingsData.status !== undefined) {
-    update.status = settingsData.status;
-    if (settingsData.status === 'published') {
+  if (localizedSettingsData.status !== undefined) {
+    update.status = localizedSettingsData.status;
+    if (localizedSettingsData.status === 'published') {
       update.publishedAt = new Date();
     }
   }
 
-  if (settingsData.difficulty !== undefined) {
-    update.difficulty = settingsData.difficulty || 'medium';
+  if (localizedSettingsData.difficulty !== undefined) {
+    update.difficulty = localizedSettingsData.difficulty || 'medium';
   }
 
-  if (settingsData.courseId !== undefined) {
-    update.courseId = settingsData.courseId;
+  if (localizedSettingsData.courseId !== undefined) {
+    update.courseId = localizedSettingsData.courseId;
   }
 
-  if (settingsData.orderInCourse !== undefined) {
-    update.orderInCourse = settingsData.orderInCourse;
+  if (localizedSettingsData.orderInCourse !== undefined) {
+    update.orderInCourse = localizedSettingsData.orderInCourse;
   }
 
-  if (settingsData.coverImageBase64 !== undefined) {
-    update.coverImageBase64 = settingsData.coverImageBase64;
+  if (localizedSettingsData.coverImageBase64 !== undefined) {
+    update.coverImageBase64 = localizedSettingsData.coverImageBase64;
   }
 
-  if (settingsData.coverFrameScale !== undefined) {
-    update.coverFrameScale = Number(settingsData.coverFrameScale);
+  if (localizedSettingsData.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(localizedSettingsData.coverFrameScale);
   }
 
-  if (settingsData.coverFrameOffsetX !== undefined) {
-    update.coverFrameOffsetX = Number(settingsData.coverFrameOffsetX);
+  if (localizedSettingsData.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(localizedSettingsData.coverFrameOffsetX);
   }
 
-  if (settingsData.coverFrameOffsetY !== undefined) {
-    update.coverFrameOffsetY = Number(settingsData.coverFrameOffsetY);
+  if (localizedSettingsData.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(localizedSettingsData.coverFrameOffsetY);
   }
 
   const previousProject = await BuilderProject.findOne({
@@ -385,7 +434,14 @@ async function updateProjectSettings(projectId, settingsData, user) {
     );
   }
 
-  return project;
+  if (!project) {
+    return null;
+  }
+
+  return localizeDocument(project, {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function notifyVerifiedCourseIfLevelAssignmentChanged(
@@ -426,22 +482,31 @@ function collectDraftAssetIds(draftData) {
     .filter(Boolean);
 }
 
-async function getProjectById(projectId, user) {
+async function getProjectById(projectId, user, language) {
   const project = await BuilderProject.findOne({
     _id: projectId,
     ownerId: user._id.toString(),
   });
-  return serializeProject(project, user._id.toString());
+  return localizeDocument(serializeProject(project, user._id.toString()), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function getAllProjects(user) {
+async function getAllProjects(user, language) {
   const projects = await BuilderProject.find({
     ownerId: user._id.toString(),
   }).sort({ updatedAt: -1 });
-  return projects.map((project) => serializeProject(project, user._id.toString()));
+  return localizeDocuments(
+    projects.map((project) => serializeProject(project, user._id.toString())),
+    {
+      ...PROJECT_LOCALIZATION_CONFIG,
+      language,
+    }
+  );
 }
 
-async function getPublishedProjects(user) {
+async function getPublishedProjects(user, language) {
   const projects = await BuilderProject.find({
     status: 'published',
     ownerRole: { $ne: 'admin' },
@@ -450,18 +515,27 @@ async function getPublishedProjects(user) {
       '_id title description status builderType difficulty courseId orderInCourse frontViewDetails coverImageBase64 coverFrameScale coverFrameOffsetX coverFrameOffsetY updatedAt ownerId ownerName ownerRole playCount comments ratings'
     )
     .sort({ updatedAt: -1 });
-  return projects.map((project) => serializeProject(project, user?._id?.toString()));
+  return localizeDocuments(
+    projects.map((project) => serializeProject(project, user?._id?.toString())),
+    {
+      ...PROJECT_LOCALIZATION_CONFIG,
+      language,
+    }
+  );
 }
 
-async function getPublishedProjectById(projectId, user) {
+async function getPublishedProjectById(projectId, user, language) {
   const project = await BuilderProject.findOne({
     _id: projectId,
     status: 'published',
   });
-  return serializeProject(project, user?._id?.toString());
+  return localizeDocument(serializeProject(project, user?._id?.toString()), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function incrementProjectPlayCount(projectId, user) {
+async function incrementProjectPlayCount(projectId, user, language) {
   const project = await BuilderProject.findOneAndUpdate(
     {
       _id: projectId,
@@ -477,10 +551,13 @@ async function incrementProjectPlayCount(projectId, user) {
     }
   );
 
-  return serializeProject(project, user?._id?.toString());
+  return localizeDocument(serializeProject(project, user?._id?.toString()), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function addProjectComment(projectId, message, user) {
+async function addProjectComment(projectId, message, user, language) {
   const normalizedMessage = normalizeCommentMessage(message);
   if (!normalizedMessage) {
     throw new Error('Comment cannot be empty.');
@@ -511,10 +588,13 @@ async function addProjectComment(projectId, message, user) {
     }
   );
 
-  return serializeProject(project, userId);
+  return localizeDocument(serializeProject(project, userId), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function deleteProjectComment(projectId, commentId, user) {
+async function deleteProjectComment(projectId, commentId, user, language) {
   const userId = user._id.toString();
   const project = await BuilderProject.findOne({
     _id: projectId,
@@ -530,10 +610,13 @@ async function deleteProjectComment(projectId, commentId, user) {
     (comment) => stringifyValue(comment._id) !== stringifyValue(commentId)
   );
   await project.save();
-  return serializeProject(project, userId);
+  return localizeDocument(serializeProject(project, userId), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
-async function rateProject(projectId, rating, user) {
+async function rateProject(projectId, rating, user, language) {
   const normalizedRating = normalizeRatingValue(rating);
   if (normalizedRating == null) {
     throw new Error('Rating must be a whole number between 1 and 5.');
@@ -566,7 +649,10 @@ async function rateProject(projectId, rating, user) {
   }
 
   await project.save();
-  return serializeProject(project, userId);
+  return localizeDocument(serializeProject(project, userId), {
+    ...PROJECT_LOCALIZATION_CONFIG,
+    language,
+  });
 }
 
 async function deleteProject(projectId, user) {

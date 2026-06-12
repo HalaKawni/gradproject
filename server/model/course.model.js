@@ -125,9 +125,8 @@ const courseRatingSchema = new mongoose.Schema(
 
 const courseSchema = new mongoose.Schema({
     courseName: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         required: true, 
-        trim: true
     },
     courseId: {
         type: String,
@@ -141,9 +140,8 @@ const courseSchema = new mongoose.Schema({
         trim: true
     },
     description: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         // required: true,
-        trim: true
     },
     courseDeliveryType: {
         type: String,

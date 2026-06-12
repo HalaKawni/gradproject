@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/localization/app_language.dart';
@@ -164,6 +165,7 @@ class _DashboardPageState extends State<DashboardPage> {
   _WelcomeBannerState? _welcomeBannerState;
   bool _isLoadingWelcomeBanner = true;
   int _welcomeBannerRequestId = 0;
+  String? _lastLocaleCode;
 
   String get _onboardingUserScope => widget.session.user.id;
 
@@ -410,8 +412,13 @@ class _DashboardPageState extends State<DashboardPage> {
       }
     }
     final detailText = totalLevels == 0
-        ? 'No levels available yet'
-        : '$completedLevels of $totalLevels levels completed';
+        ? 'dashboard.no_levels_available'.tr()
+        : 'dashboard.levels_completed'.tr(
+            namedArgs: {
+              'done': '$completedLevels',
+              'total': '$totalLevels',
+            },
+          );
 
     return _WelcomeBannerState(
       course: course,
@@ -435,7 +442,7 @@ class _DashboardPageState extends State<DashboardPage> {
       return _WelcomeBannerState(
         course: course,
         progress: 0,
-        detailText: 'Start learning',
+        detailText: 'dashboard.start_learning'.tr(),
         actionLabel: isNewUser
             ? 'dashboard.start_coding'.tr()
             : 'dashboard.continue_coding'.tr(),
@@ -741,11 +748,14 @@ class _DashboardPageState extends State<DashboardPage> {
           bannerState.legacyResumeUnit ?? 1,
         );
         break;
-      case 'AI is a hoot':
+      case 'coding_chatbots':
         await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const CodeMonkeyScratchPage(),
+            builder: (_) => const Directionality(
+              textDirection: ui.TextDirection.ltr,
+              child: CodeMonkeyScratchPage(),
+            ),
           ),
         );
         break;
@@ -770,8 +780,11 @@ class _DashboardPageState extends State<DashboardPage> {
         return const DigitalLiteracyPage();
       case 'data_is_everywhere':
         return const DataCoursePage();
-      case 'AI is a hoot':
-        return const CodeMonkeyScratchPage();
+      case 'coding_chatbots':
+        return const Directionality(
+          textDirection: ui.TextDirection.ltr,
+          child: CodeMonkeyScratchPage(),
+        );
       default:
         return const WorldMapPage();
     }
@@ -875,6 +888,7 @@ class _DashboardPageState extends State<DashboardPage> {
           totalUnits: totalUnits,
           detailLabel: 'lessons',
         );
+      case 'coding_chatbots':
       case 'AI is a hoot':
         final currentLevel = _boundedInt(
           _readWelcomeInt(progress['currentLevel'], fallback: 1),
@@ -901,7 +915,12 @@ class _DashboardPageState extends State<DashboardPage> {
         final completedUnits = _boundedInt(highestLevel - 1, min: 0, max: totalUnits);
         return _LegacyCourseSnapshot(
           progress: totalUnits == 0 ? 0 : completedUnits / totalUnits,
-          detailText: '$completedUnits of $totalUnits levels completed',
+          detailText: 'dashboard.levels_completed'.tr(
+            namedArgs: {
+              'done': '$completedUnits',
+              'total': '$totalUnits',
+            },
+          ),
           resumeUnit: highestLevel,
         );
     }
@@ -1199,6 +1218,31 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadMyBuilderProjects();
     _loadMyBuilderAssets();
     _loadMyLevelCourses();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final localeCode = context.locale.languageCode;
+    if (_lastLocaleCode == null) {
+      _lastLocaleCode = localeCode;
+      return;
+    }
+    if (_lastLocaleCode == localeCode) {
+      return;
+    }
+    _lastLocaleCode = localeCode;
+    _refreshLocalizedContent();
+  }
+
+  void _refreshLocalizedContent() {
+    _loadPublicCourses();
+    _loadCommunityCourses();
+    _loadPublishedGames();
+    _loadPublishedAssets();
+    _loadMyBuilderProjects();
+    _loadMyLevelCourses();
+    unawaited(_refreshWelcomeBanner());
   }
 
   Future<void> _loadMyLevelCourses() async {
@@ -2214,6 +2258,7 @@ class _DashboardPageState extends State<DashboardPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMobile = constraints.maxWidth < 700;
+        final isArabic = context.locale.languageCode == 'ar';
         final bannerState = _welcomeBannerState;
         final actionLabel =
             bannerState?.actionLabel ??
@@ -2225,81 +2270,96 @@ class _DashboardPageState extends State<DashboardPage> {
           return Container(
             color: const Color.fromARGB(255, 254, 253, 153),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                _buildAvatarWidget(size: 52),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'dashboard.welcome'.tr(),
-                        style: GoogleFonts.nunito(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF3A2A00),
-                        ),
-                      ),
-                      Text(
-                        '${widget.username}!',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.nunito(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: const Color(0xFF3A2A00),
-                        ),
-                      ),
-                      if (bannerState != null) ...[
-                        const SizedBox(height: 4),
+            child: Directionality(
+              textDirection: isArabic
+                  ? ui.TextDirection.rtl
+                  : ui.TextDirection.ltr,
+              child: Row(
+                children: [
+                  _buildAvatarWidget(size: 52),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: isArabic
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         Text(
-                          bannerState.course.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          'dashboard.welcome'.tr(),
+                          textAlign: isArabic ? TextAlign.right : TextAlign.left,
                           style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
                             color: const Color(0xFF3A2A00),
                           ),
                         ),
                         Text(
-                          bannerState.detailText,
-                          maxLines: 1,
+                          '${widget.username}!',
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
+                          textAlign:
+                              isArabic ? TextAlign.right : TextAlign.left,
                           style: GoogleFonts.nunito(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: const Color(0xFF5A4C1E),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF3A2A00),
                           ),
                         ),
+                        if (bannerState != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            bannerState.course.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign:
+                                isArabic ? TextAlign.right : TextAlign.left,
+                            style: GoogleFonts.nunito(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: const Color(0xFF3A2A00),
+                            ),
+                          ),
+                          Text(
+                            bannerState.detailText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign:
+                                isArabic ? TextAlign.right : TextAlign.left,
+                            style: GoogleFonts.nunito(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF5A4C1E),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: _isLoadingWelcomeBanner ? null : _handleWelcomeBannerAction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A7DBF),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 9,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
                     ),
                   ),
-                  child: Text(
-                    actionLabel,
-                    style: GoogleFonts.montserrat(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 11,
+                  ElevatedButton(
+                    onPressed:
+                        _isLoadingWelcomeBanner ? null : _handleWelcomeBannerAction,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4A7DBF),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 9,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: Text(
+                      actionLabel,
+                      style: GoogleFonts.montserrat(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }
@@ -2327,165 +2387,195 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
                 Container(color: Colors.black.withValues(alpha: 0.25)),
                 ClipPath(
-                  clipper: _WelcomeBannerClipper(),
+                  clipper: _WelcomeBannerClipper(isRtl: isArabic),
                   child: Container(
                     color: const Color.fromARGB(255, 254, 253, 153),
                     padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Directionality(
+                      textDirection: isArabic
+                          ? ui.TextDirection.rtl
+                          : ui.TextDirection.ltr,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildAvatarWidget(size: 80),
+                          const SizedBox(width: 20),
+                          SizedBox(
+                            width: constraints.maxWidth * 0.22,
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: isArabic
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'dashboard.welcome'.tr(),
+                                  textAlign: isArabic
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF3A2A00),
+                                  ),
+                                ),
+                                Text(
+                                  '${widget.username}!',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: isArabic
+                                      ? TextAlign.right
+                                      : TextAlign.left,
+                                  style: GoogleFonts.nunito(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF3A2A00),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: isArabic ? 24 : constraints.maxWidth * 0.42,
+                  right: isArabic ? constraints.maxWidth * 0.42 : 24,
+                  top: 0,
+                  bottom: 0,
+                  child: Directionality(
+                    textDirection: isArabic
+                        ? ui.TextDirection.rtl
+                        : ui.TextDirection.ltr,
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildAvatarWidget(size: 80),
-                        const SizedBox(width: 20),
                         SizedBox(
-                          width: constraints.maxWidth * 0.22,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          width: 90,
+                          height: 90,
+                          child: Stack(
+                            alignment: Alignment.center,
                             children: [
-                              Text(
-                                'dashboard.welcome'.tr(),
-                                style: GoogleFonts.nunito(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF3A2A00),
+                              SizedBox(
+                                width: 90,
+                                height: 90,
+                                child: CircularProgressIndicator(
+                                  value: bannerState?.progress ?? 0,
+                                  strokeWidth: 8,
+                                  backgroundColor: Colors.white.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                        Color(0xFF4DD0E1),
+                                      ),
                                 ),
                               ),
                               Text(
-                                '${widget.username}!',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                _isLoadingWelcomeBanner
+                                    ? '...'
+                                    : '${((bannerState?.progress ?? 0) * 100).round()}%',
                                 style: GoogleFonts.nunito(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF3A2A00),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
                           ),
                         ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: isArabic
+                                ? CrossAxisAlignment.end
+                                : CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                bannerState?.isNewUser == true
+                                    ? 'dashboard.recommended_course'.tr()
+                                    : 'dashboard.current_course'.tr(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 12,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                bannerState?.course.title ??
+                                    (_isLoadingWelcomeBanner
+                                        ? 'Loading...'
+                                        : 'dashboard.no_course_available'.tr()),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              Text(
+                                bannerState?.detailText ??
+                                    (_isLoadingWelcomeBanner
+                                        ? 'dashboard.loading_course'.tr()
+                                        : ''),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: isArabic
+                                    ? TextAlign.right
+                                    : TextAlign.left,
+                                style: GoogleFonts.nunito(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 18),
+                        ElevatedButton.icon(
+                          onPressed: _isLoadingWelcomeBanner
+                              ? null
+                              : _handleWelcomeBannerAction,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              254,
+                              253,
+                              153,
+                            ),
+                            foregroundColor: const Color(0xFF3A2A00),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 14,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          icon: const Icon(Icons.play_circle_fill, size: 22),
+                          label: Text(
+                            actionLabel,
+                            style: GoogleFonts.montserrat(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  ),
-                ),
-                Positioned(
-                  left: constraints.maxWidth * 0.42,
-                  right: 24,
-                  top: 0,
-                  bottom: 0,
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 90,
-                        height: 90,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              width: 90,
-                              height: 90,
-                              child: CircularProgressIndicator(
-                                value: bannerState?.progress ?? 0,
-                                strokeWidth: 8,
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: 0.3,
-                                ),
-                                valueColor: const AlwaysStoppedAnimation<Color>(
-                                  Color(0xFF4DD0E1),
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _isLoadingWelcomeBanner
-                                  ? '...'
-                                  : '${((bannerState?.progress ?? 0) * 100).round()}%',
-                              style: GoogleFonts.nunito(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 20),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              bannerState?.isNewUser == true
-                                  ? 'Recommended course'
-                                  : 'dashboard.current_course'.tr(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.nunito(
-                                fontSize: 12,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              bannerState?.course.title ??
-                                  (_isLoadingWelcomeBanner
-                                      ? 'Loading...'
-                                      : 'No course available'),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.nunito(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
-                            Text(
-                              bannerState?.detailText ??
-                                  (_isLoadingWelcomeBanner
-                                      ? 'Loading your course...'
-                                      : ''),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.nunito(
-                                fontSize: 14,
-                                color: Colors.white70,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 18),
-                      ElevatedButton.icon(
-                        onPressed: _isLoadingWelcomeBanner
-                            ? null
-                            : _handleWelcomeBannerAction,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(
-                            255,
-                            254,
-                            253,
-                            153,
-                          ),
-                          foregroundColor: const Color(0xFF3A2A00),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 14,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                        icon: const Icon(Icons.play_circle_fill, size: 22),
-                        label: Text(
-                          actionLabel,
-                          style: GoogleFonts.montserrat(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ],
@@ -3382,16 +3472,16 @@ class _DashboardPageState extends State<DashboardPage> {
           arrowDirection: ArrowDirection.up,
           icon: Icons.explore_rounded,
           color: Color(0xFF7C4DFF),
-          title: 'Browse content from other students',
-          message: 'Challenges are games to play, Assets are items to use in your own games, Favorites are things you saved.',
+          title: 'dashboard.discover_hint_title'.tr(),
+          message: 'dashboard.discover_hint_message'.tr(),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 24, 24, 8),
           child: Text(
             switch (_discoverContentTab) {
-              _DiscoverContentTab.challenges => 'Discover Challenges',
-              _DiscoverContentTab.assets => 'Assets',
-              _DiscoverContentTab.favorites => 'Favorites',
+              _DiscoverContentTab.challenges => 'dashboard.discover_challenges'.tr(),
+              _DiscoverContentTab.assets => 'dashboard.discover_assets'.tr(),
+              _DiscoverContentTab.favorites => 'dashboard.discover_favorites'.tr(),
             },
             style: GoogleFonts.nunito(
               color: const Color(0xFF243A1B),
@@ -3424,7 +3514,7 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Row(
             children: [
               _DashboardDiscoverTabButton(
-                label: 'CHALLENGES',
+                label: 'dashboard.discover_tab_challenges'.tr(),
                 isSelected:
                     _discoverContentTab == _DiscoverContentTab.challenges,
                 onTap: () => setState(() {
@@ -3433,7 +3523,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(width: 6),
               _DashboardDiscoverTabButton(
-                label: 'ASSETS',
+                label: 'dashboard.discover_tab_assets'.tr(),
                 isSelected: _discoverContentTab == _DiscoverContentTab.assets,
                 onTap: () => setState(() {
                   _discoverContentTab = _DiscoverContentTab.assets;
@@ -3441,7 +3531,7 @@ class _DashboardPageState extends State<DashboardPage> {
               ),
               const SizedBox(width: 6),
               _DashboardDiscoverTabButton(
-                label: 'FAVORITES',
+                label: 'dashboard.discover_tab_favorites'.tr(),
                 isSelected:
                     _discoverContentTab == _DiscoverContentTab.favorites,
                 onTap: () => setState(() {
@@ -3468,7 +3558,7 @@ class _DashboardPageState extends State<DashboardPage> {
       return _DashboardDiscoverMessage(
         icon: Icons.error_outline,
         message: errorMessage,
-        actionLabel: 'Try Again',
+        actionLabel: 'dashboard.try_again'.tr(),
         onAction: () {
           _loadPublishedGames();
           _loadCommunityCourses();
@@ -3477,9 +3567,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
 
     if (_publishedGames.isEmpty && _communityCourses.isEmpty) {
-      return const _DashboardDiscoverMessage(
+      return _DashboardDiscoverMessage(
         icon: Icons.extension_outlined,
-        message: 'No community challenges are available yet.',
+        message: 'dashboard.no_community_challenges'.tr(),
       );
     }
 
@@ -3533,15 +3623,15 @@ class _DashboardPageState extends State<DashboardPage> {
       return _DashboardDiscoverMessage(
         icon: Icons.error_outline,
         message: _publishedAssetsErrorMessage!,
-        actionLabel: 'Try Again',
+        actionLabel: 'dashboard.try_again'.tr(),
         onAction: _loadPublishedAssets,
       );
     }
 
     if (_publishedAssets.isEmpty) {
-      return const _DashboardDiscoverMessage(
+      return _DashboardDiscoverMessage(
         icon: Icons.auto_awesome_outlined,
-        message: 'No published user assets are available yet.',
+        message: 'dashboard.no_published_assets'.tr(),
       );
     }
 
@@ -3604,7 +3694,7 @@ class _DashboardPageState extends State<DashboardPage> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
-                  'Show',
+                  'dashboard.show'.tr(),
                   style: GoogleFonts.montserrat(
                     color: const Color(0xFF45523F),
                     fontSize: 13,
@@ -3612,14 +3702,14 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ),
                 _DashboardFavoriteFilterCheckbox(
-                  label: 'Challenges',
+                  label: 'dashboard.discover_challenges'.tr(),
                   value: _showFavoriteChallenges,
                   onChanged: (value) => setState(() {
                     _showFavoriteChallenges = value ?? true;
                   }),
                 ),
                 _DashboardFavoriteFilterCheckbox(
-                  label: 'Assets',
+                  label: 'dashboard.discover_assets'.tr(),
                   value: _showFavoriteAssets,
                   onChanged: (value) => setState(() {
                     _showFavoriteAssets = value ?? true;
@@ -3632,20 +3722,19 @@ class _DashboardPageState extends State<DashboardPage> {
           if (_isLoadingPublishedGames || _isLoadingPublishedAssets)
             const _DashboardDiscoverMessage(child: CircularProgressIndicator())
           else if (!_showFavoriteChallenges && !_showFavoriteAssets)
-            const _DashboardDiscoverMessage(
+            _DashboardDiscoverMessage(
               icon: Icons.check_box_outline_blank_rounded,
-              message: 'Choose Challenges or Assets to show your favorites.',
+              message: 'dashboard.choose_favorites_filters'.tr(),
             )
           else if (!hasVisibleItems)
-            const _DashboardDiscoverMessage(
+            _DashboardDiscoverMessage(
               icon: Icons.favorite_border_rounded,
-              message:
-                  'No favorites yet. Tap the heart on a challenge or asset to save it here.',
+              message: 'dashboard.no_favorites_yet'.tr(),
             )
           else ...[
             if (showGames && favoriteGames.isNotEmpty) ...[
               _DashboardFavoritesSectionTitle(
-                title: 'Challenges',
+                title: 'dashboard.discover_challenges'.tr(),
                 count: favoriteGames.length,
               ),
               const SizedBox(height: 10),
@@ -3682,7 +3771,7 @@ class _DashboardPageState extends State<DashboardPage> {
               const SizedBox(height: 24),
             if (showAssets && favoriteAssets.isNotEmpty) ...[
               _DashboardFavoritesSectionTitle(
-                title: 'Assets',
+                title: 'dashboard.discover_assets'.tr(),
                 count: favoriteAssets.length,
               ),
               const SizedBox(height: 10),
@@ -3797,7 +3886,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   color: Color(0xFF1A73E8),
                 ),
                 label: Text(
-                  'MY PROFILE',
+                  'dashboard.my_profile'.tr(),
                   style: GoogleFonts.montserrat(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -3815,8 +3904,8 @@ class _DashboardPageState extends State<DashboardPage> {
           userScope: _onboardingUserScope,
           icon: Icons.sports_esports_rounded,
           color: Color(0xFF328CBD),
-          title: 'Ready to build your own game?',
-          message: 'Tap "Create New Game" and pick a style — Slides is easiest for beginners, Scratch gives full code control.',
+          title: 'dashboard.creations_hint_title'.tr(),
+          message: 'dashboard.creations_hint_message'.tr(),
         ),
 
         Container(
@@ -3829,13 +3918,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   _DashboardDiscoverTabButton(
-                    label: 'CHALLENGES',
+                    label: 'dashboard.discover_tab_challenges'.tr(),
                     isSelected: _myCreationContentTab == _MyCreationContentTab.challenges,
                     onTap: () => setState(() { _myCreationContentTab = _MyCreationContentTab.challenges; }),
                   ),
                   const SizedBox(width: 6),
                   _DashboardDiscoverTabButton(
-                    label: 'ASSETS',
+                    label: 'dashboard.discover_tab_assets'.tr(),
                     isSelected: _myCreationContentTab == _MyCreationContentTab.assets,
                     onTap: () => setState(() { _myCreationContentTab = _MyCreationContentTab.assets; }),
                   ),
@@ -3853,7 +3942,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   icon: const Icon(Icons.add, size: 14),
-                  label: Text('Create', style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w700)),
+                  label: Text('dashboard.create'.tr(), style: GoogleFonts.montserrat(fontSize: 12, fontWeight: FontWeight.w700)),
                 ),
               );
               if (isMobile) {
@@ -3904,7 +3993,7 @@ class _DashboardPageState extends State<DashboardPage> {
           return _DashboardDiscoverMessage(
             icon: Icons.error_outline,
             message: errorMessage,
-            actionLabel: 'Try Again',
+            actionLabel: 'dashboard.try_again'.tr(),
             onAction: _loadMyCreations,
           );
         }
@@ -3912,9 +4001,9 @@ class _DashboardPageState extends State<DashboardPage> {
         if (courses.isEmpty &&
             _myLevelCourses.isEmpty &&
             _myBuilderProjects.isEmpty) {
-          return const _DashboardDiscoverMessage(
+          return _DashboardDiscoverMessage(
             icon: Icons.add_circle_outline_rounded,
-            message: 'No challenges yet. Create your first one!',
+            message: 'dashboard.no_my_challenges'.tr(),
           );
         }
 
@@ -4030,15 +4119,15 @@ class _DashboardPageState extends State<DashboardPage> {
       return _DashboardDiscoverMessage(
         icon: Icons.error_outline,
         message: _myBuilderAssetsErrorMessage!,
-        actionLabel: 'Try Again',
+        actionLabel: 'dashboard.try_again'.tr(),
         onAction: _loadMyBuilderAssets,
       );
     }
 
     if (_myBuilderAssets.isEmpty) {
-      return const _DashboardDiscoverMessage(
+      return _DashboardDiscoverMessage(
         icon: Icons.auto_awesome_outlined,
-        message: 'No assets yet. Add assets inside a game builder.',
+        message: 'dashboard.no_my_assets'.tr(),
       );
     }
 
@@ -7664,10 +7753,17 @@ class _CourseCardState extends State<_CourseCard> {
     if (!mounted) {
       return;
     }
+    final isChatbotsArabic = widget.course.legacyPageKey == 'coding_chatbots' &&
+        context.locale.languageCode == 'ar';
     showDialog(
       context: this.context,
-      builder: (ctx) =>
-          _CourseDialog(session: widget.session, course: widget.course),
+      builder: (ctx) {
+        final dialog = _CourseDialog(session: widget.session, course: widget.course);
+        if (isChatbotsArabic) {
+          return Directionality(textDirection: ui.TextDirection.ltr, child: dialog);
+        }
+        return dialog;
+      },
     );
   }
 
@@ -7684,7 +7780,9 @@ class _CourseCardState extends State<_CourseCard> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final isCodingChatbots = widget.course.legacyPageKey == 'coding_chatbots';
+    final isArabic = context.locale.languageCode == 'ar';
+    final card = MouseRegion(
       onEnter: (_) => _setHovered(true),
       onExit: (_) => _setHovered(false),
       child: GestureDetector(
@@ -7884,6 +7982,13 @@ class _CourseCardState extends State<_CourseCard> {
         ),
       ),
     );
+    if (isCodingChatbots && isArabic) {
+      return Directionality(
+        textDirection: ui.TextDirection.ltr,
+        child: card,
+      );
+    }
+    return card;
   }
 }
 
@@ -8077,8 +8182,12 @@ class _CourseDialogState extends State<_CourseDialog> {
         return const DigitalLiteracyPage();
       case 'data_is_everywhere':
         return const DataCoursePage();
+      case 'coding_chatbots':
       case 'AI is a hoot':
-        return const CodeMonkeyScratchPage();
+        return const Directionality(
+          textDirection: ui.TextDirection.ltr,
+          child: CodeMonkeyScratchPage(),
+        );
       default:
         return null;
     }
@@ -8145,7 +8254,7 @@ class _CourseDialogState extends State<_CourseDialog> {
     final routeName = switch (widget.course.legacyPageKey) {
       'code_monkey_jr' => 'code_monkey_jr_hub',
       'data_is_everywhere' => 'data_course_hub',
-      'AI is a hoot' => 'ai_hoot_hub',
+      'coding_chatbots' => 'ai_hoot_hub',
       _ => 'digital_literacy_hub',
     };
 
@@ -8323,6 +8432,11 @@ class _CourseDialogState extends State<_CourseDialog> {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
+    final isCodingChatbots = widget.course.legacyPageKey == 'coding_chatbots';
+    final isArabic = context.locale.languageCode == 'ar';
+    final displayDescription = isCodingChatbots && isArabic
+        ? 'courses.chatbots_description'.tr()
+        : widget.course.description;
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
         horizontal: isMobile ? 12 : 40,
@@ -8423,7 +8537,7 @@ class _CourseDialogState extends State<_CourseDialog> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            widget.course.description,
+                            displayDescription,
                             style: GoogleFonts.nunito(fontSize: 13, color: const Color(0xFF444444), height: 1.6),
                           ),
                         ],
@@ -8476,7 +8590,7 @@ class _CourseDialogState extends State<_CourseDialog> {
                                   ]),
                                 ),
                                 const SizedBox(height: 16),
-                                Text(widget.course.description,
+                                Text(displayDescription,
                                     style: GoogleFonts.nunito(fontSize: 14, color: const Color(0xFF444444), height: 1.6)),
                               ],
                             ),
@@ -8803,6 +8917,7 @@ const Map<String, String> _legacyGameIdByPageKey = <String, String>{
   'code_monkey_jr': 'codemonkey-jr',
   'digital_literacy': 'digital-literacy',
   'data_is_everywhere': 'data-everywhere',
+  'coding_chatbots': 'ai-hoot',
   'AI is a hoot': 'ai-hoot',
 };
 
@@ -8810,13 +8925,14 @@ const Map<String, String> _legacyPageKeyByGameId = <String, String>{
   'codemonkey-jr': 'code_monkey_jr',
   'digital-literacy': 'digital_literacy',
   'data-everywhere': 'data_is_everywhere',
-  'ai-hoot': 'AI is a hoot',
+  'ai-hoot': 'coding_chatbots',
 };
 
 const Map<String, int> _legacyCourseUnitTotals = <String, int>{
   'code_monkey_jr': 15,
   'digital_literacy': 3,
   'data_is_everywhere': 2,
+  'coding_chatbots': 9,
   'AI is a hoot': 9,
 };
 
@@ -9753,17 +9869,32 @@ class _AvatarSelectionDialogState extends State<_AvatarSelectionDialog> {
 }
 
 class _WelcomeBannerClipper extends CustomClipper<Path> {
+  const _WelcomeBannerClipper({this.isRtl = false});
+
+  final bool isRtl;
+
   @override
   Path getClip(Size size) {
-    final path = Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width * 0.40, 0)
-      ..lineTo(size.width * 0.42, size.height)
-      ..lineTo(0, size.height)
-      ..close();
+    final path = Path();
+    if (isRtl) {
+      path
+        ..moveTo(size.width, 0)
+        ..lineTo(size.width * 0.60, 0)
+        ..lineTo(size.width * 0.58, size.height)
+        ..lineTo(size.width, size.height)
+        ..close();
+    } else {
+      path
+        ..moveTo(0, 0)
+        ..lineTo(size.width * 0.40, 0)
+        ..lineTo(size.width * 0.42, size.height)
+        ..lineTo(0, size.height)
+        ..close();
+    }
     return path;
   }
 
   @override
-  bool shouldReclip(_WelcomeBannerClipper oldClipper) => false;
+  bool shouldReclip(_WelcomeBannerClipper oldClipper) =>
+      oldClipper.isRtl != isRtl;
 }

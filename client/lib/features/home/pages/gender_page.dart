@@ -118,7 +118,7 @@ class _HomeGenderPageState extends State<HomeGenderPage>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Choose your gender',
+                        'gender.title'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.amaticSc(
                           color: Colors.white,
@@ -135,7 +135,7 @@ class _HomeGenderPageState extends State<HomeGenderPage>
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Pick the option that fits you best before continuing.',
+                        'gender.subtitle'.tr(),
                         textAlign: TextAlign.center,
                         style: GoogleFonts.nunito(
                           color: Colors.white,
@@ -150,8 +150,8 @@ class _HomeGenderPageState extends State<HomeGenderPage>
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             _GenderCard(
-                              label: 'Male',
-                              subtitle: 'Continue as male',
+                              label: 'gender.male'.tr(),
+                              subtitle: 'gender.male_subtitle'.tr(),
                               imagePath: 'assets/images/monkey_yes.png',
                               isSelected: _selectedGender == 'male',
                               onTap: () {
@@ -162,8 +162,8 @@ class _HomeGenderPageState extends State<HomeGenderPage>
                             ),
                             const SizedBox(width: 24),
                             _GenderCard(
-                              label: 'Female',
-                              subtitle: 'Continue as female',
+                              label: 'gender.female'.tr(),
+                              subtitle: 'gender.female_subtitle'.tr(),
                               imagePath: 'assets/images/monkey_no.png',
                               isSelected: _selectedGender == 'female',
                               onTap: () {

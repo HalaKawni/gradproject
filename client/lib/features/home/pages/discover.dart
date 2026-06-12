@@ -3,6 +3,7 @@ import 'package:client/app/navigation/app_routes.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -265,7 +266,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
               ),
               const SizedBox(width: 6),
               _DiscoverTabButton(
-                label: 'MY CREATIONS',
+                label: 'dashboard.my_creations'.tr(),
                 isSelected: selectedTab == _DiscoverTab.creations,
                 onTap: () => setState(() {
                   selectedTab = _DiscoverTab.creations;
@@ -286,7 +287,9 @@ class _DiscoverPageState extends State<DiscoverPage> {
         children: [
           Expanded(
             child: Text(
-              isChallenges ? 'Discover Challenges' : 'My Creations',
+              isChallenges
+                  ? 'Discover Challenges'
+                  : 'dashboard.my_creations'.tr(),
               style: GoogleFonts.nunito(
                 color: const Color(0xFF243A1B),
                 fontSize: 24,
@@ -382,9 +385,19 @@ class _DiscoverSidebar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 16),
-          _DiscoverSidebarItem(label: 'COURSES', onTap: onCoursesTap),
-          _DiscoverSidebarItem(label: 'MY CREATIONS', onTap: onMyCreationsTap),
-          _DiscoverSidebarItem(label: 'DISCOVER', isActive: true, onTap: () {}),
+          _DiscoverSidebarItem(
+            label: 'dashboard.courses_section'.tr(),
+            onTap: onCoursesTap,
+          ),
+          _DiscoverSidebarItem(
+            label: 'dashboard.my_creations'.tr(),
+            onTap: onMyCreationsTap,
+          ),
+          _DiscoverSidebarItem(
+            label: 'dashboard.discover'.tr(),
+            isActive: true,
+            onTap: () {},
+          ),
         ],
       ),
     );

@@ -1,6 +1,12 @@
 const Course = require('../../model/course.model');
 const BuilderProject = require('../../model/builderProjectModel');
 const CourseEnrollment = require('../../model/courseEnrollment.model');
+const { prepareLocalizedInput } = require('../localizedContent.service');
+
+const COURSE_LOCALIZATION_CONFIG = {
+  directFields: ['courseName', 'description'],
+  recursiveFields: ['title', 'description', 'instructions', 'instruction', 'lessonText', 'text', 'content', 'body', 'summary', 'subtitle'],
+};
 
 async function attachCourseStats(courses) {
   const courseObjects = courses.map((course) =>
@@ -78,11 +84,12 @@ exports.getNotifications = async () => {
 };
 
 exports.createCourse = async (data, userId) => {
+  const localizedData = prepareLocalizedInput(data, COURSE_LOCALIZATION_CONFIG);
   const course = await Course.create({
-    courseName: data.courseName,
+    courseName: localizedData.courseName,
     courseId: data.courseId,
     category: data.category,
-    description: data.description,
+    description: localizedData.description,
     courseImageBase64: data.courseImageBase64 ?? null,
     coverFrameScale: Number(data.coverFrameScale ?? 1),
     coverFrameOffsetX: Number(data.coverFrameOffsetX ?? 0),
@@ -96,45 +103,46 @@ exports.createCourse = async (data, userId) => {
 };
 
 exports.updateCourse = async (id, data, userId) => {
+  const localizedData = prepareLocalizedInput(data, COURSE_LOCALIZATION_CONFIG);
   const update = {
     updatedBy: userId,
     updatedAt: new Date(),
   };
 
-  if (data.courseName !== undefined || data.title !== undefined) {
-    update.courseName = data.courseName ?? data.title;
+  if (localizedData.courseName !== undefined || localizedData.title !== undefined) {
+    update.courseName = localizedData.courseName ?? localizedData.title;
   }
 
-  if (data.courseId !== undefined) {
-    update.courseId = data.courseId;
+  if (localizedData.courseId !== undefined) {
+    update.courseId = localizedData.courseId;
   }
 
-  if (data.category !== undefined) {
-    update.category = data.category;
+  if (localizedData.category !== undefined) {
+    update.category = localizedData.category;
   }
 
-  if (data.description !== undefined) {
-    update.description = data.description;
+  if (localizedData.description !== undefined) {
+    update.description = localizedData.description;
   }
 
-  if (data.courseImageBase64 !== undefined) {
-    update.courseImageBase64 = data.courseImageBase64;
+  if (localizedData.courseImageBase64 !== undefined) {
+    update.courseImageBase64 = localizedData.courseImageBase64;
   }
 
-  if (data.coverFrameScale !== undefined) {
-    update.coverFrameScale = Number(data.coverFrameScale);
+  if (localizedData.coverFrameScale !== undefined) {
+    update.coverFrameScale = Number(localizedData.coverFrameScale);
   }
 
-  if (data.coverFrameOffsetX !== undefined) {
-    update.coverFrameOffsetX = Number(data.coverFrameOffsetX);
+  if (localizedData.coverFrameOffsetX !== undefined) {
+    update.coverFrameOffsetX = Number(localizedData.coverFrameOffsetX);
   }
 
-  if (data.coverFrameOffsetY !== undefined) {
-    update.coverFrameOffsetY = Number(data.coverFrameOffsetY);
+  if (localizedData.coverFrameOffsetY !== undefined) {
+    update.coverFrameOffsetY = Number(localizedData.coverFrameOffsetY);
   }
 
-  if (data.isPublic !== undefined) {
-    update.isPublic = data.isPublic;
+  if (localizedData.isPublic !== undefined) {
+    update.isPublic = localizedData.isPublic;
   }
 
   const course = await Course.findByIdAndUpdate(id, update, {

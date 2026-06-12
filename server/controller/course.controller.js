@@ -14,7 +14,8 @@ exports.createCourse = async (req, res) => {
       title,
       description || '',
       lessons || [],
-      courseImageBase64 || null
+      courseImageBase64 || null,
+      req.query.lang
     );
     res.status(201).json({ status: true, course });
   } catch (err) {
@@ -24,7 +25,7 @@ exports.createCourse = async (req, res) => {
 
 exports.getUserCourses = async (req, res) => {
   try {
-    const courses = await CourseService.getUserCourses(req.user._id);
+    const courses = await CourseService.getUserCourses(req.user._id, req.query.lang);
     res.json({ status: true, courses });
   } catch (err) {
     res.status(500).json({ status: false, error: err.message });
@@ -46,7 +47,12 @@ exports.updateCourse = async (req, res) => {
     if (title !== undefined) updates.title = title;
     if (description !== undefined) updates.description = description;
     if (lessons !== undefined) updates.lessons = lessons;
-    const updated = await CourseService.updateCourse(req.params.id, req.user._id, updates);
+    const updated = await CourseService.updateCourse(
+      req.params.id,
+      req.user._id,
+      updates,
+      req.query.lang
+    );
     if (!updated) return res.status(404).json({ status: false, error: 'Course not found' });
     res.json({ status: true, course: updated });
   } catch (err) {

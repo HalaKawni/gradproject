@@ -2,7 +2,7 @@ const coursesService = require('../services/courses.service');
 
 async function getMineCourses(req, res) {
   try {
-    const courses = await coursesService.getMineCourses(req.user._id);
+    const courses = await coursesService.getMineCourses(req.user._id, req.query.lang);
     return res.json({ success: true, data: courses });
   } catch (error) {
     return res.status(500).json({
@@ -17,7 +17,8 @@ async function createMineCourse(req, res) {
   try {
     const course = await coursesService.createMineCourse(
       req.body,
-      req.user._id
+      req.user._id,
+      req.query.lang
     );
     return res.status(201).json({ success: true, data: course });
   } catch (error) {
@@ -33,7 +34,8 @@ async function updateMineCourse(req, res) {
     const course = await coursesService.updateMineCourse(
       req.params.id,
       req.body,
-      req.user._id
+      req.user._id,
+      req.query.lang
     );
     return res.json({ success: true, data: course });
   } catch (error) {
@@ -60,7 +62,8 @@ async function requestMineCourseVerification(req, res) {
   try {
     const course = await coursesService.requestMineCourseVerification(
       req.params.id,
-      req.user._id
+      req.user._id,
+      req.query.lang
     );
     return res.json({ success: true, data: course });
   } catch (error) {
@@ -73,7 +76,7 @@ async function requestMineCourseVerification(req, res) {
 
 async function getPublicCourses(req, res) {
   try {
-    const courses = await coursesService.getPublicCourses(req.user);
+    const courses = await coursesService.getPublicCourses(req.user, req.query.lang);
     return res.json({ success: true, data: courses });
   } catch (error) {
     return res.status(500).json({
@@ -86,7 +89,7 @@ async function getPublicCourses(req, res) {
 
 async function getCommunityCourses(req, res) {
   try {
-    const courses = await coursesService.getCommunityCourses(req.user._id);
+    const courses = await coursesService.getCommunityCourses(req.user._id, req.query.lang);
     return res.json({ success: true, data: courses });
   } catch (error) {
     return res.status(500).json({
@@ -100,7 +103,8 @@ async function getCommunityCourses(req, res) {
 async function getPublicCourseLevels(req, res) {
   try {
     const levels = await coursesService.getPublicCourseLevels(
-      req.params.courseId
+      req.params.courseId,
+      req.query.lang
     );
     return res.json({ success: true, data: levels });
   } catch (error) {
@@ -165,7 +169,8 @@ async function addCourseComment(req, res) {
     const course = await coursesService.addCourseComment(
       req.params.courseId,
       req.body.message,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!course) {
@@ -193,7 +198,8 @@ async function deleteCourseComment(req, res) {
     const course = await coursesService.deleteCourseComment(
       req.params.courseId,
       req.params.commentId,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!course) {
@@ -221,7 +227,8 @@ async function rateCourse(req, res) {
     const course = await coursesService.rateCourse(
       req.params.courseId,
       req.body.rating,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!course) {

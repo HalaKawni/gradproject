@@ -24,6 +24,8 @@ class BuilderController extends ChangeNotifier {
   static const Duration _playbackStepDuration = Duration(milliseconds: 360);
   static const String playerFacingLeft = 'left';
   static const String playerFacingRight = 'right';
+  // Proximity radius (in grid cells) for goal/collectable hit detection
+  static const int _entityProximityRadius = 1;
 
   BuilderProject project;
   final AuthSession session;
@@ -2909,11 +2911,17 @@ class BuilderController extends ChangeNotifier {
     }
   }
 
+  bool _isWithinEntityProximity(int px, int py, int ex, int ey) {
+    return (px - ex).abs() <= _entityProximityRadius &&
+        (py - ey).abs() <= _entityProximityRadius;
+  }
+
   Set<String> _collectablesAt(int x, int y) {
     final collectableIds = <String>{};
 
     for (final entity in project.entities) {
-      if (entity.type == 'collectable' && entity.x == x && entity.y == y) {
+      if (entity.type == 'collectable' &&
+          _isWithinEntityProximity(x, y, entity.x, entity.y)) {
         collectableIds.add(entity.id);
       }
     }
@@ -2927,7 +2935,8 @@ class BuilderController extends ChangeNotifier {
       return false;
     }
 
-    final isAtGoal = state.playerX == goal.x && state.playerY == goal.y;
+    final isAtGoal =
+        _isWithinEntityProximity(state.playerX, state.playerY, goal.x, goal.y);
     if (!isAtGoal) {
       return false;
     }
@@ -2947,8 +2956,8 @@ class BuilderController extends ChangeNotifier {
     }
 
     if (requireAllCollectablesForSuccess &&
-        state.playerX == goal.x &&
-        state.playerY == goal.y &&
+        _isWithinEntityProximity(
+            state.playerX, state.playerY, goal.x, goal.y) &&
         state.collectedCollectableIds.length < totalCollectableCount) {
       final missingCollectables =
           totalCollectableCount - state.collectedCollectableIds.length;

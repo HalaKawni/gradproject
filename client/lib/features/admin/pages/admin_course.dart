@@ -6,6 +6,7 @@ import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/admin/models/admin_level.dart';
+import 'package:client/features/admin/shared/admin_view_theme.dart';
 import 'package:client/mycourses/create_course_page.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
@@ -652,33 +653,44 @@ class _AdminCoursesPageState extends State<AdminCoursesPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                language.t('coursesManagement'),
-                style: Theme.of(context).textTheme.headlineSmall,
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: AdminViewTheme.border.withValues(alpha: 0.9),
               ),
-              const Spacer(),
-              IconButton(
-                tooltip: language.t('refreshCourses'),
-                onPressed: _loadCourses,
-                icon: const Icon(Icons.refresh),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _showCreateCourseDialog,
-                icon: const Icon(Icons.add),
-                label: Text(language.t('createCourse')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TabBar(
-            tabs: [
-              Tab(text: language.t('published')),
-              Tab(text: language.t('drafts')),
-              Tab(text: language.t('userCreated')),
-            ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 24),
+                    tabs: [
+                      Tab(text: language.t('published')),
+                      Tab(text: language.t('drafts')),
+                      Tab(text: language.t('userCreated')),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                IconButton(
+                  tooltip: language.t('refreshCourses'),
+                  onPressed: _loadCourses,
+                  icon: const Icon(Icons.refresh),
+                ),
+                const SizedBox(width: 4),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ElevatedButton.icon(
+                    onPressed: _showCreateCourseDialog,
+                    icon: const Icon(Icons.add),
+                    label: Text(language.t('createCourse')),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Expanded(

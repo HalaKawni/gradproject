@@ -1,6 +1,8 @@
+import 'package:client/core/localization/app_language.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
+import 'package:client/features/admin/shared/admin_view_theme.dart';
 import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:client/features/builder/shared/widgets/course_level_nav_banner.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +29,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
   }
 
   Future<void> _loadNotifications() async {
+    final language = AppLanguage.instance;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -58,31 +61,35 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
 
     setState(() {
       _errorMessage =
-          result['message']?.toString() ?? 'Failed to load notifications.';
+          result['message']?.toString() ?? language.t('failedToLoadNotifications');
       _isLoading = false;
     });
   }
 
   Future<void> _approve(AdminCourse course) async {
+    final language = AppLanguage.of(context);
     final result = await ApiService.approveAdminCourseVerification(
       authToken: widget.session.token,
       courseId: course.id,
     );
-    _handleActionResult(result, 'Course verified.');
+    _handleActionResult(result, language.t('courseVerified'));
   }
 
   Future<void> _reject(AdminCourse course) async {
+    final language = AppLanguage.of(context);
     final reasonController = TextEditingController();
     final reason = await showDialog<String>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Reject "${course.title}"?'),
+          title: Text(
+            language.t('rejectCourseTitle', params: {'title': course.title}),
+          ),
           content: TextField(
             controller: reasonController,
-            decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: language.t('reasonOptional'),
+              border: const OutlineInputBorder(),
             ),
             minLines: 2,
             maxLines: 4,
@@ -90,11 +97,11 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: Text(language.t('cancel')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, reasonController.text),
-              child: const Text('Reject'),
+              child: Text(language.t('reject')),
             ),
           ],
         );
@@ -111,18 +118,20 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
       courseId: course.id,
       reason: reason.trim(),
     );
-    _handleActionResult(result, 'Verification rejected.');
+    _handleActionResult(result, language.t('verificationRejected'));
   }
 
   Future<void> _dismissUpdate(AdminCourse course) async {
+    final language = AppLanguage.of(context);
     final result = await ApiService.dismissAdminCourseUpdateNotification(
       authToken: widget.session.token,
       courseId: course.id,
     );
-    _handleActionResult(result, 'Update notification dismissed.');
+    _handleActionResult(result, language.t('updateNotificationDismissed'));
   }
 
   Future<void> _reviewCourse(AdminCourse course) async {
+    final language = AppLanguage.of(context);
     final courseId = course.courseId.isNotEmpty ? course.courseId : course.id;
     final result = await ApiService.getPublicCourseLevels(
       authToken: widget.session.token,
@@ -137,7 +146,8 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            result['message']?.toString() ?? 'Failed to load course levels.',
+            result['message']?.toString() ??
+                language.t('failedToLoadCourseLevels'),
           ),
         ),
       );
@@ -165,7 +175,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
 
     if (levels.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This course has no playable levels.')),
+        SnackBar(content: Text(language.t('noPlayableCourseLevels'))),
       );
       return;
     }
@@ -185,13 +195,14 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     if (!mounted) {
       return;
     }
+    final language = AppLanguage.of(context);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           result['success'] == true
               ? successMessage
-              : result['message']?.toString() ?? 'Action failed.',
+              : result['message']?.toString() ?? language.t('actionFailed'),
         ),
       ),
     );
@@ -203,6 +214,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -217,7 +229,7 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
             FilledButton.icon(
               onPressed: _loadNotifications,
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
+              label: Text(language.t('retry')),
             ),
           ],
         ),
@@ -225,31 +237,77 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     }
 
     if (_courses.isEmpty) {
-      return const Center(child: Text('No course notifications.'));
+      return Center(child: Text(language.t('noCourseNotifications')));
     }
 
     return RefreshIndicator(
       onRefresh: _loadNotifications,
-      child: ListView.separated(
+      child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        itemCount: _courses.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final course = _courses[index];
-          return _CourseNotificationCard(
-            course: course,
-            onReview: () => _reviewCourse(course),
-            onApprove: course.isVerificationPending
-                ? () => _approve(course)
-                : null,
-            onReject: course.isVerificationPending
-                ? () => _reject(course)
-                : null,
-            onDismissUpdate: course.hasUnreadUpdateNotification
-                ? () => _dismissUpdate(course)
-                : null,
-          );
-        },
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: AdminViewTheme.softCardDecoration(
+              AdminViewTheme.accent,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AdminViewTheme.highlight,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_active_outlined,
+                    color: AdminViewTheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        language.t('notifications'),
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        language.t('notificationsSummary'),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _loadNotifications,
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ..._courses.map((course) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _CourseNotificationCard(
+                course: course,
+                onReview: () => _reviewCourse(course),
+                onApprove: course.isVerificationPending
+                    ? () => _approve(course)
+                    : null,
+                onReject: course.isVerificationPending
+                    ? () => _reject(course)
+                    : null,
+                onDismissUpdate: course.hasUnreadUpdateNotification
+                    ? () => _dismissUpdate(course)
+                    : null,
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -272,10 +330,15 @@ class _CourseNotificationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = AppLanguage.of(context);
     final creator = course.creatorName.isEmpty
-        ? 'Unknown user'
+        ? language.t('unknownUser')
         : course.creatorName;
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: AdminViewTheme.border.withValues(alpha: 0.9)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -283,7 +346,15 @@ class _CourseNotificationCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.notifications_active_outlined),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AdminViewTheme.primarySoft.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(Icons.notifications_active_outlined),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -294,16 +365,16 @@ class _CourseNotificationCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text('By $creator'),
+                Text(language.t('byCreator', params: {'creator': creator})),
               ],
             ),
             const SizedBox(height: 10),
             if (course.isVerificationPending)
-              const Text('Verification request is waiting for review.'),
+              Text(language.t('verificationRequestWaiting')),
             if (course.hasUnreadUpdateNotification)
               Text(
                 course.lastUpdateNotificationMessage.isEmpty
-                    ? 'Verified course was updated.'
+                    ? language.t('verifiedCourseUpdated')
                     : course.lastUpdateNotificationMessage,
               ),
             const SizedBox(height: 12),
@@ -312,28 +383,31 @@ class _CourseNotificationCard extends StatelessWidget {
                 OutlinedButton.icon(
                   onPressed: onReview,
                   icon: const Icon(Icons.rate_review_outlined),
-                  label: const Text('Review levels'),
+                  label: Text(language.t('reviewLevels')),
                 ),
                 const SizedBox(width: 8),
                 if (onApprove != null)
                   FilledButton.icon(
                     onPressed: onApprove,
                     icon: const Icon(Icons.check_rounded),
-                    label: const Text('Approve'),
+                    label: Text(language.t('approve')),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AdminViewTheme.success,
+                    ),
                   ),
                 if (onApprove != null) const SizedBox(width: 8),
                 if (onReject != null)
                   OutlinedButton.icon(
                     onPressed: onReject,
                     icon: const Icon(Icons.close_rounded),
-                    label: const Text('Reject'),
+                    label: Text(language.t('reject')),
                   ),
                 const Spacer(),
                 if (onDismissUpdate != null)
                   TextButton.icon(
                     onPressed: onDismissUpdate,
                     icon: const Icon(Icons.done_all_rounded),
-                    label: const Text('Dismiss update'),
+                    label: Text(language.t('dismissUpdate')),
                   ),
               ],
             ),

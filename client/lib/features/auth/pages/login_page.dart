@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:client/core/services/api_service.dart';
@@ -156,6 +157,7 @@ class _LoginPageState extends State<LoginPage>
   }
 
   Future<void> _openAuthenticatedSession(dynamic rawData) async {
+    final selectedLanguageCode = context.locale.languageCode;
     final session = AuthSession.fromJson(
       rawData is Map ? Map<String, dynamic>.from(rawData) : {},
     );
@@ -184,6 +186,8 @@ class _LoginPageState extends State<LoginPage>
       'profilePhotoFrameOffsetX': session.user.profilePhotoFrameOffsetX,
       'profilePhotoFrameOffsetY': session.user.profilePhotoFrameOffsetY,
     });
+
+    await AppLanguage.instance.setLanguage(selectedLanguageCode);
 
     if (!mounted) {
       return;

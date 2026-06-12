@@ -8,6 +8,7 @@ import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/features/admin/models/admin_course.dart';
 import 'package:client/features/admin/models/admin_level.dart';
+import 'package:client/features/admin/shared/admin_view_theme.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -154,7 +155,7 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
           options: [
             _AdminBuilderCardData(
               type: _AdminBuilderType.frontView,
-              title: language.t('frontViewBlockPuzzle'),
+              title: 'Block Sequence',
               subtitle: language.t('frontViewDescription'),
               icon: Icons.view_in_ar_rounded,
               color: const Color(0xFF58C4DD),
@@ -162,19 +163,11 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
             ),
             _AdminBuilderCardData(
               type: _AdminBuilderType.topView,
-              title: language.t('topViewCodingLevel'),
+              title: 'Coding Sequence',
               subtitle: language.t('topViewDescription'),
               icon: Icons.grid_view_rounded,
               color: const Color(0xFF72C665),
               accentColor: const Color(0xFFEAF9E5),
-            ),
-            _AdminBuilderCardData(
-              type: _AdminBuilderType.scratch,
-              title: language.t('scratchBuilder'),
-              subtitle: language.t('scratchBuilderDescription'),
-              icon: Icons.extension_rounded,
-              color: const Color(0xFFB98AF3),
-              accentColor: const Color(0xFFF4ECFF),
             ),
             const _AdminBuilderCardData(
               type: _AdminBuilderType.fourthDemo,
@@ -183,6 +176,14 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
               icon: Icons.sports_esports_rounded,
               color: Color(0xFFFF7C9B),
               accentColor: Color(0xFFFFEDF2),
+            ),
+            _AdminBuilderCardData(
+              type: _AdminBuilderType.scratch,
+              title: 'Scratch Builder',
+              subtitle: language.t('scratchBuilderDescription'),
+              icon: Icons.extension_rounded,
+              color: const Color(0xFFB98AF3),
+              accentColor: const Color(0xFFF4ECFF),
             ),
           ],
         );
@@ -611,33 +612,36 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                language.t('levelsManagement'),
-                style: Theme.of(context).textTheme.headlineSmall,
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.72),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: AdminViewTheme.border.withValues(alpha: 0.9),
               ),
-              const Spacer(),
-              IconButton(
-                tooltip: language.t('refreshLevels'),
-                onPressed: _loadLevels,
-                icon: const Icon(Icons.refresh),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: _createLevel,
-                icon: const Icon(Icons.add),
-                label: Text(language.t('createLevel')),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TabBar(
-            tabs: [
-              Tab(text: language.t('published')),
-              Tab(text: language.t('drafts')),
-              Tab(text: language.t('userCreated')),
-            ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TabBar(
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    labelPadding: const EdgeInsets.symmetric(horizontal: 24),
+                    tabs: [
+                      Tab(text: language.t('published')),
+                      Tab(text: language.t('drafts')),
+                      Tab(text: language.t('userCreated')),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: _createLevel,
+                  icon: const Icon(Icons.add),
+                  label: Text(language.t('createLevel')),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
           Expanded(
@@ -1020,14 +1024,21 @@ class _LevelCard extends StatelessWidget {
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: AdminViewTheme.border.withValues(alpha: 0.9)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             height: 90,
             width: double.infinity,
-            color: Colors.grey.shade300,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AdminViewTheme.primarySoft, AdminViewTheme.highlight],
+              ),
+            ),
             child: level.coverImageBase64 != null
                 ? FramedImagePreview(
                     bytes: _safeDecodeCover(level.coverImageBase64),
@@ -1037,13 +1048,23 @@ class _LevelCard extends StatelessWidget {
                     placeholderIcon: Icons.image_outlined,
                   )
                 : level.previewImageUrl == null
-                ? const Center(child: Icon(Icons.image_outlined, size: 32))
+                ? const Center(
+                    child: Icon(
+                      Icons.image_outlined,
+                      size: 32,
+                      color: AdminViewTheme.text,
+                    ),
+                  )
                 : Image.network(
                     level.previewImageUrl!,
                     fit: BoxFit.cover,
                     errorBuilder: (_, _, _) {
                       return const Center(
-                        child: Icon(Icons.image_outlined, size: 32),
+                        child: Icon(
+                          Icons.image_outlined,
+                          size: 32,
+                          color: AdminViewTheme.text,
+                        ),
                       );
                     },
                   ),
@@ -1153,6 +1174,9 @@ class _LevelCard extends StatelessWidget {
                           onPressed: onDelete,
                           icon: const Icon(Icons.delete_outline, size: 18),
                           label: Text(language.t('delete')),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AdminViewTheme.danger,
+                          ),
                         ),
                       ),
                     ],

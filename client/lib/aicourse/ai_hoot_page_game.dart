@@ -1078,7 +1078,9 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Directionality(
+      textDirection: ui.TextDirection.ltr,
+      child: Scaffold(
       backgroundColor: const Color(0xFFE9EEF2),
       body: Stack(
         children: [
@@ -1271,6 +1273,7 @@ class _CodeMonkeyScratchPageState extends State<CodeMonkeyScratchPage> {
           ),
         ],
       ),
+    ),
     );
   }
 }
@@ -2214,24 +2217,18 @@ class _LessonPanelState extends State<_LessonPanel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.exerciseNumber == 9)
-                    const _Exercise9OverviewContent()
-                  else if (widget.exerciseNumber == 8)
-                    const _Exercise8OverviewContent()
-                  else if (widget.exerciseNumber == 7)
-                    const _Exercise7OverviewContent()
-                  else if (widget.exerciseNumber == 6)
-                    const _Exercise6OverviewContent()
-                  else if (widget.exerciseNumber == 5)
-                    const _Exercise5OverviewContent()
-                  else if (widget.exerciseNumber == 4)
-                    const _Exercise4OverviewContent()
-                  else if (widget.exerciseNumber == 3)
-                    const _Exercise3OverviewContent()
-                  else if (widget.exerciseNumber == 2)
-                    const _Exercise2OverviewContent()
-                  else
-                    const _Exercise1OverviewContent(),
+                  Builder(builder: (ctx) {
+                    final isArabic = Localizations.localeOf(ctx).languageCode == 'ar';
+                    if (widget.exerciseNumber == 9) return _Exercise9OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 8) return _Exercise8OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 7) return _Exercise7OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 6) return _Exercise6OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 5) return _Exercise5OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 4) return _Exercise4OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 3) return _Exercise3OverviewContent(isArabic: isArabic);
+                    if (widget.exerciseNumber == 2) return _Exercise2OverviewContent(isArabic: isArabic);
+                    return _Exercise1OverviewContent(isArabic: isArabic);
+                  }),
                   const SizedBox(height: 20),
                   // ── INSTRUCTIONS header ──
                   Row(
@@ -2522,7 +2519,8 @@ class _CodeExampleBox extends StatelessWidget {
 // ── Exercise overview content widgets ────────────────────────────────────────
 
 class _Exercise1OverviewContent extends StatelessWidget {
-  const _Exercise1OverviewContent();
+  const _Exercise1OverviewContent({this.isArabic = false});
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -2562,9 +2560,10 @@ class _Exercise1OverviewContent extends StatelessWidget {
         Builder(builder: (ctx) {
           return Row(
             children: [
-              const Expanded(
-                child: Text('Nice to Meet You, Oliver.',
-                    style: TextStyle(
+              Expanded(
+                child: Text(
+                    isArabic ? 'يسعدنا لقاؤك، أوليفر.' : 'Nice to Meet You, Oliver.',
+                    style: const TextStyle(
                         color: Color(0xFF101926),
                         fontSize: 15,
                         fontWeight: FontWeight.w800)),
@@ -2578,14 +2577,16 @@ class _Exercise1OverviewContent extends StatelessWidget {
           );
         }),
         const SizedBox(height: 12),
-        const Text(
-          "It's going to be an exciting night! We are going to learn\n"
-          'how to build an AI-based game to move Oliver, the owl,\n'
-          'between obstacles and get to the end of the route.\n\n'
-          'The player will use different postures to change the size\n'
-          'of the owl so it can go below or over tiles.\n'
-          'This is the game you will create at the end of course:',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'ستكون ليلةً مثيرة! سنتعلم كيفية بناء لعبة تعتمد على الذكاء الاصطناعي لتحريك أوليفر البومة بين العقبات والوصول إلى نهاية المسار.\n\nسيستخدم اللاعب أوضاعاً جسدية مختلفة لتغيير حجم البومة حتى تتمكن من المرور أسفل البلاطات أو فوقها.\nهذه هي اللعبة التي ستصنعها في نهاية الدورة:'
+              : "It's going to be an exciting night! We are going to learn\n"
+                  'how to build an AI-based game to move Oliver, the owl,\n'
+                  'between obstacles and get to the end of the route.\n\n'
+                  'The player will use different postures to change the size\n'
+                  'of the owl so it can go below or over tiles.\n'
+                  'This is the game you will create at the end of course:',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 12),
         Container(
@@ -2642,7 +2643,8 @@ class _Exercise1OverviewContent extends StatelessWidget {
 }
 
 class _Exercise2OverviewContent extends StatelessWidget {
-  const _Exercise2OverviewContent();
+  const _Exercise2OverviewContent({this.isArabic = false});
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -2682,9 +2684,10 @@ class _Exercise2OverviewContent extends StatelessWidget {
         Builder(builder: (ctx) {
           return Row(
             children: [
-              const Expanded(
-                child: Text('AI to the Rescue',
-                    style: TextStyle(
+              Expanded(
+                child: Text(
+                    isArabic ? 'الذكاء الاصطناعي لإنقاذ الموقف' : 'AI to the Rescue',
+                    style: const TextStyle(
                         color: Color(0xFF101926),
                         fontSize: 15,
                         fontWeight: FontWeight.w800)),
@@ -2698,28 +2701,34 @@ class _Exercise2OverviewContent extends StatelessWidget {
           );
         }),
         const SizedBox(height: 12),
-        const Text(
-          'In this exercise, we will create an AI model that will later be used to control the game.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'في هذا التمرين، سننشئ نموذج ذكاء اصطناعي سيُستخدم لاحقاً للتحكم في اللعبة.'
+              : 'In this exercise, we will create an AI model that will later be used to control the game.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 6),
-        const _BulletRow(
-          bullet: _Bullet('The AI model will identify gestures; also known as human poses.'),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic
+              ? 'سيتعرف النموذج على الإيماءات؛ والمعروفة أيضاً بالأوضاع الجسدية.'
+              : 'The AI model will identify gestures; also known as human poses.'),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'We will use an application to train the AI model. We will train the AI model to differentiate between two different poses:',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'سنستخدم تطبيقاً لتدريب النموذج على التمييز بين وضعين مختلفين:'
+              : 'We will use an application to train the AI model. We will train the AI model to differentiate between two different poses:',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 6),
-        const _BulletRow(
-          bullet: _Bullet('raising hands', numbered: 1),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic ? 'رفع اليدين' : 'raising hands', numbered: 1),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
-        const _BulletRow(
-          bullet: _Bullet('standing straight', numbered: 2),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic ? 'الوقوف مستقيماً' : 'standing straight', numbered: 2),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 20),
         const _DeepDiveBox(
@@ -2735,7 +2744,8 @@ class _Exercise2OverviewContent extends StatelessWidget {
 }
 
 class _Exercise3OverviewContent extends StatelessWidget {
-  const _Exercise3OverviewContent();
+  const _Exercise3OverviewContent({this.isArabic = false});
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -2774,9 +2784,9 @@ class _Exercise3OverviewContent extends StatelessWidget {
         const SizedBox(height: 18),
         Row(
           children: [
-            const Expanded(
-              child: Text('Add the Model',
-                  style: TextStyle(
+            Expanded(
+              child: Text(isArabic ? 'إضافة النموذج' : 'Add the Model',
+                  style: const TextStyle(
                       color: Color(0xFF101926),
                       fontSize: 15,
                       fontWeight: FontWeight.w800)),
@@ -2788,23 +2798,27 @@ class _Exercise3OverviewContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        const Text(
-          'After training the model, the model can identify two different poses:',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'بعد تدريب النموذج، يمكنه التعرف على وضعين مختلفين:'
+              : 'After training the model, the model can identify two different poses:',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 6),
-        const _BulletRow(
-          bullet: _Bullet('raising hands', numbered: 1),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic ? 'رفع اليدين' : 'raising hands', numbered: 1),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
-        const _BulletRow(
-          bullet: _Bullet('standing', numbered: 2),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic ? 'الوقوف' : 'standing', numbered: 2),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'Now, we will add the AI model to the game so that the owl can do different things for each pose.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'الآن، سنضيف النموذج إلى اللعبة حتى تتمكن البومة من فعل أشياء مختلفة لكل وضع.'
+              : 'Now, we will add the AI model to the game so that the owl can do different things for each pose.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 12),
         RichText(
@@ -2820,9 +2834,11 @@ class _Exercise3OverviewContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'When we raise our hands, the owl will jump. We will not make Oliver do something when we stand; it will continue to step.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'عندما نرفع أيدينا، ستقفز البومة. لن نجعل أوليفر يفعل شيئاً عند الوقوف؛ سيستمر في المشي.'
+              : 'When we raise our hands, the owl will jump. We will not make Oliver do something when we stand; it will continue to step.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 24),
         const _CodeExampleBox3(),
@@ -2886,7 +2902,8 @@ class _CodeExampleBox3 extends StatelessWidget {
 }
 
 class _Exercise4OverviewContent extends StatelessWidget {
-  const _Exercise4OverviewContent();
+  const _Exercise4OverviewContent({this.isArabic = false});
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -2925,9 +2942,9 @@ class _Exercise4OverviewContent extends StatelessWidget {
         const SizedBox(height: 18),
         Row(
           children: [
-            const Expanded(
-              child: Text("What's the Prediction?",
-                  style: TextStyle(
+            Expanded(
+              child: Text(isArabic ? 'ما هو التنبؤ؟' : "What's the Prediction?",
+                  style: const TextStyle(
                       color: Color(0xFF101926),
                       fontSize: 15,
                       fontWeight: FontWeight.w800)),
@@ -2956,9 +2973,11 @@ class _Exercise4OverviewContent extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        const Text(
-          'On Update runs every game frame (30–60 times per second), so the text widget will update in real time as you move.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'تعمل On Update في كل إطار من اللعبة (30-60 مرة في الثانية)، لذا سيتحدث عنصر النص بشكل فوري أثناء تحركك.'
+              : 'On Update runs every game frame (30–60 times per second), so the text widget will update in real time as you move.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 24),
         const _CodeExampleBox4(),
@@ -3027,7 +3046,8 @@ class _CodeExampleBox4 extends StatelessWidget {
 }
 
 class _Exercise5OverviewContent extends StatelessWidget {
-  const _Exercise5OverviewContent();
+  const _Exercise5OverviewContent({this.isArabic = false});
+  final bool isArabic;
 
   @override
   Widget build(BuildContext context) {
@@ -3049,23 +3069,27 @@ class _Exercise5OverviewContent extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        const Text('Enlarge the World',
-            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        Text(isArabic ? 'توسيع العالم' : 'Enlarge the World',
+            style: const TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text(
-          'In this exercise, we are going to enlarge the game area and set the camera to follow Oliver as it moves around the world.',
-          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        Text(
+          isArabic
+              ? 'في هذا التمرين، سنوسّع منطقة اللعبة ونضبط الكاميرا لتتبع أوليفر أثناء تحركه في العالم.'
+              : 'In this exercise, we are going to enlarge the game area and set the camera to follow Oliver as it moves around the world.',
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
         ),
         const SizedBox(height: 10),
-        const Text('From the Game tab, you can change some of the game\'s properties. For example:',
-            style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
+        Text(isArabic
+              ? 'من تبويب اللعبة، يمكنك تغيير بعض خصائص اللعبة. على سبيل المثال:'
+              : 'From the Game tab, you can change some of the game\'s properties. For example:',
+            style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
         const SizedBox(height: 6),
         _BulletRow(
-          bullet: const _Bullet('World size'),
+          bullet: _Bullet(isArabic ? 'حجم العالم' : 'World size'),
           style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13),
         ),
         _BulletRow(
-          bullet: const _Bullet('Camera target'),
+          bullet: _Bullet(isArabic ? 'هدف الكاميرا' : 'Camera target'),
           style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13),
         ),
       ],
@@ -3074,7 +3098,9 @@ class _Exercise5OverviewContent extends StatelessWidget {
 }
 
 class _Exercise6OverviewContent extends StatelessWidget {
-  const _Exercise6OverviewContent();
+  const _Exercise6OverviewContent({this.isArabic = false});
+  final bool isArabic;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -3088,30 +3114,36 @@ class _Exercise6OverviewContent extends StatelessWidget {
           Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
         ]),
         const SizedBox(height: 14),
-        const Text("Let's Challenge with Obstacles",
-            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        Text(isArabic ? 'لنواجه التحديات مع العقبات' : "Let's Challenge with Obstacles",
+            style: const TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text(
-          "When the game's world is bigger than the screen, use the drag icon ✛ (top right corner) to scroll beyond what is seen. Use the arrow icon to switch back.",
-          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        Text(
+          isArabic
+              ? 'عندما يكون عالم اللعبة أكبر من الشاشة، استخدم أيقونة السحب ✛ (أعلى اليمين) للتمرير خارج نطاق الرؤية. استخدم أيقونة السهم للعودة.'
+              : "When the game's world is bigger than the screen, use the drag icon ✛ (top right corner) to scroll beyond what is seen. Use the arrow icon to switch back.",
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
         ),
         const SizedBox(height: 10),
-        const Text("Let's see how we can add tiles:",
-            style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, fontWeight: FontWeight.bold, height: 1.5)),
+        Text(isArabic ? 'لنرَ كيف يمكننا إضافة البلاطات:' : "Let's see how we can add tiles:",
+            style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, fontWeight: FontWeight.bold, height: 1.5)),
         const SizedBox(height: 6),
-        const Text(
-          "This is done by using the upper right icon menu where you can click on the paintbrush 🖌, choose a pattern and click on the game to add the tiles. You can always erase them.",
-          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        Text(
+          isArabic
+              ? 'يتم ذلك باستخدام قائمة الأيقونات في أعلى اليمين حيث يمكنك النقر على الفرشاة 🖌، واختيار نمط والنقر على اللعبة لإضافة البلاطات. يمكنك دائماً محوها.'
+              : "This is done by using the upper right icon menu where you can click on the paintbrush 🖌, choose a pattern and click on the game to add the tiles. You can always erase them.",
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
         ),
         const SizedBox(height: 6),
-        const Text("Let's see!", style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
+        Text(isArabic ? 'لنجرب!' : "Let's see!", style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5)),
       ],
     );
   }
 }
 
 class _Exercise7OverviewContent extends StatelessWidget {
-  const _Exercise7OverviewContent();
+  const _Exercise7OverviewContent({this.isArabic = false});
+  final bool isArabic;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -3125,17 +3157,21 @@ class _Exercise7OverviewContent extends StatelessWidget {
           Container(height: 1.4, width: 100, color: const Color(0xFF78AD50)),
         ]),
         const SizedBox(height: 14),
-        const Text("Let's Build a New AI Model",
-            style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
+        Text(isArabic ? 'لنبنِ نموذج ذكاء اصطناعي جديداً' : "Let's Build a New AI Model",
+            style: const TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text(
-          'We have a model that can identify two human poses.',
-          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        Text(
+          isArabic
+              ? 'لدينا نموذج يمكنه التعرف على وضعين بشريين.'
+              : 'We have a model that can identify two human poses.',
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
         ),
         const SizedBox(height: 6),
-        const Text(
-          'This exercise is about building a new model that can identify three different poses - squat, stand, and arms up.',
-          style: TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
+        Text(
+          isArabic
+              ? 'يتعلق هذا التمرين ببناء نموذج جديد يمكنه التعرف على ثلاثة أوضاع مختلفة - القرفصاء والوقوف ورفع اليدين.'
+              : 'This exercise is about building a new model that can identify three different poses - squat, stand, and arms up.',
+          style: const TextStyle(color: Color(0xFF2E2722), fontSize: 13, height: 1.5),
         ),
         const SizedBox(height: 16),
         const _DeepDiveBox(
@@ -3151,7 +3187,9 @@ class _Exercise7OverviewContent extends StatelessWidget {
 }
 
 class _Exercise9OverviewContent extends StatelessWidget {
-  const _Exercise9OverviewContent();
+  const _Exercise9OverviewContent({this.isArabic = false});
+  final bool isArabic;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -3167,9 +3205,9 @@ class _Exercise9OverviewContent extends StatelessWidget {
         const SizedBox(height: 18),
         Builder(builder: (ctx) {
           return Row(children: [
-            const Expanded(
-              child: Text('How fast are You?',
-                  style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
+            Expanded(
+              child: Text(isArabic ? 'ما مدى سرعتك؟' : 'How fast are You?',
+                  style: const TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
             ),
             const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
             const SizedBox(width: 5),
@@ -3177,19 +3215,25 @@ class _Exercise9OverviewContent extends StatelessWidget {
           ]);
         }),
         const SizedBox(height: 12),
-        const Text(
-          "Let's time how many seconds it takes Oliver to get to the end of the game.",
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'لنقِس عدد الثواني التي يستغرقها أوليفر للوصول إلى نهاية اللعبة.'
+              : "Let's time how many seconds it takes Oliver to get to the end of the game.",
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'We will use the Clock widget to time the seconds.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'سنستخدم أداة Clock لقياس الثواني.'
+              : 'We will use the Clock widget to time the seconds.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'We will add another event that detects a collision with the world boundary and pause the game.',
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'سنضيف حدثاً آخر يكشف الاصطدام بحدود العالم ويوقف اللعبة.'
+              : 'We will add another event that detects a collision with the world boundary and pause the game.',
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 18),
         // CODE EXAMPLE
@@ -3237,7 +3281,9 @@ class _Exercise9OverviewContent extends StatelessWidget {
 }
 
 class _Exercise8OverviewContent extends StatelessWidget {
-  const _Exercise8OverviewContent();
+  const _Exercise8OverviewContent({this.isArabic = false});
+  final bool isArabic;
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -3253,9 +3299,9 @@ class _Exercise8OverviewContent extends StatelessWidget {
         const SizedBox(height: 18),
         Builder(builder: (ctx) {
           return Row(children: [
-            const Expanded(
-              child: Text('AI Comes to Life',
-                  style: TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
+            Expanded(
+              child: Text(isArabic ? 'الذكاء الاصطناعي ينبض بالحياة' : 'AI Comes to Life',
+                  style: const TextStyle(color: Color(0xFF101926), fontSize: 15, fontWeight: FontWeight.w800)),
             ),
             const Text('Listen', style: TextStyle(color: Color(0xFF34B772), fontSize: 15)),
             const SizedBox(width: 5),
@@ -3263,19 +3309,23 @@ class _Exercise8OverviewContent extends StatelessWidget {
           ]);
         }),
         const SizedBox(height: 12),
-        const Text(
-          "Let's play with the new AI model you've created. We'll make Oliver jump, shrink, or grow based on the poses we created.",
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'لنلعب مع نموذج الذكاء الاصطناعي الجديد الذي أنشأته. سنجعل أوليفر يقفز أو يتقلص أو يكبر بناءً على الأوضاع التي أنشأناها.'
+              : "Let's play with the new AI model you've created. We'll make Oliver jump, shrink, or grow based on the poses we created.",
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 8),
-        const Text(
-          "When you squat, we will change Oliver's scale to 0.5, and when you stand, we will set it to 1.",
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        Text(
+          isArabic
+              ? 'عندما تنحني، سنغير حجم أوليفر إلى 0.5، وعندما تقف، سنضبطه على 1.'
+              : "When you squat, we will change Oliver's scale to 0.5, and when you stand, we will set it to 1.",
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 4),
-        const _BulletRow(
-          bullet: _Bullet('Use the Set Scale block for this'),
-          style: TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
+        _BulletRow(
+          bullet: _Bullet(isArabic ? 'استخدم كتلة Set Scale لهذا الغرض' : 'Use the Set Scale block for this'),
+          style: const TextStyle(fontSize: 15, height: 1.42, color: Color(0xFF0D1B2A)),
         ),
         const SizedBox(height: 18),
         // CODE EXAMPLE

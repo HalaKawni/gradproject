@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class AdminLevel {
   final String id;
   final String title;
@@ -93,6 +95,10 @@ String _readString(
   String fallback = '',
 }) {
   final value = json[key] ?? (fallbackKey == null ? null : json[fallbackKey]);
+  if (value is Map) {
+    final langCode = AppLanguage.instance.locale.languageCode;
+    return value[langCode]?.toString() ?? value['en']?.toString() ?? fallback;
+  }
   return value?.toString() ?? fallback;
 }
 

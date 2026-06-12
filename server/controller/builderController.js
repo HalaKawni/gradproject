@@ -12,7 +12,7 @@ async function createProject(req, res) {
       });
     }
 
-    const project = await builderService.createProject(req.body, req.user);
+    const project = await builderService.createProject(req.body, req.user, req.query.lang);
 
     return res.status(201).json({
       success: true,
@@ -40,7 +40,7 @@ async function updateProject(req, res) {
       });
     }
 
-    const project = await builderService.updateProject(id, req.body, req.user);
+    const project = await builderService.updateProject(id, req.body, req.user, req.query.lang);
 
     if (!project) {
       return res.status(404).json({
@@ -69,7 +69,8 @@ async function updateProjectSettings(req, res) {
     const project = await builderService.updateProjectSettings(
       id,
       req.body,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!project) {
@@ -96,7 +97,7 @@ async function updateProjectSettings(req, res) {
 async function getProjectById(req, res) {
   try {
     const { id } = req.params;
-    const project = await builderService.getProjectById(id, req.user);
+    const project = await builderService.getProjectById(id, req.user, req.query.lang);
 
     if (!project) {
       return res.status(404).json({
@@ -120,7 +121,7 @@ async function getProjectById(req, res) {
 
 async function getAllProjects(req, res) {
   try {
-    const projects = await builderService.getAllProjects(req.user);
+    const projects = await builderService.getAllProjects(req.user, req.query.lang);
 
     return res.status(200).json({
       success: true,
@@ -137,7 +138,7 @@ async function getAllProjects(req, res) {
 
 async function getPublishedProjects(req, res) {
   try {
-    const projects = await builderService.getPublishedProjects(req.user);
+    const projects = await builderService.getPublishedProjects(req.user, req.query.lang);
 
     return res.status(200).json({
       success: true,
@@ -155,7 +156,7 @@ async function getPublishedProjects(req, res) {
 async function getPublishedProjectById(req, res) {
   try {
     const { id } = req.params;
-    const project = await builderService.getPublishedProjectById(id, req.user);
+    const project = await builderService.getPublishedProjectById(id, req.user, req.query.lang);
 
     if (!project) {
       return res.status(404).json({
@@ -180,7 +181,7 @@ async function getPublishedProjectById(req, res) {
 async function incrementProjectPlayCount(req, res) {
   try {
     const { id } = req.params;
-    const project = await builderService.incrementProjectPlayCount(id, req.user);
+    const project = await builderService.incrementProjectPlayCount(id, req.user, req.query.lang);
 
     if (!project) {
       return res.status(404).json({
@@ -209,7 +210,8 @@ async function addProjectComment(req, res) {
     const project = await builderService.addProjectComment(
       id,
       req.body.message,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!project) {
@@ -238,7 +240,8 @@ async function deleteProjectComment(req, res) {
     const project = await builderService.deleteProjectComment(
       id,
       commentId,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!project) {
@@ -267,7 +270,8 @@ async function rateProject(req, res) {
     const project = await builderService.rateProject(
       id,
       req.body.rating,
-      req.user
+      req.user,
+      req.query.lang
     );
 
     if (!project) {

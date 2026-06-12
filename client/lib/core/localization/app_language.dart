@@ -710,6 +710,9 @@ class AppLanguage extends ChangeNotifier {
 
   Locale _locale = const Locale('en');
   Map<String, String> _translations = {};
+  Map<String, String> _englishTranslations = {
+    ..._builderFallbackEn,
+  };
 
   Locale get locale => _locale;
   bool get isArabic => _locale.languageCode == 'ar';
@@ -724,10 +727,15 @@ class AppLanguage extends ChangeNotifier {
 
   Future<void> setLanguage(String code, {bool persist = true}) async {
     final normalizedCode = code == 'ar' ? 'ar' : 'en';
+    final englishRawJson = await rootBundle.loadString('assets/i18n/en.json');
     final rawJson = await rootBundle.loadString(
       'assets/i18n/$normalizedCode.json',
     );
+    final englishDecoded = jsonDecode(englishRawJson) as Map<String, dynamic>;
     final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
+    final englishBuilderDecoded = await _loadOptionalTranslations(
+      'assets/i18n/builders_en.json',
+    );
     final builderDecoded = await _loadOptionalTranslations(
       'assets/i18n/builders_$normalizedCode.json',
     );
@@ -736,6 +744,11 @@ class AppLanguage extends ChangeNotifier {
         : _builderFallbackEn;
 
     _locale = Locale(normalizedCode);
+    _englishTranslations = <String, dynamic>{
+      ...englishDecoded,
+      ..._builderFallbackEn,
+      ...englishBuilderDecoded,
+    }.map((key, value) => MapEntry(key, value.toString()));
     _translations = <String, dynamic>{
       ...decoded,
       ...builderFallback,
@@ -751,7 +764,7 @@ class AppLanguage extends ChangeNotifier {
   }
 
   String t(String key, {Map<String, String> params = const {}}) {
-    var value = _translations[key] ?? key;
+    var value = _rawTranslationForKey(key) ?? key;
 
     for (final entry in params.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value);
@@ -765,13 +778,21 @@ class AppLanguage extends ChangeNotifier {
     String fallback, {
     Map<String, String> params = const {},
   }) {
-    var value = _translations[key] ?? fallback;
+    var value = _rawTranslationForKey(key) ?? fallback;
 
     for (final entry in params.entries) {
       value = value.replaceAll('{${entry.key}}', entry.value);
     }
 
     return value;
+  }
+
+  String? _rawTranslationForKey(String key) {
+    if (key.startsWith('builder.')) {
+      return _englishTranslations[key] ?? _builderFallbackEn[key] ?? key;
+    }
+
+    return _translations[key];
   }
 
   Future<Map<String, dynamic>> _loadOptionalTranslations(

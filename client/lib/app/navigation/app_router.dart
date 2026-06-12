@@ -88,6 +88,7 @@ class AppRouter {
         if (data is BuilderRouteData) {
           return _pageRoute(
             settings: settings,
+            forceLtr: true,
             builder: (_) => BuilderPage(
               session: data.session,
               initialProjectId: data.initialProjectId,
@@ -108,6 +109,7 @@ class AppRouter {
         if (data is BuilderPlayRouteData) {
           return _pageRoute(
             settings: settings,
+            forceLtr: true,
             builder: (_) => BuilderPlayPage(
               session: data.session,
               projectId: data.projectId,
@@ -127,6 +129,7 @@ class AppRouter {
         if (data is FourthDemoBuilderRouteData) {
           return _pageRoute(
             settings: settings,
+            forceLtr: true,
             builder: (_) => FourthDemoBuilderPage(
               session: data.session,
               initialProjectId: data.initialProjectId,
@@ -153,6 +156,7 @@ class AppRouter {
         if (data is TopViewBuilderRouteData) {
           return _pageRoute(
             settings: settings,
+            forceLtr: true,
             builder: (_) => TopViewBuilderPage(
               session: data.session,
               initialProjectId: data.initialProjectId,
@@ -179,6 +183,7 @@ class AppRouter {
         if (data is ScratchBuilderRouteData) {
           return _pageRoute(
             settings: settings,
+            forceLtr: true,
             builder: (_) => ScratchBuilderPage(
               session: data.session,
               initialProjectId: data.initialProjectId,
@@ -295,13 +300,14 @@ class AppRouter {
   static MaterialPageRoute<void> _pageRoute({
     required RouteSettings settings,
     required WidgetBuilder builder,
+    bool forceLtr = false,
   }) {
     return MaterialPageRoute<void>(
       settings: settings,
       builder: (context) {
         final language = AppLanguage.of(context);
         return Directionality(
-          textDirection: language.textDirection,
+          textDirection: forceLtr ? TextDirection.ltr : language.textDirection,
           child: builder(context),
         );
       },

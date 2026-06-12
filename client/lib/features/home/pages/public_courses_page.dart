@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'dart:ui' as ui;
 import 'dart:typed_data';
 
 import 'package:client/app/navigation/app_route_data.dart';
 import 'package:client/app/navigation/app_routes.dart';
-import 'package:client/aicourse/ai_hoot_page_game.dart';
+import 'package:client/aicourse/ai_hoot_conditional.dart';
 import 'package:client/core/models/auth_session.dart';
 import 'package:client/core/services/api_service.dart';
 import 'package:client/datagame/data_course_page.dart';
@@ -12,6 +13,7 @@ import 'package:client/features/builder/models/saved_builder_project.dart';
 import 'package:client/features/home/models/legacy_public_course_catalog.dart';
 import 'package:client/features/home/services/course_resume_service.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'world_map_page.dart';
 
@@ -29,10 +31,26 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
   String? _errorMessage;
   List<_PublicCourse> _courses = const [];
   String? _openingCourseId;
+  String? _lastLocaleCode;
 
   @override
   void initState() {
     super.initState();
+    _loadCourses();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final localeCode = context.locale.languageCode;
+    if (_lastLocaleCode == null) {
+      _lastLocaleCode = localeCode;
+      return;
+    }
+    if (_lastLocaleCode == localeCode) {
+      return;
+    }
+    _lastLocaleCode = localeCode;
     _loadCourses();
   }
 
@@ -201,7 +219,10 @@ class _PublicCoursesPageState extends State<PublicCoursesPage> {
       case 'data_is_everywhere':
         return const DataCoursePage();
       case 'coding_chatbots':
-        return const CodeMonkeyScratchPage();
+        return const Directionality(
+          textDirection: ui.TextDirection.ltr,
+          child: CodeMonkeyScratchPage(),
+        );
       default:
         return null;
     }
@@ -453,10 +474,26 @@ class _CourseLevelsPageState extends State<_CourseLevelsPage> {
   bool _isLoading = true;
   String? _errorMessage;
   List<SavedBuilderProject> _levels = const [];
+  String? _lastLocaleCode;
 
   @override
   void initState() {
     super.initState();
+    _loadLevels();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final localeCode = context.locale.languageCode;
+    if (_lastLocaleCode == null) {
+      _lastLocaleCode = localeCode;
+      return;
+    }
+    if (_lastLocaleCode == localeCode) {
+      return;
+    }
+    _lastLocaleCode = localeCode;
     _loadLevels();
   }
 

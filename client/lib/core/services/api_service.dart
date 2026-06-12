@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import '../constants/api_config.dart';
+import '../localization/app_language.dart';
 
 class ApiService {
   static String get baseUrl => ApiConfig.origin;
@@ -9,6 +10,21 @@ class ApiService {
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
   };
+
+  static Map<String, String> _withLanguageQueryParameters(
+    Map<String, String>? queryParameters,
+  ) {
+    final merged = <String, String>{...?queryParameters};
+    final languageCode = AppLanguage.instance.locale.languageCode
+        .trim()
+        .toLowerCase();
+
+    if (languageCode == 'en' || languageCode == 'ar') {
+      merged['lang'] = languageCode;
+    }
+
+    return merged;
+  }
 
   // =========================
   // AUTH
@@ -320,9 +336,12 @@ class ApiService {
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/builder/projects/$projectId');
+      final localizedUrl = url.replace(
+        queryParameters: _withLanguageQueryParameters(null),
+      );
 
       final response = await http.get(
-        url,
+        localizedUrl,
         headers: _headersWithAuth(authToken),
       );
 
@@ -350,9 +369,12 @@ class ApiService {
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/builder/projects');
+      final localizedUrl = url.replace(
+        queryParameters: _withLanguageQueryParameters(null),
+      );
 
       final response = await http.get(
-        url,
+        localizedUrl,
         headers: _headersWithAuth(authToken),
       );
 
@@ -380,9 +402,12 @@ class ApiService {
   }) async {
     try {
       final url = Uri.parse('$baseUrl/api/builder/projects/published');
+      final localizedUrl = url.replace(
+        queryParameters: _withLanguageQueryParameters(null),
+      );
 
       final response = await http.get(
-        url,
+        localizedUrl,
         headers: _headersWithAuth(authToken),
       );
 
@@ -416,9 +441,12 @@ class ApiService {
       final url = Uri.parse(
         '$baseUrl/api/builder/projects/published/$projectId',
       );
+      final localizedUrl = url.replace(
+        queryParameters: _withLanguageQueryParameters(null),
+      );
 
       final response = await http.get(
-        url,
+        localizedUrl,
         headers: _headersWithAuth(authToken),
       );
 
@@ -654,6 +682,7 @@ class ApiService {
       method: 'GET',
       path: '/api/courses/public',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch courses',
     );
   }
@@ -665,6 +694,7 @@ class ApiService {
       method: 'GET',
       path: '/api/courses/mine',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch your courses',
     );
   }
@@ -678,6 +708,7 @@ class ApiService {
       path: '/api/courses/mine',
       authToken: authToken,
       body: courseJson,
+      includeLanguage: true,
       defaultSuccessMessage: 'Course created successfully',
       defaultErrorMessage: 'Failed to create course',
     );
@@ -693,6 +724,7 @@ class ApiService {
       path: '/api/courses/mine/$courseId',
       authToken: authToken,
       body: courseJson,
+      includeLanguage: true,
       defaultSuccessMessage: 'Course updated successfully',
       defaultErrorMessage: 'Failed to update course',
     );
@@ -719,6 +751,7 @@ class ApiService {
       method: 'POST',
       path: '/api/courses/mine/$courseId/verification-request',
       authToken: authToken,
+      includeLanguage: true,
       defaultSuccessMessage: 'Verification request sent successfully',
       defaultErrorMessage: 'Failed to request verification',
     );
@@ -731,6 +764,7 @@ class ApiService {
       method: 'GET',
       path: '/api/courses/community',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch community courses',
     );
   }
@@ -745,6 +779,7 @@ class ApiService {
       path: '/api/courses/$courseId/comments',
       authToken: authToken,
       body: {'message': message},
+      includeLanguage: true,
       defaultSuccessMessage: 'Comment added successfully',
       defaultErrorMessage: 'Failed to add comment',
     );
@@ -759,6 +794,7 @@ class ApiService {
       method: 'DELETE',
       path: '/api/courses/$courseId/comments/$commentId',
       authToken: authToken,
+      includeLanguage: true,
       defaultSuccessMessage: 'Comment deleted successfully',
       defaultErrorMessage: 'Failed to delete comment',
     );
@@ -774,6 +810,7 @@ class ApiService {
       path: '/api/courses/$courseId/rating',
       authToken: authToken,
       body: {'rating': rating},
+      includeLanguage: true,
       defaultSuccessMessage: 'Rating saved successfully',
       defaultErrorMessage: 'Failed to save rating',
     );
@@ -787,6 +824,7 @@ class ApiService {
       method: 'GET',
       path: '/api/courses/$courseId/levels',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch course levels',
     );
   }
@@ -880,6 +918,7 @@ class ApiService {
       method: 'GET',
       path: '/api/admin/courses',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch courses',
     );
   }
@@ -891,6 +930,7 @@ class ApiService {
       method: 'GET',
       path: '/api/admin/courses/notifications',
       authToken: authToken,
+      includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch course notifications',
     );
   }
@@ -904,6 +944,7 @@ class ApiService {
       path: '/api/admin/courses',
       authToken: authToken,
       body: courseJson,
+      includeLanguage: true,
       defaultSuccessMessage: 'Course created successfully',
       defaultErrorMessage: 'Failed to create course',
     );
@@ -919,6 +960,7 @@ class ApiService {
       path: '/api/admin/courses/$courseId',
       authToken: authToken,
       body: courseJson,
+      includeLanguage: true,
       defaultSuccessMessage: 'Course updated successfully',
       defaultErrorMessage: 'Failed to update course',
     );
@@ -1131,13 +1173,18 @@ class ApiService {
     required String authToken,
     Map<String, String>? queryParameters,
     Map<String, dynamic>? body,
+    bool includeLanguage = false,
     String defaultSuccessMessage = 'Request completed successfully',
     String defaultErrorMessage = 'Request failed',
   }) async {
     try {
       final url = Uri.parse(
         '$baseUrl$path',
-      ).replace(queryParameters: queryParameters);
+      ).replace(
+        queryParameters: includeLanguage
+            ? _withLanguageQueryParameters(queryParameters)
+            : queryParameters,
+      );
       final headers = _headersWithAuth(authToken);
       late final http.Response response;
 
