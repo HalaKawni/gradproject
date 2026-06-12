@@ -17,4 +17,5 @@ class AppRoutes {
   static const String publicCourses = '/courses';
   static const String profile = '/profile';
   static const String admin = '/admin';
+  static const String parent = '/parent';
 }

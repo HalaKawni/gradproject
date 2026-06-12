@@ -15,6 +15,7 @@ import 'package:client/features/builder/scratch_builder/pages/scratch_builder_pa
 import 'package:client/features/builder/top_view/pages/top_view_builder_page.dart';
 import 'package:client/features/home/pages/discover.dart';
 import 'package:client/features/home/pages/dashboard_page.dart';
+import 'package:client/parent/parent_dashboard_page.dart';
 import 'package:client/features/home/pages/public_courses_page.dart';
 import 'package:client/features/profile/pages/user_profile_page.dart';
 import 'package:flutter/material.dart';
@@ -284,6 +285,20 @@ class AppRouter {
         return _errorRoute(
           settings,
           'The admin page needs an active user session.',
+        );
+      case AppRoutes.parent:
+        final data = settings.arguments;
+        if (data is ParentRouteData) {
+          return _pageRoute(
+            settings: settings,
+            builder: (_) => ParentDashboardPage(
+              parentName: data.session.user.name,
+            ),
+          );
+        }
+        return _errorRoute(
+          settings,
+          'The parent page needs an active user session.',
         );
       default:
         return onUnknownRoute(settings);

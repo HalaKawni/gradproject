@@ -193,12 +193,16 @@ class _LoginPageState extends State<LoginPage>
       return;
     }
 
-    final routeName = session.userRole == 'admin'
-        ? AppRoutes.admin
-        : AppRoutes.dashboard;
-    final routeData = session.userRole == 'admin'
-        ? AdminRouteData(session: session)
-        : DashboardRouteData(session: session);
+    final routeName = switch (session.userRole) {
+      'admin' => AppRoutes.admin,
+      'parent' => AppRoutes.parent,
+      _ => AppRoutes.dashboard,
+    };
+    final routeData = switch (session.userRole) {
+      'admin' => AdminRouteData(session: session),
+      'parent' => ParentRouteData(session: session),
+      _ => DashboardRouteData(session: session),
+    };
 
     _scaffoldMessenger?.removeCurrentSnackBar();
     Navigator.of(context).pushNamedAndRemoveUntil(

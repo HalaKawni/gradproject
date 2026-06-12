@@ -181,3 +181,9 @@ class AdminRouteData {
 
   final AuthSession session;
 }
+
+class ParentRouteData {
+  const ParentRouteData({required this.session});
+
+  final AuthSession session;
+}
