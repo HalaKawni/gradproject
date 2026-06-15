@@ -1,3 +1,5 @@
+import 'package:client/core/localization/app_language.dart';
+
 class AdminCourse {
   final String id;
   final String courseId;
@@ -164,7 +166,7 @@ String _readString(
   String fallback = '',
 }) {
   final value = json[key] ?? (fallbackKey == null ? null : json[fallbackKey]);
-  return value?.toString() ?? fallback;
+  return _readLocalizedString(value, fallback: fallback);
 }
 
 int _readInt(Object? value) {
@@ -201,11 +203,48 @@ double _readDouble(Object? value, {double fallback = 0}) {
 }
 
 String? _readNullableString(Object? value) {
-  final text = value?.toString();
+  final text = _readLocalizedString(value);
   if (text == null || text.isEmpty) {
     return null;
   }
   return text;
+}
+
+String _readLocalizedString(Object? value, {String fallback = ''}) {
+  if (value == null) {
+    return fallback;
+  }
+
+  if (value is String) {
+    return value;
+  }
+
+  if (value is Map) {
+    final localizedMap = Map<String, dynamic>.from(value);
+    final currentLanguage = AppLanguage.instance.locale.languageCode;
+    final directMatch = localizedMap[currentLanguage];
+    if (directMatch is String && directMatch.trim().isNotEmpty) {
+      return directMatch;
+    }
+
+    final englishMatch = localizedMap['en'];
+    if (englishMatch is String && englishMatch.trim().isNotEmpty) {
+      return englishMatch;
+    }
+
+    final arabicMatch = localizedMap['ar'];
+    if (arabicMatch is String && arabicMatch.trim().isNotEmpty) {
+      return arabicMatch;
+    }
+
+    for (final candidate in localizedMap.values) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        return candidate;
+      }
+    }
+  }
+
+  return value.toString();
 }
 
 Map<String, dynamic> _readMap(Object? value) {

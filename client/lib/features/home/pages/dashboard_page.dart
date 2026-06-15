@@ -4237,6 +4237,7 @@ class _DashboardPageState extends State<DashboardPage> {
     double coverFrameScale = course?.coverFrameScale ?? 1;
     double coverFrameOffsetX = course?.coverFrameOffsetX ?? 0;
     double coverFrameOffsetY = course?.coverFrameOffsetY ?? 0;
+    String? nameErrorText;
 
     final payload = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -4288,8 +4289,18 @@ class _DashboardPageState extends State<DashboardPage> {
                     onPressed: () {
                       final title = nameController.text.trim();
                       if (title.isEmpty) {
+                        setDialogState(() => nameErrorText = 'Course name is required.');
+                        ScaffoldMessenger.of(this.context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            const SnackBar(
+                              content: Text('Enter a course name first.'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
                         return;
                       }
+                      setDialogState(() => nameErrorText = null);
                       Navigator.pop(context, {
                         'courseName': title,
                         'courseId': course?.courseId.isNotEmpty == true
@@ -4317,6 +4328,12 @@ class _DashboardPageState extends State<DashboardPage> {
                       controller: nameController,
                       label: 'Course name',
                       icon: Icons.title_rounded,
+                      errorText: nameErrorText,
+                      onChanged: (_) {
+                        if (nameErrorText != null) {
+                          setDialogState(() => nameErrorText = null);
+                        }
+                      },
                     ),
                     const SizedBox(height: 12),
                     _SettingsTextField(
@@ -4383,10 +4400,6 @@ class _DashboardPageState extends State<DashboardPage> {
         );
       },
     );
-
-    nameController.dispose();
-    categoryController.dispose();
-    descriptionController.dispose();
 
     if (!mounted || payload == null) {
       return null;
@@ -5050,14 +5063,6 @@ class _CreationBuilderPickerDialog extends StatelessWidget {
       icon: Icons.grid_view_rounded,
       color: Color(0xFF72C665),
       accentColor: Color(0xFFEAF9E5),
-    ),
-    _CreationBuilderCardData(
-      option: _CreationBuilderOption.scratch,
-      title: 'Scratch Coding',
-      subtitle: 'Create friendly drag-and-drop coding challenges.',
-      icon: Icons.extension_rounded,
-      color: Color(0xFFB98AF3),
-      accentColor: Color(0xFFF4ECFF),
     ),
     _CreationBuilderCardData(
       option: _CreationBuilderOption.fourthDemo,
@@ -6953,17 +6958,20 @@ class _CreationSettingsShell extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  if (constraints.maxWidth < 360) {
-                    return Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
+                  final visibleActions = actions
+                      .where((widget) => widget is! Spacer)
+                      .toList(growable: false);
+
+                  return Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       alignment: WrapAlignment.end,
-                      children: [
-                        ...actions.where((w) => w is! Spacer),
-                      ],
-                    );
-                  }
-                  return Row(children: actions);
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: visibleActions,
+                    ),
+                  );
                 },
               ),
             ),
@@ -6980,6 +6988,8 @@ class _SettingsTextField extends StatelessWidget {
   final IconData icon;
   final int? minLines;
   final int? maxLines;
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
 
   const _SettingsTextField({
     required this.controller,
@@ -6987,6 +6997,8 @@ class _SettingsTextField extends StatelessWidget {
     required this.icon,
     this.minLines,
     this.maxLines,
+    this.errorText,
+    this.onChanged,
   });
 
   @override
@@ -6995,9 +7007,11 @@ class _SettingsTextField extends StatelessWidget {
       controller: controller,
       minLines: minLines,
       maxLines: maxLines ?? 1,
+      onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
+        errorText: errorText,
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -7227,8 +7241,8 @@ class _CourseData {
     final courseKey = json['courseId']?.toString() ?? '';
     final legacyMetadata = legacyPublicCourseMetadataForCourseId(courseKey);
     final title =
-        json['courseName']?.toString() ??
-        json['title']?.toString() ??
+        _readLocalizedCourseText(json['courseName']) ??
+        _readLocalizedCourseText(json['title']) ??
         legacyMetadata?.title ??
         'Untitled Course';
     final category = json['category']?.toString().trim();
@@ -7279,7 +7293,7 @@ class _CourseData {
       coverFrameOffsetX: _readCourseDouble(json['coverFrameOffsetX']),
       coverFrameOffsetY: _readCourseDouble(json['coverFrameOffsetY']),
       description:
-          json['description']?.toString() ??
+          _readLocalizedCourseText(json['description']) ??
           legacyMetadata?.description ??
           'Open this course to play the levels built by your teacher.',
       creatorName: creatorName,
@@ -7404,6 +7418,37 @@ class _CourseData {
         )
         .toList(growable: false);
   }
+}
+
+String? _readLocalizedCourseText(Object? value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  if (value is Map) {
+    final localizedMap = Map<String, dynamic>.from(value);
+    final currentLanguage = AppLanguage.instance.locale.languageCode;
+    final candidates = <Object?>[
+      localizedMap[currentLanguage],
+      localizedMap['en'],
+      localizedMap['ar'],
+      ...localizedMap.values,
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        return candidate.trim();
+      }
+    }
+  }
+
+  final fallback = value.toString().trim();
+  return fallback.isEmpty ? null : fallback;
 }
 
 typedef _CourseCommentSubmitter = Future<_CourseData?> Function(String message);

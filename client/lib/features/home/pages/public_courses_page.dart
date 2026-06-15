@@ -14,6 +14,7 @@ import 'package:client/features/home/models/legacy_public_course_catalog.dart';
 import 'package:client/features/home/services/course_resume_service.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:client/core/localization/app_language.dart';
 import 'package:flutter/material.dart';
 import 'world_map_page.dart';
 
@@ -737,12 +738,12 @@ class _PublicCourse {
           legacyMetadata?.legacyPageKey ??
           '',
       title:
-          json['courseName']?.toString() ??
-          json['title']?.toString() ??
+          _readLocalizedPublicCourseText(json['courseName']) ??
+          _readLocalizedPublicCourseText(json['title']) ??
           legacyMetadata?.title ??
           'Untitled Course',
       description:
-          json['description']?.toString() ??
+          _readLocalizedPublicCourseText(json['description']) ??
           legacyMetadata?.description ??
           '',
       imagePath: legacyMetadata?.imagePath ?? 'assets/images/course1.jpg',
@@ -773,6 +774,37 @@ class _PublicCourse {
     }
     return double.tryParse(value?.toString() ?? '') ?? fallback;
   }
+}
+
+String? _readLocalizedPublicCourseText(Object? value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String) {
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  if (value is Map) {
+    final localizedMap = Map<String, dynamic>.from(value);
+    final currentLanguage = AppLanguage.instance.locale.languageCode;
+    final candidates = <Object?>[
+      localizedMap[currentLanguage],
+      localizedMap['en'],
+      localizedMap['ar'],
+      ...localizedMap.values,
+    ];
+
+    for (final candidate in candidates) {
+      if (candidate is String && candidate.trim().isNotEmpty) {
+        return candidate.trim();
+      }
+    }
+  }
+
+  final fallback = value.toString().trim();
+  return fallback.isEmpty ? null : fallback;
 }
 
 class _CourseProgress {

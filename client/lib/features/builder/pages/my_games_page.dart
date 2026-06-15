@@ -13,7 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/saved_builder_project.dart';
 
-enum _GameCreatorOption { scratch, frontView, topView, fourthDemo }
+enum _GameCreatorOption { frontView, topView, fourthDemo }
 
 class MyGamesPage extends StatefulWidget {
   final AuthSession session;
@@ -404,12 +404,6 @@ class _MyGamesPageState extends State<MyGamesPage> {
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop(_GameCreatorOption.scratch);
-              },
-              child: const Text('Scratch Builder'),
-            ),
-            TextButton(
-              onPressed: () {
                 Navigator.of(dialogContext).pop(_GameCreatorOption.frontView);
               },
               child: const Text('Front View'),
@@ -436,8 +430,6 @@ class _MyGamesPageState extends State<MyGamesPage> {
     }
 
     switch (selection) {
-      case _GameCreatorOption.scratch:
-        _openScratchBuilder(context);
       case _GameCreatorOption.frontView:
         _openFrontViewBuilder(context);
       case _GameCreatorOption.topView:

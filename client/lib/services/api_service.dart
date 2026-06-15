@@ -233,6 +233,26 @@ class ApiService {
     String? coverImageBase64,
     String? authToken,
   }) async {
+    final result = await saveCourseDetailed(
+      title: title,
+      description: description,
+      lessons: lessons,
+      coverImageBase64: coverImageBase64,
+      authToken: authToken,
+    );
+    if (result['success'] == true && result['data'] is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(result['data'] as Map);
+    }
+    return null;
+  }
+
+  static Future<Map<String, dynamic>> saveCourseDetailed({
+    required String title,
+    required String description,
+    required List<Map<String, dynamic>> lessons,
+    String? coverImageBase64,
+    String? authToken,
+  }) async {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/course'),
@@ -244,15 +264,25 @@ class ApiService {
           if (coverImageBase64 != null) 'courseImageBase64': coverImageBase64,
         }),
       );
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
-        if (data['status'] == true)
-          return data['course'] as Map<String, dynamic>;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 201 && data['status'] == true) {
+        return {
+          'success': true,
+          'data': data['course'],
+          'message': 'Course saved successfully',
+        };
       }
-      return null;
+
+      return {
+        'success': false,
+        'message': data['error'] ?? 'Failed to save course',
+      };
     } catch (e) {
-      print('[Course] Save error: $e');
-      return null;
+      return {
+        'success': false,
+        'message': 'Failed to save course: $e',
+      };
     }
   }
 
@@ -282,15 +312,44 @@ class ApiService {
     Map<String, dynamic> updates, {
     String? authToken,
   }) async {
+    final result = await updateCourseDetailed(
+      id,
+      updates,
+      authToken: authToken,
+    );
+    return result['success'] == true;
+  }
+
+  static Future<Map<String, dynamic>> updateCourseDetailed(
+    String id,
+    Map<String, dynamic> updates, {
+    String? authToken,
+  }) async {
     try {
       final response = await http.patch(
         Uri.parse('$baseUrl/course/$id'),
         headers: await _authHeaders(authToken: authToken),
         body: jsonEncode(updates),
       );
-      return response.statusCode == 200;
+
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200 && data['status'] == true) {
+        return {
+          'success': true,
+          'data': data['course'],
+          'message': 'Course updated successfully',
+        };
+      }
+
+      return {
+        'success': false,
+        'message': data['error'] ?? 'Failed to update course',
+      };
     } catch (e) {
-      return false;
+      return {
+        'success': false,
+        'message': 'Failed to update course: $e',
+      };
     }
   }
 
