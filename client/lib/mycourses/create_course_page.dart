@@ -35,6 +35,7 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
   final _descController = TextEditingController();
   final List<_LessonDraft> _lessons = [];
   bool _saved = false;
+  bool _isSaving = false;
   Uint8List? _coverImageBytes;
   bool get _isEditMode => widget.courseId != null;
 
@@ -212,7 +213,11 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
     setState(() => _coverImageBytes = result.files.first.bytes);
   }
 
-  Future<void> _saveCourst() async {
+  Future<void> _saveCourse() async {
+    if (_isSaving) {
+      return;
+    }
+
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -236,18 +241,27 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
         )
         .toList();
 
-    bool success;
+    setState(() => _isSaving = true);
+
+    late final bool success;
+    String? failureMessage;
     if (_isEditMode) {
-      success = await ApiService.updateCourse(widget.courseId!, {
-        'title': _titleController.text.trim(),
-        'description': _descController.text.trim(),
-        'lessons': lessonsData,
-        'courseImageBase64': _coverImageBytes != null
-            ? base64Encode(_coverImageBytes!)
-            : null,
-      }, authToken: widget.session?.token);
+      final result = await ApiService.updateCourseDetailed(
+        widget.courseId!,
+        {
+          'title': _titleController.text.trim(),
+          'description': _descController.text.trim(),
+          'lessons': lessonsData,
+          'courseImageBase64': _coverImageBytes != null
+              ? base64Encode(_coverImageBytes!)
+              : null,
+        },
+        authToken: widget.session?.token,
+      );
+      success = result['success'] == true;
+      failureMessage = result['message']?.toString();
     } else {
-      final saved = await ApiService.saveCourse(
+      final result = await ApiService.saveCourseDetailed(
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         lessons: lessonsData,
@@ -256,10 +270,12 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
             : null,
         authToken: widget.session?.token,
       );
-      success = saved != null;
+      success = result['success'] == true;
+      failureMessage = result['message']?.toString();
     }
 
     if (!mounted) return;
+    setState(() => _isSaving = false);
     if (success) {
       if (_isEditMode) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,8 +298,8 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to save. Are you logged in?'),
+        SnackBar(
+          content: Text(failureMessage ?? 'Failed to save course.'),
           backgroundColor: Colors.orange,
           duration: Duration(seconds: 3),
         ),
@@ -603,7 +619,7 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _saveCourst,
+                onPressed: _isSaving ? null : _saveCourse,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color.fromARGB(255, 255, 230, 154),
                   foregroundColor: Colors.black,
@@ -613,9 +629,20 @@ class _CreateCoursePageState extends State<CreateCoursePage> {
                   ),
                   elevation: 3,
                 ),
-                icon: const Icon(Icons.save_rounded, size: 22),
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.black,
+                        ),
+                      )
+                    : const Icon(Icons.save_rounded, size: 22),
                 label: Text(
-                  _isEditMode ? 'Update Course' : 'Save Course',
+                  _isSaving
+                      ? 'Saving...'
+                      : (_isEditMode ? 'Update Course' : 'Save Course'),
                   style: const TextStyle(
                     fontFamily: 'Chennai',
                     fontSize: 15,

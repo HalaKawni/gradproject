@@ -177,14 +177,6 @@ class _AdminLevelsPageState extends State<AdminLevelsPage> {
               color: Color(0xFFFF7C9B),
               accentColor: Color(0xFFFFEDF2),
             ),
-            _AdminBuilderCardData(
-              type: _AdminBuilderType.scratch,
-              title: 'Scratch Builder',
-              subtitle: language.t('scratchBuilderDescription'),
-              icon: Icons.extension_rounded,
-              color: const Color(0xFFB98AF3),
-              accentColor: const Color(0xFFF4ECFF),
-            ),
           ],
         );
       },
