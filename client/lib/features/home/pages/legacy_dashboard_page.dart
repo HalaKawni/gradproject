@@ -13,7 +13,7 @@ import 'package:client/datagame/data_course_page.dart';
 import 'package:client/aicourse/ai_hoot_page_game.dart';
 import 'package:client/mycourses/create_course_page.dart';
 import 'package:client/mycourses/course_detail_page.dart';
-import 'package:client/utils/responsive.dart';
+import 'package:client/core/utils/responsive.dart';
 
 class DashboardPage extends StatefulWidget {
   final String username;

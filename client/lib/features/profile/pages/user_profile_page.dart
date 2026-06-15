@@ -10,7 +10,7 @@ import 'package:client/shared/widgets/framed_image_editor.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:client/utils/web_redirect.dart';
+import 'package:client/core/utils/web_redirect.dart';
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({

@@ -545,7 +545,7 @@ class _BuilderPageState extends State<BuilderPage> {
   Widget build(BuildContext context) {
     final language = AppLanguage.of(context);
     final project = controller.project;
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < 900;
 
     return Directionality(
       textDirection: TextDirection.ltr,
@@ -560,75 +560,94 @@ class _BuilderPageState extends State<BuilderPage> {
             hintText: language.t('builder.gameName'),
             onChanged: _handleTitleChanged,
           ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: TextButton(
-                onPressed: controller.isSaving ? null : _handlePublishPressed,
-                child: Text(
-                  controller.isSaving
-                      ? language.t('builder.saving')
-                      : language.t('builder.publish'),
-                  style: const TextStyle(color: Colors.black),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: TextButton(
-                onPressed: controller.isSaving ? null : _handleSavePressed,
-                child: Text(
-                  controller.isSaving
-                      ? language.t('builder.saving')
-                      : language.t('builder.save'),
-                  style: const TextStyle(color: Colors.black),
-                ),
-              ),
-            ),
-          ],
+          actions: isMobile
+              ? [
+                  IconButton(
+                    tooltip: language.t('builder.publish'),
+                    onPressed: controller.isSaving
+                        ? null
+                        : _handlePublishPressed,
+                    icon: const Icon(Icons.public_rounded),
+                  ),
+                  IconButton(
+                    tooltip: language.t('builder.save'),
+                    onPressed: controller.isSaving ? null : _handleSavePressed,
+                    icon: const Icon(Icons.save_rounded),
+                  ),
+                ]
+              : [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextButton(
+                      onPressed: controller.isSaving
+                          ? null
+                          : _handlePublishPressed,
+                      child: Text(
+                        controller.isSaving
+                            ? language.t('builder.saving')
+                            : language.t('builder.publish'),
+                        style: const TextStyle(color: Colors.black),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: TextButton(
+                      onPressed: controller.isSaving
+                          ? null
+                          : _handleSavePressed,
+                      child: Text(
+                        controller.isSaving
+                            ? language.t('builder.saving')
+                            : language.t('builder.save'),
+                        style: const TextStyle(color: Colors.black),
+                      ),
+                    ),
+                  ),
+                ],
         ),
         body: controller.isLoading
             ? const Center(child: CircularProgressIndicator())
             : isMobile
-                ? _buildMobileBody(project)
-                : Stack(
-                    children: [
-                      Container(
-                        color: const Color(0xFFEAF6FF),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: _leftPanelWidth,
-                              padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.92),
-                                border: Border(
-                                  right: BorderSide(
-                                    color: Colors.blueGrey.shade100,
-                                  ),
-                                ),
-                              ),
-                              child: _buildLeftPanel(),
-                            ),
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Center(
-                                  child: _buildFixedGameWindow(project),
-                                ),
+            ? _buildMobileBody(project)
+            : Stack(
+                children: [
+                  Container(
+                    color: const Color(0xFFEAF6FF),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: _leftPanelWidth,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 12, 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.92),
+                            border: Border(
+                              right: BorderSide(
+                                color: Colors.blueGrey.shade100,
                               ),
                             ),
-                          ],
+                          ),
+                          child: _buildLeftPanel(),
                         ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 18,
-                        child: Center(child: _buildTrashBin()),
-                      ),
-                    ],
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Center(
+                              child: _buildFixedGameWindow(project),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 18,
+                    child: Center(child: _buildTrashBin()),
+                  ),
+                ],
+              ),
       ),
     );
   }

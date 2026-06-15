@@ -769,7 +769,7 @@ class ApiService {
     );
 
     final message = result['message']?.toString() ?? '';
-    if (result['success'] != true && message.contains('FormatException')) {
+    if (result['success'] != true && message.toLowerCase().contains('format')) {
       return {
         'success': true,
         'data': const [],

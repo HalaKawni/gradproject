@@ -16,7 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:client/utils/web_redirect.dart';
+import 'package:client/core/utils/web_redirect.dart';
 import 'package:client/datagame/data_lesson_page.dart';
 import 'package:client/digitalgame/digital_lesson_page.dart';
 import 'world_map_page.dart';
@@ -26,7 +26,7 @@ import 'package:client/digitalgame/digital_literacy_page.dart';
 import 'package:client/datagame/data_course_page.dart';
 import 'package:client/aicourse/ai_hoot_conditional.dart';
 import 'package:client/features/classroom/pages/classroom_page.dart';
-import 'package:client/utils/responsive.dart';
+import 'package:client/core/utils/responsive.dart';
 import 'package:client/mycourses/course_detail_page.dart';
 import 'package:client/mycourses/create_course_page.dart';
 import 'package:client/shared/widgets/framed_image_editor.dart';
@@ -1090,14 +1090,30 @@ class _DashboardPageState extends State<DashboardPage> {
         return;
       }
 
+      final message = result['message']?.toString() ?? '';
+      if (message.toLowerCase().contains('format')) {
+        setState(() {
+          _communityCourses = const [];
+          _isLoadingCommunityCourses = false;
+        });
+        return;
+      }
+
       setState(() {
         _communityCoursesErrorMessage =
-            result['message']?.toString() ??
-            'Failed to load community courses.';
+            message.isNotEmpty ? message : 'Failed to load community courses.';
         _isLoadingCommunityCourses = false;
       });
     } catch (e) {
       if (!mounted) {
+        return;
+      }
+
+      if (e.toString().toLowerCase().contains('format')) {
+        setState(() {
+          _communityCourses = const [];
+          _isLoadingCommunityCourses = false;
+        });
         return;
       }
 
