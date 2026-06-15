@@ -759,14 +759,25 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getCommunityCourses({
     required String authToken,
-  }) {
-    return _sendRequest(
+  }) async {
+    final result = await _sendRequest(
       method: 'GET',
       path: '/api/courses/community',
       authToken: authToken,
       includeLanguage: true,
       defaultErrorMessage: 'Failed to fetch community courses',
     );
+
+    final message = result['message']?.toString() ?? '';
+    if (result['success'] != true && message.contains('FormatException')) {
+      return {
+        'success': true,
+        'data': const [],
+        'message': 'No community courses available.',
+      };
+    }
+
+    return result;
   }
 
   static Future<Map<String, dynamic>> addCourseComment({
@@ -1178,9 +1189,7 @@ class ApiService {
     String defaultErrorMessage = 'Request failed',
   }) async {
     try {
-      final url = Uri.parse(
-        '$baseUrl$path',
-      ).replace(
+      final url = Uri.parse('$baseUrl$path').replace(
         queryParameters: includeLanguage
             ? _withLanguageQueryParameters(queryParameters)
             : queryParameters,
